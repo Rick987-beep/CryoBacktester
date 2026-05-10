@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+markers = [
+    "live: tests that require live network access (deselected by default)",
+]
+addopts = "-m 'not live'"
+testpaths = ["backtester/strategies/tests"]
+norecursedirs = ["backtester/data", "backtester/data_archive", "backtester/data_spot_rebuilt", "backtester/reports", "backtester/newstrategy"]

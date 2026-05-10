@@ -1,0 +1,30 @@
+# Data directories — large, not versioned
+backtester/data/
+backtester/data_archive/
+backtester/data_spot_rebuilt/
+backtester/ingest/raw/
+
+# Generated outputs
+backtester/reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.venv/
+venv/
+.env
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/settings.json
+.idea/

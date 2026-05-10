@@ -1,0 +1,74 @@
+# delta_strangle_tp_v1.toml
+# ── Experiment: Short Strangle Delta TP — Candidate v1 ───────────
+#
+# This experiment captures the research steps that follow an initial
+# discovery run on the broad PARAM_GRID.
+#
+# Step 2  (sensitivity):
+#   python -m backtester.run --experiment delta_strangle_tp_v1 --mode sensitivity
+#
+# Step 3  (walk-forward validation):
+#   python -m backtester.run --experiment delta_strangle_tp_v1 --mode wfo
+#
+# Candidate found from discovery run 2026-04-15 (combo #14, 120-day window):
+#   delta=0.15, entry_hour=18, stop_loss_pct=7.0, take_profit_pct=0.90
+#   dte=1, max_hold_hours=0, skip_weekends=1, min_otm_pct=0
+
+strategy = "delta_strangle_tp"
+
+# ── Sensitivity analysis ─────────────────────────────────────────
+[sensitivity]
+
+# How many values to generate around the best value for each continuous param.
+# Must be odd so the best value sits at the centre.
+steps = 5
+
+# The IS-best candidate found in the discovery run.
+[sensitivity.best]
+dte              = 1
+delta            = 0.15
+entry_hour       = 18
+stop_loss_pct    = 7.0
+take_profit_pct  = 0.90
+max_hold_hours   = 0
+skip_weekends    = 1
+min_otm_pct      = 0
+
+# Per-parameter deviation rules.
+#   type = "pct"   → ±amount % of the best value  (for continuous ratios/percentages)
+#   type = "abs"   → ±amount in natural units      (for times, durations, strikes)
+#   type = "fixed" → hold at best value; always [best]
+[sensitivity.deviation.dte]
+type = "fixed"
+
+[sensitivity.deviation.delta]
+type   = "pct"
+amount = 10        # ±10 % → [0.135, 0.143, 0.15, 0.158, 0.165]
+
+[sensitivity.deviation.entry_hour]
+type   = "abs"
+amount = 2         # ±2 hours → [16, 17, 18, 19, 20]
+
+[sensitivity.deviation.stop_loss_pct]
+type   = "pct"
+amount = 10        # ±10 % → [6.3, 6.65, 7.0, 7.35, 7.7]
+
+[sensitivity.deviation.take_profit_pct]
+type   = "pct"
+amount = 10        # ±10 % → [0.81, 0.855, 0.90, 0.945, 0.99]
+
+[sensitivity.deviation.max_hold_hours]
+type = "fixed"
+
+[sensitivity.deviation.skip_weekends]
+type = "fixed"
+
+[sensitivity.deviation.min_otm_pct]
+type = "fixed"
+
+
+# ── Walk-forward validation ──────────────────────────────────────
+[wfo]
+is_days   = 45    # In-sample window length (calendar days)
+oos_days  = 15    # Out-of-sample window length (calendar days)
+step_days = 15    # Window shift per step

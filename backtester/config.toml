@@ -1,0 +1,125 @@
+# ── Backtester Application Configuration ─────────────────────────────────────
+#
+# Strategy-specific settings (PARAM_GRID, DATE_RANGE, entry logic) stay in
+# each strategy file. This file holds application-level settings only.
+#
+# All paths are relative to this file's directory (backtester/).
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+[data]
+
+# Default snapshot parquets fed to the backtest engine.
+# Point to the data/ directory — MarketReplay will load all options_YYYY-MM-DD.parquet
+# and spot_YYYY-MM-DD.parquet files found there (per-day layout from Tardis bulk download).
+# Old 2-week snapshots are kept as test_options_*.parquet / test_spot_*.parquet and ignored.
+options_parquet     = "data"
+spot_parquet        = "data"
+
+# Raw tick data input and snapshot output directories (used by snapshot_builder).
+tardis_data_dir     = "ingest/tardis/data"
+snapshots_dir       = "data"
+reports_dir         = "reports"
+
+# Snapshot cadences (minutes).
+snapshot_interval_min   = 5   # option snapshot grid resolution
+spot_interval_min       = 1   # spot OHLC bar resolution
+
+# Parquet output compression codec (zstd recommended for size/speed balance).
+parquet_compression = "zstd"
+
+# ── Simulation ────────────────────────────────────────────────────────────────
+[simulation]
+
+account_size_usd        = 100_000  # virtual account size (used in equity curve)
+progress_interval       = 500     # print engine progress every N market states
+top_n_console           = 5       # top combos printed to terminal after run
+top_n_report            = 20      # top combos for detailed equity metrics in HTML report
+
+# ── Pricing ───────────────────────────────────────────────────────────────────
+[pricing]
+
+hours_per_year          = 8760.0  # calendar denominator for T in Black-Scholes
+risk_free_rate          = 0.0     # r in BS (negligible for sub-24h crypto options)
+expiry_hour_utc         = 8       # Deribit 0DTE daily expiry time (UTC)
+strike_step_usd         = 500     # Deribit strike grid increment ($)
+
+# Realized-vol estimation window
+vol_lookback_candles    = 24      # trailing candles used for realized-vol estimate
+min_vol_candles         = 6       # minimum candles required before using realized vol
+default_vol             = 0.55    # fallback annualised vol when data is insufficient
+gap_reset_seconds       = 7200    # max gap (2 h) before resetting log-return window
+
+# Vol clamps — prevent numerical blowups in Black-Scholes
+min_vol                 = 0.15    # floor: 15% annualised
+max_vol                 = 3.00    # ceiling: 300% annualised
+
+# ── Repricing ─────────────────────────────────────────────────────────────────
+[repricing]
+
+# Fallback pricing for held positions when bid or ask is 0 (no market quote).
+# Applied only during mark-to-market repricing of open positions — entry logic
+# is unaffected (no quote = no entry, unchanged).
+#
+# Three-tier logic in _reprice_legs:
+#   1. bid/ask > 0   → use as-is (normal path)
+#   2. bid/ask == 0 AND mark_usd > min_mark_usd  → mark × (1 ± slip_pct_zero_price)
+#   3. bid/ask == 0 AND mark_usd ≤ min_mark_usd  → treat as 0 (skip tick, as before)
+
+# Minimum mark in USD for the fallback to activate.
+# Below this the option is too deep OTM / illiquid for any estimate to be meaningful.
+min_mark_usd            = 15.0
+
+# Slippage fraction applied to mark when constructing the fallback price.
+# ask_fallback = mark × (1 + slip_pct_zero_price)   (cost to buy back short)
+# bid_fallback = mark × (1 - slip_pct_zero_price)   (proceeds from selling long)
+# 0.25 = 25% — conservative central estimate for thin crypto option markets.
+slip_pct_zero_price     = 0.25
+
+# ── Fee Model ─────────────────────────────────────────────────────────────────
+[fees]
+
+model           = "deribit"   # fee model identifier
+index_rate      = 0.0003      # 0.03% of index price (base fee per leg)
+price_cap_frac  = 0.125       # capped at 12.5% of the option leg price
+perp_taker_rate = 0.0005      # 0.05% taker fee per BTC-PERPETUAL trade
+
+# ── Scoring ───────────────────────────────────────────────────────────────────
+[scoring]
+
+# Combos with fewer trades than this are ineligible for scoring (ranked last).
+min_trades          = 10
+
+# Percentile-rank weights — must sum to 1.0.
+# Each metric is ranked 0→1 across all eligible combos before weighting.
+# max_dd_pct and ulcer are INVERTED (1 − rank) so lower values = better score.
+w_sharpe        = 0.15   # risk-adjusted return (higher = better)
+w_pnl           = 0.20   # total PnL (higher = better)
+w_max_dd        = 0.15   # max drawdown % intraday (lower = better — inverted)
+w_profit_factor = 0.08   # gross win / gross loss (higher = better)
+w_r_squared     = 0.15   # R² of equity curve vs linear trend (higher = better)
+w_omega         = 0.07   # Omega ratio of daily returns (higher = better)
+w_ulcer         = 0.15   # Ulcer Index (lower = better — inverted)
+w_consistency   = 0.05   # fraction of calendar months with positive return (higher = better)
+
+# ── Recency overlay ───────────────────────────────────────────────────────────
+# Treats the trailing portion of the backtest as a pseudo-OOS window.
+# The composite score is blended: (1 - recency_weight) × full_score + recency_weight × recent_score.
+# Recent score is the percentile-ranked blend of recent-window Sharpe (60%) + PnL (40%).
+# Set recency_pct = 0.0 to disable entirely.
+
+# Fraction of the total date range used as the recency window (0.0–1.0).
+# Examples: 0.10 → last 10 days of a 100-day test; last 1 day of a 10-day test.
+recency_pct         = 0.20
+
+# Weight of the recent-window score in the composite (0.0 = full-period only).
+recency_weight      = 0.30
+
+# Minimum number of active days (non-zero NAV change) required in the recency window
+# for a combo to receive a proper recent score. Combos below this get a neutral 0.5.
+recency_min_trades  = 3
+
+# Hard gate: veto combos whose recent-window Sharpe falls below this threshold.
+# Vetoed combos receive score 0.0 and sink to the bottom of the ranking.
+# Set recency_gate_enabled = false to disable the gate entirely.
+recency_gate_enabled    = true
+recency_gate_sharpe     = 0.3   # require mild positive recent Sharpe (0.0 = just profitable, 0.5 = stricter)

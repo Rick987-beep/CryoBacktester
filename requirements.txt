@@ -1,0 +1,13 @@
+# CryoBacktester Dependencies
+# Install with: pip install -r requirements.txt
+
+pandas>=2.0               # DataFrame / parquet I/O
+pyarrow>=14.0             # Parquet backend
+numpy>=1.24               # Array operations
+scipy>=1.11               # Deflated Sharpe Ratio (DSR) — normal CDF/PPF
+requests>=2.31.0          # Binance kline fetch (indicators/hist_data.py), Tardis bulk download
+python-dotenv>=1.0.0      # .env loading for data path overrides
+tzdata>=2024.1            # IANA tz DB fallback for zoneinfo (no-op on macOS/Ubuntu with system tz)
+
+# Development dependencies (optional)
+# pytest>=7.0.0           # Testing framework
