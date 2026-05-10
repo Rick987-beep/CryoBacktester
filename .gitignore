@@ -3,8 +3,11 @@ backtester/data/
 backtester/data_archive/
 backtester/data_spot_rebuilt/
 backtester/ingest/raw/
+backtester/archive/
+indicators/data/
 
-# Generated outputs
+# Work-in-progress / planning / outputs — not code
+backtester/planning/
 backtester/reports/
 
 # Python
