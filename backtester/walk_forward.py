@@ -211,7 +211,7 @@ def run_walk_forward(
         t0 = _time.time()
         is_replay = MarketReplay(options_path, spot_path,
                                  start=is_start_s, end=is_end_s)
-        df_is, keys_is, nav_daily_is, final_nav_is = run_grid_full(
+        df_is, keys_is, nav_daily_is, final_nav_is, _ = run_grid_full(
             strategy_cls, strategy_cls.PARAM_GRID, is_replay
         )
         is_result = GridResult(
@@ -240,7 +240,7 @@ def run_walk_forward(
         oos_param_grid = {k: [v] for k, v in best_params.items()}
         oos_replay = MarketReplay(options_path, spot_path,
                                   start=oos_start_s, end=oos_end_s)
-        df_oos, keys_oos, _, _ = run_grid_full(
+        df_oos, keys_oos, _, _, _ = run_grid_full(
             strategy_cls, oos_param_grid, oos_replay
         )
 

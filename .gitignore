@@ -31,3 +31,4 @@ venv/
 # IDE
 .vscode/settings.json
 .idea/
+.claude/settings.local.json

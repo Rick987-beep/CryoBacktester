@@ -391,6 +391,8 @@ class DeltaSwipSwap:
             entry_date=pos.entry_time.strftime("%Y-%m-%d"),
             metadata={
                 **pos.metadata,
+                "legs": pos.legs,
+                "fees_open": pos.fees_open,
                 "option_pnl":       round(option_pnl, 4),
                 "perp_pnl":         round(perp_pnl, 4),
                 "perp_trades":      self._perp_trades,

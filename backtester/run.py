@@ -36,6 +36,7 @@ from backtester.strategies.ss_turb_dyn_mk2 import SsTurbDynMk2
 from backtester.strategies.bt_supertrend_lc import BtSupertrendLc
 from backtester.strategies.long_gamma_whitelist import LongGammaWhitelist
 from backtester.strategies.preopen_straddle import PreopenStraddle
+from backtester.strategies.hedged_put_sell import HedgedPutSell
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -56,6 +57,7 @@ STRATEGIES = {
     "bt_supertrend_lc": BtSupertrendLc,
     "long_gamma_whitelist": LongGammaWhitelist,
     "preopen_straddle": PreopenStraddle,
+    "hedged_put_sell": HedgedPutSell,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet
@@ -125,7 +127,7 @@ def main():
 
     # Run grid
     t1 = time.time()
-    df, keys, nav_daily_df, final_nav_df = run_grid_full(
+    df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
         strategy_cls, param_grid, replay
     )
     grid_time = time.time() - t1
@@ -148,6 +150,7 @@ def main():
         param_grid=param_grid,
         account_size=account_size,
         date_range=date_range,
+        df_fills=df_fills,
     )
 
     # Walk-forward validation (optional)
@@ -171,6 +174,7 @@ def main():
         strategy_description=getattr(strategy_cls, "DESCRIPTION", ""),
         robustness=args.robustness,
         wfo_result=wfo_result,
+        status_labels=getattr(strategy_cls, "TRADE_STATUS", getattr(strategy_cls, "STATUS_LABELS", None)),
     )
 
     reports_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")

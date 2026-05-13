@@ -94,7 +94,7 @@ class ShortStrTurbDyn:
     """
 
     name = "short_str_turb_dyn"
-    DATE_RANGE = ("2025-05-01", "2026-05-05")
+    DATE_RANGE = ("2025-05-12", "2026-05-13")
     DESCRIPTION = (
         "Sells a strangle, naked call, or naked put on a Deribit expiry N calendar "
         "days ahead (dte=1/2/3), with legs chosen by target delta. "
@@ -115,17 +115,18 @@ class ShortStrTurbDyn:
 
     PARAM_GRID = {
         # entry_time: NYC wall-clock (HH:MM); translated to UTC in _maybe_open (DST-aware)
+        # Slot2 params: entry_hour=19 UTC = 15:00 NYC (EDT, UTC-4)
         "leg_type":             ["strangle"],
         "dte":                  [1],
         "delta":                [0.15],
-        "entry_time":           ["14:30","15:00","15:30"],  # NYC (US Eastern)
-        "stop_loss_pct":        [5.0, 5.75],
-        "take_profit_pct":      [0],
+        "entry_time":           ["15:00"],   # NYC (US Eastern) — 19:00 UTC in EDT
+        "stop_loss_pct":        [3,3.5,4,4.5,5,5.5],
+        "take_profit_pct":      [0.0],
         "max_hold_hours":       [0],
         "skip_weekends":        [1],
-        "min_otm_pct":          [2.1, 2.3, 2.5],
-        "turbulence_threshold": [50, 55, 60],
-        "dyn_target_premium":   [600],
+        "min_otm_pct":          [2.4],
+        "turbulence_threshold": [60],
+        "dyn_target_premium":   [800],
         "max_quantity":         [25],
         "leg_min_price":        [0],
     }
@@ -406,12 +407,14 @@ class ShortStrTurbDyn:
             entry_spot=state.spot,
             legs=[
                 {"strike": call.strike, "is_call": True,  "expiry": expiry, "side": "sell",
-                 "entry_price": call.bid, "entry_price_usd": call_usd, "entry_delta": call.delta},
+                 "entry_price": call.bid, "entry_price_usd": call_usd * quantity, "entry_delta": call.delta,
+                 "qty": quantity},
                 {"strike": put.strike,  "is_call": False, "expiry": expiry, "side": "sell",
-                 "entry_price": put.bid, "entry_price_usd": put_usd,  "entry_delta": put.delta},
+                 "entry_price": put.bid, "entry_price_usd": put_usd * quantity,  "entry_delta": put.delta,
+                 "qty": quantity},
             ],
-            entry_price_usd=entry_usd,
-            fees_open=deribit_fee_per_leg(state.spot, call_usd) + deribit_fee_per_leg(state.spot, put_usd),
+            entry_price_usd=entry_usd * quantity,
+            fees_open=(deribit_fee_per_leg(state.spot, call_usd) + deribit_fee_per_leg(state.spot, put_usd)) * quantity,
             metadata={
                 "leg_type":      "strangle",
                 "target_delta":  self._delta,
@@ -458,10 +461,11 @@ class ShortStrTurbDyn:
             entry_spot=state.spot,
             legs=[
                 {"strike": leg.strike, "is_call": is_call, "expiry": expiry, "side": "sell",
-                 "entry_price": leg.bid, "entry_price_usd": entry_usd, "entry_delta": leg.delta},
+                 "entry_price": leg.bid, "entry_price_usd": entry_usd * quantity, "entry_delta": leg.delta,
+                 "qty": quantity},
             ],
-            entry_price_usd=entry_usd,
-            fees_open=deribit_fee_per_leg(state.spot, entry_usd),
+            entry_price_usd=entry_usd * quantity,
+            fees_open=deribit_fee_per_leg(state.spot, entry_usd) * quantity,
             metadata={
                 "leg_type":     leg_type,
                 "target_delta": self._delta,
@@ -510,13 +514,7 @@ class ShortStrTurbDyn:
         trade.metadata["take_profit_pct"]      = self._tp_pct
         trade.metadata["max_hold_hours"]       = self._max_hold_hours
         trade.metadata["turbulence_threshold"] = self._turbulence_threshold
-        # Scale all dollar amounts by quantity (trade helpers return per-contract values)
-        qty = pos.metadata.get("quantity", 1.0)
-        trade.metadata["quantity"]    = qty
-        trade.entry_price_usd        *= qty
-        trade.exit_price_usd         *= qty
-        trade.fees                   *= qty
-        trade.pnl                    *= qty
+        trade.metadata["quantity"]             = pos.metadata.get("quantity", 1.0)
         return trade
 
     def _close_single_leg(self, state, pos, reason):
@@ -526,13 +524,18 @@ class ShortStrTurbDyn:
         expiry   = pos.metadata["expiry"]
         strike   = pos.metadata["call_strike"] if is_call else pos.metadata["put_strike"]
 
+        quantity = float(pos.metadata.get("quantity", 1.0))
         if reason == "expiry":
-            exit_usd   = max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)
+            exit_usd   = (max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)) * quantity
             fees_close = 0.0
         else:
             _min_tick_usd = 0.0001 * state.spot
             q = state.get_option(expiry, strike, is_call)
-            exit_usd   = q.ask_usd if q and q.ask > 0 else _min_tick_usd
+            exit_usd   = (q.ask_usd if q and q.ask > 0 else _min_tick_usd) * quantity
             fees_close = deribit_fee_per_leg(state.spot, exit_usd)
+
+        # Annotate the leg with its actual exit price for fills table display.
+        for leg in pos.legs:
+            leg["exit_price_usd"] = exit_usd
 
         return close_trade(state, pos, reason, exit_usd, fees_close)
