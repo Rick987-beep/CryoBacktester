@@ -297,44 +297,59 @@ function sortRobTable(col, th) {
 # ── CSS ──────────────────────────────────────────────────────────
 
 CSS = """
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-       max-width: 1500px; margin: 20px auto; padding: 0 20px; background: #fafafa; color: #222; }
-h1 { border-bottom: 3px solid #333; padding-bottom: 10px; }
-h2 { margin-top: 36px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
-h3 { margin-top: 20px; color: #555; }
-h4 { margin: 0 0 6px; font-size: 13px; color: #555; font-weight: 600; }
-.meta { background: #e8eaf6; padding: 12px 18px; border-radius: 6px; margin: 16px 0;
-        display: flex; gap: 28px; flex-wrap: wrap; font-size: 14px; }
-.meta b { color: #333; }
-.best-box { background: #e8f5e9; border: 2px solid #4caf50; border-radius: 8px;
-            padding: 18px 24px; margin: 16px 0; }
-.best-box.negative { background: #fff3e0; border-color: #ff9800; }
-.best-box h3 { margin: 0 0 10px; color: #2e7d32; }
+body { font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+       max-width: 1500px; margin: 20px auto; padding: 0 20px;
+       background: #f0f4f8; color: #1a2332; font-size: 14px; }
+h1 { font-size: 22px; font-weight: 700; color: #1565c0;
+     border-bottom: 3px solid #1565c0; padding-bottom: 8px; margin-bottom: 4px; }
+h2 { font-size: 16px; font-weight: 600; margin-top: 32px; color: #1a2332;
+     border-bottom: 2px solid #bbdefb; padding-bottom: 5px; }
+h3 { font-size: 14px; font-weight: 600; margin-top: 16px; color: #37474f; }
+h4 { margin: 0 0 5px; font-size: 12px; color: #546e7a; font-weight: 600;
+     text-transform: uppercase; letter-spacing: 0.4px; }
+.meta { background: #dbeafe; border: 1px solid #93c5fd; padding: 9px 16px;
+        border-radius: 6px; margin: 12px 0;
+        display: flex; gap: 22px; flex-wrap: wrap; font-size: 12px; color: #1e3a5f; }
+.meta b { color: #1565c0; }
+.best-box { background: #fff; border: 2px solid #1565c0; border-left: 5px solid #1565c0;
+            border-radius: 6px; padding: 14px 20px; margin: 12px 0; }
+.best-box.negative { background: #fff8f0; border-color: #e65100; border-left-color: #e65100; }
+.best-box h3 { margin: 0 0 8px; color: #1565c0; font-size: 13px; }
 .best-box.negative h3 { color: #e65100; }
-.best-box .params { font-size: 17px; font-weight: 700; color: #00695c; margin: 8px 0; }
+.best-box .params { font-size: 15px; font-weight: 700; color: #0d47a1; margin: 6px 0; }
 .best-box.negative .params { color: #bf360c; }
-.metric { display: inline-block; margin: 4px 20px 4px 0; }
-.metric-label { color: #666; font-size: 12px; }
-.metric-value { font-size: 16px; font-weight: 600; }
-.grid-info { background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px;
-             padding: 12px 18px; margin: 10px 0; font-size: 13px; }
-.grid-info code { background: #e0e0e0; padding: 1px 5px; border-radius: 3px; }
-table { border-collapse: collapse; font-size: 13px; margin: 10px 0 24px; }
-th, td { padding: 5px 8px; text-align: right; border: 1px solid #ccc; white-space: nowrap; }
-th { background: #333; color: #fff; font-weight: 600; position: sticky; top: 0; }
+.metric { display: inline-block; margin: 4px 18px 4px 0; vertical-align: top; }
+.metric-label { color: #78909c; font-size: 10px; font-weight: 600;
+                text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+.metric-value { font-size: 15px; font-weight: 700; display: block; }
+.grid-info { background: #fff; border: 1px solid #cfd8dc;
+             border-left: 4px solid #1565c0; border-radius: 4px;
+             padding: 10px 16px; margin: 8px 0; font-size: 12px; color: #37474f; }
+.grid-info code { background: #e8f0fe; color: #1565c0;
+                  padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+table { border-collapse: collapse; font-size: 12px; margin: 8px 0 18px; width: 100%; }
+th, td { padding: 4px 6px; text-align: right; border: 1px solid #cfd8dc; white-space: nowrap; }
+th { background: #1565c0; color: #fff; font-weight: 600;
+     font-size: 11px; letter-spacing: 0.3px; position: sticky; top: 0; }
 th:first-child, td:first-child { text-align: left; }
-.pos { color: #2e7d32; font-weight: 600; }
-.neg { color: #c62828; }
-.empty { color: #bbb; background: #f8f8f8; }
-.hm-wrap { overflow-x: auto; margin: 4px 0 12px; }
-.hm-label { text-align: left !important; font-weight: 600; background: #f0f0f0 !important;
-             color: #333 !important; min-width: 60px; }
-.hm-pair { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;
-           margin-bottom: 28px; }
+tbody tr:nth-child(odd)  { background: #ffffff; }
+tbody tr:nth-child(even) { background: #f0f6ff; }
+tbody tr:hover { background: #dbeafe !important; }
+.pos { color: #1b5e20; font-weight: 600; }
+.neg { color: #b71c1c; }
+.empty { color: #b0bec5; background: #f8fafc; }
+.hm-wrap { overflow-x: auto; margin: 4px 0 10px;
+           box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-radius: 4px; }
+.hm-label { text-align: left !important; font-weight: 600;
+             background: #e8f0fe !important; color: #1565c0 !important; min-width: 55px; }
+.hm-pair { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start;
+           margin-bottom: 24px; }
 .hm-pair > div { flex: 0 0 auto; }
-.eq-bar { display: inline-block; height: 14px; border-radius: 2px; vertical-align: middle; }
-.eq-pos { background: #4caf50; }
+.eq-bar { display: inline-block; height: 13px; border-radius: 2px; vertical-align: middle; }
+.eq-pos { background: #1976d2; }
 .eq-neg { background: #e53935; }
+.fills-odd  { background: #ffffff; }
+.fills-even { background: #eef4fd; }
 """
 
 
@@ -446,9 +461,17 @@ def _wfo_section_html(wfo_result, account_size):
 
 # ── HTML Report ──────────────────────────────────────────────────
 
+def _decode_status(status, labels):
+    # type: (int, dict) -> str
+    """Decode a 16-bit status bitmask into a comma-joined list of flag names."""
+    if not status:
+        return ""
+    return ", ".join(label for bit, label in sorted(labels.items()) if status & bit)
+
+
 def generate_html(strategy_name, result, n_intervals, runtime_s,
                   strategy_description="", qty=1, heatmap_pairs=None,
-                  robustness=False, wfo_result=None):
+                  robustness=False, wfo_result=None, status_labels=None):
     """Generate a self-contained HTML backtest report.
 
     Args:
@@ -484,6 +507,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
     best_key     = result.best_key
     best_stats   = result.best_stats
     df_best      = result.df_best
+    df_fills_best = getattr(result, "df_fills_best", None)
     best_eq      = result.best_eq
     best_final_nav = result.best_final_nav
     best_params  = result.best_params
@@ -873,18 +897,84 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         parts.append(_wfo_section_html(wfo_result, account_size=account_size))
 
     # ── Trade log — best combo ───────────────────────────────────
-    if df_best is not None and not df_best.empty:
+    if df_fills_best is not None and not df_fills_best.empty:
+        parts.append("<h2>Trade Log &mdash; Best Combo</h2>")
+        trade_count = int(df_fills_best["trade_idx"].nunique())
+        parts.append(f'<p>{trade_count} trades, {len(df_fills_best)} fill rows</p>')
+        parts.append(
+            '<div class="hm-wrap">'
+            '<table id="fills-table">'
+            '<thead><tr>'
+            '<th style="text-align:left">Timestamp</th>'
+            '<th style="text-align:right">#</th>'
+            '<th style="text-align:right">Opens</th>'
+            '<th>Event</th>'
+            '<th style="text-align:left">Contract</th>'
+            '<th>Side</th>'
+            '<th style="text-align:right">Qty</th>'
+            '<th style="text-align:right">Amount</th>'
+            '<th style="text-align:right">Fees</th>'
+            '<th style="text-align:right">Spot</th>'
+            '<th style="text-align:left">Reason</th>'
+            '</tr></thead><tbody>'
+        )
+        _last_tidx = None
+        _shade = False
+        for row in df_fills_best.itertuples(index=False):
+            if row.trade_idx != _last_tidx:
+                _shade = not _shade
+                _last_tidx = row.trade_idx
+            row_cls = 'fills-even' if _shade else 'fills-odd'
+            event_cls = 'color:#1b5e20' if row.event == 'open' else 'color:#b71c1c'
+            side_cls  = 'color:#1b5e20' if row.side == 'sell' else 'color:#b71c1c'
+            ts_str = row.ts.strftime("%Y-%m-%d %H:%M") if hasattr(row.ts, 'strftime') else str(row.ts)
+            _row_status = int(getattr(row, 'status', 0))
+            if _row_status and status_labels:
+                reason_str = status_labels.get(_row_status, str(_row_status))
+            elif hasattr(row, 'exit_reason') and row.exit_reason:
+                reason_str = str(row.exit_reason)
+            else:
+                reason_str = ""
+            _amt = row.amount_usd
+            _amt_cls = 'color:#1b5e20' if _amt >= 0 else 'color:#b71c1c'
+            _open_idx = int(getattr(row, 'open_idx', 0))
+            _opens_str = str(_open_idx) if (_open_idx and _open_idx != row.trade_idx) else ''
+            _qty = getattr(row, 'qty', None)
+            _qty_str = f'{_qty:g}' if _qty is not None else ''
+            parts.append(
+                f'<tr class="{row_cls}">'
+                f'<td style="text-align:left;white-space:nowrap">{ts_str}</td>'
+                f'<td style="text-align:right">{row.trade_idx}</td>'
+                f'<td style="text-align:right;color:#888">{_opens_str}</td>'
+                f'<td style="text-align:center"><span style="{event_cls}">{row.event}</span></td>'
+                f'<td style="text-align:left;font-family:monospace">{row.contract}</td>'
+                f'<td style="text-align:center;{side_cls}">{row.side}</td>'
+                f'<td style="text-align:right">{_qty_str}</td>'
+                f'<td style="text-align:right;{_amt_cls}">${_amt:+,.2f}</td>'
+                f'<td style="text-align:right">${row.fees:,.2f}</td>'
+                f'<td style="text-align:right">${row.spot:,.0f}</td>'
+                f'<td style="text-align:left">{reason_str}</td>'
+                '</tr>'
+            )
+        parts.append("</tbody></table></div>")
+    elif df_best is not None and not df_best.empty:
+        # Fallback: strategy has no leg detail — show old summary table
         parts.append("<h2>Trade Log &mdash; Best Combo</h2>")
         parts.append(f'<p>{len(df_best)} trades total</p>')
         parts.append('<div class="hm-wrap"><table>')
+        _fb_status_hdr = '<th>Status</th>' if (status_labels and "status" in df_best.columns) else ''
         parts.append(
             '<tr><th style="text-align:left">Date</th>'
             '<th>Entry Time</th><th>Exit Time</th>'
             '<th>Entry Spot</th><th>Exit Spot</th>'
             '<th>Entry USD</th><th>Exit USD</th>'
-            '<th>Fees</th><th>PnL</th><th>Reason</th></tr>')
+            '<th>Fees</th><th>PnL</th><th>Reason</th>'
+            + _fb_status_hdr + '</tr>')
         for t in df_best.itertuples(index=False):
             pnl_cls = _pnl_class(t.pnl)
+            _fb_sc = ""
+            if status_labels and hasattr(t, 'status'):
+                _fb_sc = f'<td style="font-size:11px;color:#555">{_decode_status(int(t.status), status_labels)}</td>'
             parts.append(
                 f'<tr><td style="text-align:left">{t.entry_date}</td>'
                 f'<td>{t.entry_time.strftime("%H:%M")}</td>'
@@ -895,7 +985,8 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
                 f'<td>${t.exit_price_usd:,.2f}</td>'
                 f'<td>${t.fees:,.2f}</td>'
                 f'<td class="{pnl_cls}">${t.pnl:,.2f}</td>'
-                f'<td>{t.exit_reason}</td></tr>'
+                f'<td>{t.exit_reason}</td>'
+                + _fb_sc + '</tr>'
             )
         parts.append("</table></div>")
 

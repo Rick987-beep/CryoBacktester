@@ -35,19 +35,25 @@ from backtester.config import cfg as _cfg
 
 @dataclass
 class Trade:
-    """A completed (closed) trade with full P&L accounting."""
+    """A trade event (open or close) with P&L accounting.
+
+    For open events: pnl=0.0, exit_time=entry_time, exit_price_usd=0.0,
+    fees=opening fees only.  The engine excludes open events from P&L metrics.
+    """
     entry_time: datetime
     exit_time: datetime
     entry_spot: float           # BTC spot at entry
     exit_spot: float            # BTC spot at exit
     entry_price_usd: float      # Total premium paid/received (all legs, USD)
     exit_price_usd: float       # Total premium at close (all legs, USD)
-    fees: float                 # Round-trip Deribit fees (USD)
-    pnl: float                  # Net P&L after fees (USD)
+    fees: float                 # Deribit fees for this event (USD)
+    pnl: float                  # Net P&L after fees (USD); 0.0 for open events
     triggered: bool             # Whether primary exit trigger fired
     exit_reason: str            # "trigger", "time_exit", "max_hold", "expiry", etc.
     exit_hour: int              # Hours held (int, for V1 metrics compat)
     entry_date: str             # "YYYY-MM-DD"
+    status: int = 0             # reason code; strategy defines meaning via TRADE_STATUS
+    side: str = "close"         # "open" or "close"; engine skips PnL for "open"
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -301,6 +307,7 @@ def _reprice_legs(state, pos):
         )
         if quote is None:
             return None
+        _leg_qty = float(leg.get("qty", 1.0))
         if direction == "sell":
             if quote.ask == 0.0:
                 # Zero-price fallback: use mark × (1 + slip) if mark is meaningful
@@ -313,16 +320,16 @@ def _reprice_legs(state, pos):
                 _a = quote.ask
                 _m = quote.mark
                 effective_ask = _a if _a > _m else _m
-            total += effective_ask * quote.spot
+            total += effective_ask * quote.spot * _leg_qty
         else:
             if quote.bid == 0.0:
                 # Zero-price fallback: use mark × (1 - slip) if mark is meaningful
                 if quote.mark_usd > _min_mark_usd:
-                    total += quote.mark * (1.0 - _slip) * quote.spot
+                    total += quote.mark * (1.0 - _slip) * quote.spot * _leg_qty
                 else:
                     return None  # Too illiquid to estimate — skip tick
             else:
-                total += quote.bid_usd
+                total += quote.bid_usd * _leg_qty
     pos._last_reprice_usd = total
     return total
 
@@ -357,7 +364,11 @@ def close_trade(state, pos, reason, current_usd=None, fees_close=0.0):
         exit_reason=reason,
         exit_hour=int(held_s / 3600),
         entry_date=pos.entry_time.strftime("%Y-%m-%d"),
-        metadata={**pos.metadata},
+        metadata={
+            **pos.metadata,
+            "legs": pos.legs,
+            "fees_open": pos.fees_open,
+        },
     )
 
 
@@ -415,15 +426,25 @@ def close_short_strangle(state, pos, reason):
     call_strike = pos.metadata["call_strike"]
     put_strike  = pos.metadata["put_strike"]
 
+    quantity = float(pos.metadata.get("quantity", 1.0))
+
     if reason == "expiry":
-        call_exit_usd = max(0.0, state.spot - call_strike)
-        put_exit_usd  = max(0.0, put_strike - state.spot)
+        call_exit_usd = max(0.0, state.spot - call_strike) * quantity
+        put_exit_usd  = max(0.0, put_strike - state.spot) * quantity
     else:
         _min_tick_usd = 0.0001 * state.spot
         call_q = state.get_option(expiry, call_strike, True)
         put_q  = state.get_option(expiry, put_strike,  False)
-        call_exit_usd = (call_q.ask_usd if call_q and call_q.ask > 0 else _min_tick_usd)
-        put_exit_usd  = (put_q.ask_usd  if put_q  and put_q.ask  > 0 else _min_tick_usd)
+        call_exit_usd = (call_q.ask_usd if call_q and call_q.ask > 0 else _min_tick_usd) * quantity
+        put_exit_usd  = (put_q.ask_usd  if put_q  and put_q.ask  > 0 else _min_tick_usd) * quantity
+
+    # Annotate each leg with its actual exit price so _append_fills can display
+    # the correct per-leg amount rather than a proportional split.
+    for leg in pos.legs:
+        if leg.get("is_call"):
+            leg["exit_price_usd"] = call_exit_usd
+        else:
+            leg["exit_price_usd"] = put_exit_usd
 
     exit_usd   = call_exit_usd + put_exit_usd
     fees_close = 0.0 if reason == "expiry" else (

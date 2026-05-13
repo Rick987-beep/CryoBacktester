@@ -518,12 +518,14 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
 class GridResult:
     """All engine output and derived statistics for a completed grid run.
 
-    Constructed from the 4-tuple returned by engine.run_grid_full(), plus
+    Constructed from the 5-tuple returned by engine.run_grid_full(), plus
     strategy metadata. Computes and caches all per-combo stats on init so
     rendering is decoupled from statistics.
 
     Attributes:
         df            — trade log DataFrame (one row per trade, all combos)
+        df_fills      — fill log DataFrame (one row per leg per event, all combos)
+        df_fills_best — df_fills filtered to best combo, sorted by ts
         keys          — list of param tuples; keys[i] maps combo_idx i → params
         nav_daily_df  — daily NAV (low/high/close) per combo
         final_nav_df  — final NAV per combo
@@ -561,8 +563,9 @@ class GridResult:
     """
 
     def __init__(self, df, keys, nav_daily_df, final_nav_df,
-                 param_grid, account_size, date_range):
+                 param_grid, account_size, date_range, df_fills=None):
         self.df = df
+        self.df_fills = df_fills
         self.keys = keys
         self.nav_daily_df = nav_daily_df
         self.final_nav_df = final_nav_df
@@ -623,6 +626,17 @@ class GridResult:
             )
         else:
             self.df_best = None
+
+        # Fill log for best combo — sorted chronologically
+        if (df_fills is not None and not df_fills.empty
+                and self.best_combo_idx is not None):
+            self.df_fills_best = (
+                df_fills[df_fills["combo_idx"] == self.best_combo_idx]
+                .sort_values(["ts", "trade_idx", "event"], ascending=[True, True, False])
+                .reset_index(drop=True)
+            )
+        else:
+            self.df_fills_best = None
 
         _best_nav_daily = None
         if (nav_daily_df is not None and not nav_daily_df.empty
