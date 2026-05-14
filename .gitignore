@@ -10,6 +10,12 @@ indicators/data/
 backtester/planning/
 backtester/reports/
 
+# Runtime logs (UI worker, etc.)
+logs/
+
+# UI SQLite state DB
+backtester/ui/state/ui_state.db
+
 # Python
 __pycache__/
 *.pyc

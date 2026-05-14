@@ -278,6 +278,8 @@ def run_grid_full(
     replay,             # type: Any
     extra_params=None,  # type: Optional[Dict[str, Any]]
     progress=True,      # type: bool
+    progress_cb=None,   # type: Optional[Any]  # Callable[[int, int, str], None] | None
+    progress_cb_interval=50,  # type: int  # call progress_cb every N states
 ):
     """Run all parameter combos in a single pass over market data.
 
@@ -563,6 +565,15 @@ def run_grid_full(
                 pct = 100.0 * n_states / total_states if total_states else 0.0
                 print(f"  {n_states}/{total_states} states ({pct:.0f}%) — {elapsed:.1f}s elapsed...")
                 _last_print = _now
+
+        if progress_cb is not None and n_states % progress_cb_interval == 0:
+            try:
+                progress_cb(n_states, total_states, day_key)
+            except Exception:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "progress_cb raised; ignoring", exc_info=True
+                )
 
     if last_state is not None:
         for i, strategy in enumerate(instances):

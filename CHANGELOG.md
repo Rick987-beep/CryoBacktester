@@ -4,7 +4,66 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
-## [Unreleased] — 2026-05-13
+## [Unreleased] — 2026-05-14
+
+### New Features
+
+#### Interactive Research UI (`backtester/ui/`)
+A Panel + Bokeh + Plotly web app for exploring backtest results without re-running the engine.
+
+```bash
+python -m backtester.ui.app              # http://localhost:5006
+python -m backtester.ui.app --port 5007
+python -m backtester.ui.app --dev        # autoreload
+```
+
+- **`app.py`** — entry point; serves the Panel app via Tornado.
+- **`state.py`** — shared reactive `AppState` param object.
+- **`log.py`** — UI-scoped logger.
+- **`views/`** — one file per tab: `sidebar`, `grid_view`, `detail_view`, `overlay_view`, `favourites_view`, `compare_view`.
+- **`services/`** — data-access layer: `store_service` (SQLite run index + bundle persistence), `cache_service` (LRU `ResultCache`), `equity_service`, `run_service`, `run_worker` (background backtest thread), `repro`, `toml_export`.
+- **`charts/equity.py`** — Plotly equity + drawdown chart builders.
+- **`state/ui_state.db`** — SQLite DB for starred combos and user preferences (gitignored).
+
+#### `run.py` — `run_backtest()` public API
+- New `run_backtest()` function callable by the UI worker and tests: accepts `strategy_key`, `param_grid`, `date_range`, `account_size`, `bundles_root`, optional `progress_cb`, and `source` label; writes both an HTML report and a run bundle, returning the bundle path.
+- CLI (`main()`) now writes a `.bundle/` directory after each run (skippable with `--no-bundle`).
+
+#### `engine.py` — `progress_cb` parameter
+- `run_grid_full()` gains `progress_cb` (callable) and `progress_cb_interval` (default 50 states) parameters so the UI worker can stream live progress to the frontend.
+
+#### `backtester/run_ui_test.py`
+- Quick 36-combo test script (`python -m backtester.run_ui_test`) over a trimmed grid and 90-day window for fast UI development iteration. Not for research use.
+
+#### Test suite expansion (`tests/`)
+- 128 new UI unit tests across `tests/ui/` covering: boot, store/cache services, grid filter parser, equity charts, detail/overlay/favourites/compare views, TOML export, URL state, column presets, CSV export, range shorthand parser, run service, and run worker.
+- `tests/test_engine_progress_cb.py` — two tests covering `progress_cb` invocation and error isolation.
+- `pyproject.toml`: added `slow_ui` marker (excluded by default); `testpaths` now includes both `backtester/strategies/tests` and `tests/`.
+
+### Changes
+
+#### Dependencies (`requirements.txt`)
+- Added `panel>=1.4,<2`, `bokeh>=3.4,<4`, `plotly>=5.20` for the interactive UI.
+
+#### `.gitignore`
+- Added `logs/` (runtime UI worker logs) and `backtester/ui/state/ui_state.db`.
+
+#### `README.md`
+- Added **Research UI** section with tab descriptions, filter syntax reference, and persistence notes.
+- Updated repo structure diagram and testing docs to reflect `tests/ui/` and the new CLI flags.
+
+#### `docs/upgrades/backtester-interactive-ui.md`
+- Updated planning doc to reflect completed phases.
+
+### Bug Fixes
+
+#### `engine.py` — `progress_cb` signature incomplete
+- `progress_cb` and `progress_cb_interval` were referenced in the loop body and called from `run.py` but were missing from `run_grid_full()`'s parameter list, causing a `TypeError` at runtime.
+- Fixed undefined `logger` reference in the callback exception handler (replaced with inline `logging.getLogger(__name__)`).
+
+---
+
+## [7bc9c65] — 2026-05-13
 
 ### New Features
 
