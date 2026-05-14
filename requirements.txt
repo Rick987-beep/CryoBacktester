@@ -9,5 +9,10 @@ requests>=2.31.0          # Binance kline fetch (indicators/hist_data.py), Tardi
 python-dotenv>=1.0.0      # .env loading for data path overrides
 tzdata>=2024.1            # IANA tz DB fallback for zoneinfo (no-op on macOS/Ubuntu with system tz)
 
+# Interactive UI (backtester/ui/)
+panel>=1.4,<2             # Dashboard framework (Bokeh-based, Panel serve)
+bokeh>=3.4,<4             # Panel runtime dep (Tornado server)
+plotly>=5.20              # Equity charts rendered via pn.pane.Plotly
+
 # Development dependencies (optional)
 # pytest>=7.0.0           # Testing framework

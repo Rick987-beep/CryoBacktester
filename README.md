@@ -17,16 +17,17 @@ The companion live trading repo is [CryoTrader](https://github.com/Rick987-beep/
 5. [Strategy Logic](#strategy-logic)
 6. [The Engine](#the-engine)
 7. [The Research Pipeline](#the-research-pipeline)
-8. [Indicators](#indicators)
-9. [Scoring Model](#scoring-model)
-10. [HTML Reports](#html-reports)
-11. [Experiment Files](#experiment-files)
-12. [Configuration](#configuration)
-13. [Strategies](#strategies)
-14. [Adding a New Strategy](#adding-a-new-strategy)
-15. [Testing](#testing)
-16. [Performance Notes](#performance-notes)
-17. [Fee Model](#fee-model)
+8. [Research UI](#research-ui)
+9. [Indicators](#indicators)
+10. [Scoring Model](#scoring-model)
+11. [HTML Reports](#html-reports)
+12. [Experiment Files](#experiment-files)
+13. [Configuration](#configuration)
+14. [Strategies](#strategies)
+15. [Adding a New Strategy](#adding-a-new-strategy)
+16. [Testing](#testing)
+17. [Performance Notes](#performance-notes)
+18. [Fee Model](#fee-model)
 
 ---
 
@@ -47,11 +48,15 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
 # 4. Walk-forward validation
 python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 
-# 5. Run tests
-python -m pytest backtester/strategies/tests/ -v
+# 5. Launch the interactive Research UI
+python -m backtester.ui.app
+
+# 6. Run tests
+python -m pytest tests/ backtester/strategies/tests/ -v
 ```
 
 Reports are written to `backtester/reports/` as self-contained HTML files.
+The Research UI reads those same run bundles interactively at http://localhost:5006.
 
 ---
 
@@ -77,6 +82,30 @@ CryoBacktester/
 │   ├── expiry_utils.py            # Expiry date utilities
 │   ├── config.py / config.toml   # Config loader + application settings
 │   │
+│   ├── ui/                        # Interactive Research UI (Panel + Bokeh + Plotly)
+│   │   ├── app.py                 # Entry point: python -m backtester.ui.app
+│   │   ├── state.py               # AppState param object (shared reactive state)
+│   │   ├── log.py                 # UI-scoped logger
+│   │   ├── views/                 # One file per tab
+│   │   │   ├── sidebar.py         # Run list, strategy picker, param editor, run control
+│   │   │   ├── grid_view.py       # Results Grid: sortable/filterable combo table
+│   │   │   ├── detail_view.py     # Combo Detail: stats card + equity chart + trade log
+│   │   │   ├── overlay_view.py    # Equity Overlay: multi-combo comparison chart
+│   │   │   ├── favourites_view.py # Favourites: starred combos with TOML export
+│   │   │   └── compare_view.py    # Compare: side-by-side combo metric table
+│   │   ├── services/              # Data access layer
+│   │   │   ├── store_service.py   # SQLite run index + bundle persistence
+│   │   │   ├── cache_service.py   # LRU ResultCache (holds loaded GridResults)
+│   │   │   ├── equity_service.py  # Equity curve extraction from GridResult
+│   │   │   ├── run_service.py     # Async backtest execution bridge
+│   │   │   ├── run_worker.py      # Background worker thread for live runs
+│   │   │   ├── repro.py           # Reproducibility metadata helpers
+│   │   │   └── toml_export.py     # Favourite → experiment TOML snippet
+│   │   ├── charts/
+│   │   │   └── equity.py          # Plotly equity + drawdown chart builders
+│   │   └── state/
+│   │       └── ui_state.db        # SQLite DB (gitignored)
+│   │
 │   ├── strategies/                # One file per strategy
 │   │   └── tests/                 # Strategy unit tests
 │   │
@@ -87,6 +116,9 @@ CryoBacktester/
 │   └── ingest/
 │       ├── check_data_completeness.py
 │       └── bulkdownloadTardis/    # Tardis bulk download pipeline
+│
+├── tests/                         # UI and integration tests
+│   └── ui/                        # Panel UI unit tests (180+ tests)
 │
 ├── indicators/                    # Shared indicator compute functions
 │   ├── hist_data.py               # On-disk Binance kline cache (used by indicators)
@@ -101,7 +133,8 @@ CryoBacktester/
 - `backtester/data/` — parquet snapshots (~924 MB)
 - `backtester/archive/` — archived parquets
 - `backtester/planning/` — research notes, drafts, reference reports
-- `backtester/reports/` — generated HTML reports
+- `backtester/reports/` — generated HTML reports and run bundles
+- `backtester/ui/state/` — SQLite UI state DB
 - `indicators/data/` — cached kline data
 
 ---
@@ -310,6 +343,56 @@ In-sample (IS) uses the wide `PARAM_GRID` (honest search space). Out-of-sample (
 
 ---
 
+## Research UI
+
+An interactive Panel-based web app for exploring backtest results without re-running the engine.
+
+```bash
+python -m backtester.ui.app              # open on http://localhost:5006
+python -m backtester.ui.app --port 5007  # custom port
+python -m backtester.ui.app --no-browser # suppress auto-open
+python -m backtester.ui.app --dev        # autoreload on file changes
+```
+
+### What it reads
+
+The UI scans `backtester/reports/` for run bundles — directories created by `run.py`
+(format: `<strategy>_<timestamp>.bundle/`) containing `meta.json`, `trade_log.parquet`,
+`nav_daily.parquet`, and `final_nav.parquet`. It does **not** re-run the backtest engine.
+
+### Tabs
+
+| Tab | Description |
+|---|---|
+| **Results Grid** | All combos for the selected run — sortable, filterable, star/unstar |
+| **Combo Detail** | Stats card + equity/drawdown chart + trade log for one focused combo |
+| **Equity Overlay** | Multi-combo equity curves on one chart (select up to 50 combos) |
+| **Favourites** | Starred combos across all runs; TOML export, re-run prefill, notes |
+| **Compare** | Side-by-side metric table for selected combos |
+
+### Results Grid filter syntax
+
+Type filter expressions into the **Filter** box (space-separated, AND-combined):
+
+| Expression | Effect |
+|---|---|
+| `sharpe>1.5` | Sharpe > 1.5 |
+| `pnl:0..5000` | PnL between 0 and 5 000 |
+| `max_dd_pct<=20` | Max drawdown ≤ 20 % |
+| `exit_reason:trigger,expiry` | exit_reason is trigger or expiry |
+| `strategy:short` | strategy contains "short" (substring) |
+| `sharpe>1 pnl>0 max_dd_pct<30` | multiple AND filters |
+
+Supported operators: `>` `>=` `<` `<=` `=` `!=`
+
+### Persistence
+
+User preferences (dark mode, column visibility presets per strategy) and starred combos
+are stored in `backtester/ui/state/ui_state.db` (SQLite, gitignored). Created automatically
+on first launch.
+
+---
+
 ## Indicators
 
 Pre-computed indicators are injected into strategy instances before the data pass begins. Strategies declare their dependencies via a class attribute:
@@ -508,14 +591,25 @@ python -m backtester.run --strategy my_strategy
 ## Testing
 
 ```bash
-# Run all strategy tests (required before and after any code change)
+# Full test suite: UI tests + strategy tests (187 tests)
+python -m pytest tests/ backtester/strategies/tests/ -v
+
+# Strategy tests only
 python -m pytest backtester/strategies/tests/ -v
+
+# UI tests only
+python -m pytest tests/ui/ -v
 
 # Live/network tests (deselected by default, require network)
 python -m pytest backtester/strategies/tests/ -m live -v
 ```
 
-Tests live in `backtester/strategies/tests/`. `@pytest.mark.live` tests are excluded by default via `pyproject.toml` (`addopts = "-m 'not live'"`).
+Tests live in two directories:
+- `tests/ui/` — Panel UI unit tests (state, views, services, filter parser, etc.)
+- `backtester/strategies/tests/` — per-strategy backtesting unit tests
+
+`@pytest.mark.live` tests are excluded by default via `pyproject.toml` (`addopts = "-m 'not live'"`).
+`@pytest.mark.slow_ui` marks tests that require a real Panel server and are also excluded by default.
 
 ---
 

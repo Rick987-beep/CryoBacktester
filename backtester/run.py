@@ -64,6 +64,94 @@ DEFAULT_OPTIONS = _cfg.data.options_parquet
 DEFAULT_SPOT = _cfg.data.spot_parquet
 
 
+# ── run_backtest() — callable by worker + tests ───────────────────
+
+def run_backtest(
+    strategy_key,
+    param_grid,
+    date_range,
+    account_size,
+    bundles_root,
+    options_path=None,
+    spot_path=None,
+    progress_cb=None,
+    source="cli",
+):
+    """Run a discovery backtest and write both an HTML report and a run bundle.
+
+    Args:
+        strategy_key:  Key in STRATEGIES dict.
+        param_grid:    {param: [values]} dict.
+        date_range:    (date_from, date_to) strings or (None, None) for strategy default.
+        account_size:  Virtual account size in USD.
+        bundles_root:  Directory for HTML reports and .bundle/ dirs.
+        options_path:  Override parquet path (default: config).
+        spot_path:     Override parquet path (default: config).
+        progress_cb:   Optional callable(current, total, date_iso) — called every 50 states.
+        source:        "cli" | "ui" recorded in bundle meta.
+
+    Returns:
+        pathlib.Path pointing to the .bundle/ directory.
+    """
+    import pathlib
+
+    strategy_cls = STRATEGIES[strategy_key]
+    opts = options_path or DEFAULT_OPTIONS
+    spot = spot_path or DEFAULT_SPOT
+
+    date_from, date_to = date_range if date_range else (None, None)
+    if date_from is None and date_to is None:
+        date_from, date_to = getattr(strategy_cls, "DATE_RANGE", (None, None))
+
+    t0 = time.time()
+    replay = MarketReplay(opts, spot, start=date_from, end=date_to)
+
+    t1 = time.time()
+    df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
+        strategy_cls, param_grid, replay,
+        progress_cb=progress_cb,
+    )
+    grid_time = time.time() - t1
+
+    first_dt, last_dt = replay.time_range
+    actual_date_range = (first_dt.strftime("%Y-%m-%d"), last_dt.strftime("%Y-%m-%d"))
+
+    result = GridResult(
+        df, keys, nav_daily_df, final_nav_df,
+        param_grid=param_grid,
+        account_size=float(account_size),
+        date_range=actual_date_range,
+        df_fills=df_fills,
+    )
+
+    html = generate_html(
+        strategy_name=strategy_cls.name,
+        result=result,
+        n_intervals=len(replay._timestamps),
+        runtime_s=grid_time,
+        strategy_description=getattr(strategy_cls, "DESCRIPTION", ""),
+    )
+
+    reports_dir = pathlib.Path(bundles_root)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    html_path = reports_dir / f"{strategy_key}_{ts}.html"
+    html_path.write_text(html)
+
+    # Write bundle
+    _ui_state_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "ui", "state"
+    )
+    from backtester.ui.services.store_service import StoreService
+    _store = StoreService(str(_ui_state_dir), str(reports_dir))
+    bundle_path = _store.write_bundle(
+        result, strategy=strategy_key, runtime_s=grid_time, source=source
+    )
+    _store.register_bundle(bundle_path)
+
+    return bundle_path
+
+
 # ── Main ─────────────────────────────────────────────────────────
 
 def main():
@@ -93,6 +181,8 @@ def main():
                         choices=["discovery", "sensitivity", "wfo"],
                         help="Run mode: discovery (full PARAM_GRID), sensitivity "
                              "(experiment grid around best params), wfo (walk-forward).")
+    parser.add_argument("--no-bundle", action="store_true",
+                        help="Skip writing a run bundle (no .bundle/ dir next to the HTML).")
     args = parser.parse_args()
 
     # ── Resolve strategy, param_grid, and WFO window params ───────
@@ -188,6 +278,27 @@ def main():
         f.write(html)
 
     print(f"\n  Report: {output_path}")
+
+    # ── Write run bundle (for UI) ──────────────────────────────────
+    if not getattr(args, "no_bundle", False):
+        try:
+            from backtester.ui.services.store_service import StoreService
+            _ui_state_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "ui", "state"
+            )
+            _store = StoreService(_ui_state_dir, reports_dir)
+            _bundle_path = _store.write_bundle(
+                result,
+                strategy=report_stem,
+                runtime_s=grid_time,
+                source="cli",
+                wfo_result=wfo_result,
+            )
+            _store.register_bundle(_bundle_path)
+            print(f"  Bundle: {_bundle_path}")
+        except Exception as _bundle_exc:
+            print(f"  Bundle: skipped ({_bundle_exc})")
+
     print(f"  Total:  {time.time()-t0:.1f}s\n")
 
 

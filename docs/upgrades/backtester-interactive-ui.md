@@ -695,14 +695,14 @@ Steps:
 - `test_range_shorthand_parser.py` — integer & float ranges; invalid step rejected.
 - `test_csv_export.py` — filtered view exports only visible rows.
 
-**Manual live test**
+**Manual live test** — signed off 2026-05-13
 
-1. Hide 3 columns → save → reload UI → columns stay hidden.
-2. Toggle dark mode; reload → persists.
-3. `/` focuses filter; type; `Esc` clears.
-4. In param editor, type `0.1..0.5:0.1` → preview shows `[0.1, 0.2, 0.3, 0.4, 0.5]`.
-5. Prune runs (dry-run) → shows what it would delete; confirm → pinned survive.
-6. **Sign-off**: user confirms.
+1. ✅ Hide/show columns; reload → columns stay hidden.
+2. ✅ Toggle dark mode; reload → persists.
+3. ✅ Keyboard shortcuts removed (didn't react; removed per user request).
+4. ✅ CSV export works.
+5. ✅ Range shorthand (`0.1..0.5:0.1`) works (limited test).
+6. ✅ Prune runs works (no old runs to delete, dry-run path confirmed).
 
 ---
 
