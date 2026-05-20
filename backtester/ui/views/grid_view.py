@@ -34,6 +34,20 @@ _COL_FORMATTERS = {
     "consistency":    {"type": "number", "precision": 2},
 }
 
+# Colour tints injected into the Tabulator's shadow DOM.
+# :nth-child(n of .class) selects the nth element matching the class among
+# siblings — supported in Chrome 111+, Safari 9+, Firefox 113+.
+_GROUPS_CSS = """
+.tabulator-headers > div:nth-child(1 of .tabulator-col-group) {
+    background-color: #eff6ff !important;
+    border-bottom: 2px solid #93c5fd !important;
+}
+.tabulator-headers > div:nth-child(2 of .tabulator-col-group) {
+    background-color: #f0fdf4 !important;
+    border-bottom: 2px solid #86efac !important;
+}
+"""
+
 
 def _param_hash(param_names: list) -> str:
     """Return a stable 12-char hex hash of the sorted param names."""
@@ -216,11 +230,8 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
     # Mutable container so the callback can close over it
     _ctx: dict = {"tabulator": None, "hash_to_key": {}, "df_full": None}
 
-    # --- selection counter indicator ---
-    sel_count = pn.indicators.Number(
-        name="Selected", value=0, format="{value}",
-        default_color="gray", font_size="14pt",
-    )
+    # --- selection indicator (plain text label) ---
+    _sel_label = pn.pane.HTML("", styles={"font-size": "13px", "color": "#6b7280"}, margin=(8, 8))
 
     # --- "View Detail" button (enabled when exactly 1 combo is selected) ---
     _view_detail_btn = pn.widgets.Button(
@@ -229,7 +240,7 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     # --- "Star" button (Phase 4) ---
     _star_btn = pn.widgets.Button(
-        name="☆ Star", button_type="default", disabled=True, width=90,
+        name="☆ Star", button_type="light", disabled=True, width=90,
     )
     _star_feedback = pn.pane.HTML("", styles={"font-size": "11px"}, width=150)
 
@@ -246,7 +257,7 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         callback=_get_csv,
         filename="results.csv",
         label="⬇ CSV",
-        button_type="default",
+        button_type="light",
         width=80,
         margin=(0, 4),
     )
@@ -268,8 +279,8 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         sizing_mode="stretch_width",
     )
     _cols_toggle = pn.widgets.Toggle(
-        name="⚙ Cols", value=False, button_type="default",
-        width=70, margin=(0, 4),
+        name="⚙ Columns", value=False, button_type="light",
+        width=105, margin=(0, 4),
     )
     _cols_toggle.param.watch(
         lambda e: setattr(_col_chooser_panel, "visible", e.new), "value"
@@ -293,6 +304,9 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         _filter_input,
         _filter_clear,
         _filter_feedback,
+        pn.Spacer(),
+        _csv_download,
+        _cols_toggle,
         sizing_mode="stretch_width",
     )
 
@@ -355,6 +369,16 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         # Ensure all ordered cols actually exist
         ordered_cols = [c for c in ordered_cols if c in df.columns]
 
+        # Column groups — params = blue tint, performance metrics = green tint.
+        # rank and score stay ungrouped (they synthesise both worlds).
+        _tab_param_cols = [c for c in param_cols if c in ordered_cols]
+        _tab_perf_cols  = [c for c in _FIXED_DISPLAY_COLS[2:] if c in ordered_cols]
+        _tab_groups = {}
+        if _tab_param_cols:
+            _tab_groups["Parameters"] = _tab_param_cols
+        if _tab_perf_cols:
+            _tab_groups["Performance"] = _tab_perf_cols
+
         # Load column preset from store (Phase 5)
         hidden_user: list[str] = []
         strategy = ""
@@ -389,12 +413,14 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         tab = pn.widgets.Tabulator(
             df_display,
             hidden_columns=tab_hidden,
+            groups=_tab_groups,
             pagination="remote",
             page_size=200,
             selectable="checkbox",
             header_filters=True,
             sizing_mode="stretch_width",
             show_index=False,
+            stylesheets=[_GROUPS_CSS],
         )
         tab.editable = False
         tab.editors = {col: None for col in df_display.columns}
@@ -407,7 +433,8 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
                 if i < len(tab.value) and tab.value.iloc[i]["_key_hash"] in _ctx["hash_to_key"]
             ]
             state.selected_combo_keys = keys
-            sel_count.value = len(keys)
+            n = len(keys)
+            _sel_label.object = (f"<span>{n} combo{'s' if n != 1 else ''} selected</span>" if n else "")
             # Enable "View Detail" only when exactly one combo is selected
             _view_detail_btn.disabled = len(keys) != 1
             if len(keys) == 1:
@@ -444,7 +471,7 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         run_id = event.new
         if run_id is None:
             _content[:] = [_placeholder]
-            sel_count.value = 0
+            _sel_label.object = ""
             return
         try:
             result = cache.get(run_id)
@@ -505,15 +532,13 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     _star_btn.on_click(_on_star)
 
-    toolbar = pn.Row(
+    _action_row = pn.Row(
         pn.pane.Markdown("### Results Grid", margin=(5, 10)),
         pn.Spacer(),
         _view_detail_btn,
         _star_btn,
         _star_feedback,
-        _csv_download,
-        _cols_toggle,
-        pn.Row(pn.pane.Markdown("Selected:", margin=(8, 4)), sel_count),
+        _sel_label,
         sizing_mode="stretch_width",
     )
 
@@ -525,4 +550,4 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     _view_detail_btn.on_click(_on_view_detail)
 
-    return pn.Column(toolbar, _filter_row, _col_chooser_panel, _content, sizing_mode="stretch_width")
+    return pn.Column(_action_row, _filter_row, _col_chooser_panel, _content, sizing_mode="stretch_width")

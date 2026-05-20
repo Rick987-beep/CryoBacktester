@@ -114,6 +114,12 @@ def main():
             "date": date_iso,
         })
 
+    def _status_cb(phase, msg):
+        """Write a phase-change line to the progress file."""
+        if _CANCELLED:
+            return
+        _write_line(progress_path, {"phase": phase, "msg": msg})
+
     try:
         from backtester.run import run_backtest
 
@@ -124,6 +130,7 @@ def main():
             account_size=account_size,
             bundles_root=bundles_root,
             progress_cb=_progress_cb,
+            status_cb=_status_cb,
             source="ui",
         )
 

@@ -18,7 +18,11 @@ from backtester.ui.charts.equity import equity_figure
 
 log = get_ui_logger(__name__)
 
-# Trades table columns to display (all others exist on df but aren't useful here)
+# Fills-view columns (used when result.df_fills is available — one row per leg per event)
+_FILLS_COLS = ["ts", "trade_idx", "event", "contract", "side", "qty",
+               "amount_usd", "fees", "spot", "exit_reason"]
+
+# Summary-view columns (fallback when df_fills is absent)
 _TRADE_COLS = ["entry_time", "exit_time", "days_held", "entry_spot", "pnl",
                "pnl_pct", "exit_reason"]
 
@@ -55,6 +59,7 @@ def _fmt(v) -> str:
 # Columns whose values are USD amounts → format as xx,xxx.xx
 _DOLLAR_COLS = frozenset({
     "entry_spot", "exit_spot", "entry_price_usd", "exit_price_usd", "fees", "pnl",
+    "amount_usd", "spot",  # fills-view columns
 })
 # Columns that are percentages → format as xx.xx
 _PCT_COLS = frozenset({"pnl_pct", "win_rate", "max_dd_pct"})
@@ -130,7 +135,22 @@ def _stats_card_html(stats: dict, eq: dict | None, key: tuple, rank: int | None)
 
 
 def _trades_df(result, combo_idx: int) -> pd.DataFrame:
-    """Build display-ready trades DataFrame for one combo."""
+    """Build display-ready trades DataFrame for one combo.
+
+    Uses result.df_fills (one row per leg per event) if available for this combo.
+    Falls back to result.df (one summary row per trade) when df_fills is absent.
+    """
+    # --- Fills view (preferred) ---
+    df_f = result.df_fills
+    if df_f is not None and not df_f.empty:
+        df_c = df_f[df_f["combo_idx"] == combo_idx].copy()
+        if not df_c.empty:
+            if "ts" in df_c.columns:
+                df_c["ts"] = pd.to_datetime(df_c["ts"]).dt.strftime("%Y-%m-%d %H:%M")
+            avail = [c for c in _FILLS_COLS if c in df_c.columns]
+            return df_c[avail].reset_index(drop=True)
+
+    # --- Summary view fallback ---
     df = result.df
     if df is None or df.empty:
         return pd.DataFrame()
@@ -185,6 +205,8 @@ def _inspector_panel(trade_row: pd.Series, result) -> pn.Column:
         exit_t  = str(trade_row.get("exit_time",  "exit"))
         e_spot  = float(trade_row.get("entry_spot", 0))
         x_spot  = float(trade_row.get("exit_spot",  0) if "exit_spot" in trade_row.index else 0)
+        if e_spot == 0 and x_spot == 0:
+            raise ValueError("no spot data")
         pnl_v   = float(trade_row.get("pnl", 0))
         color   = "#16a34a" if pnl_v >= 0 else "#dc2626"
         mini_fig = go.Figure(go.Scatter(
@@ -337,8 +359,17 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
         else:
             # Add a hidden _row_idx column for inspector lookup
             df_trades["_row_idx"] = range(len(df_trades))
-            # Keep a reference to the full original df_c for the inspector
-            _df_full = result.df[result.df["combo_idx"] == combo_idx].reset_index(drop=True)
+            # Keep a reference to the full row data for the inspector.
+            # Prefer df_fills rows (richer per-leg detail); fall back to summary df.
+            _uses_fills = (
+                result.df_fills is not None
+                and not result.df_fills.empty
+                and not result.df_fills[result.df_fills["combo_idx"] == combo_idx].empty
+            )
+            if _uses_fills:
+                _df_full = result.df_fills[result.df_fills["combo_idx"] == combo_idx].reset_index(drop=True)
+            else:
+                _df_full = result.df[result.df["combo_idx"] == combo_idx].reset_index(drop=True)
 
             display_cols = [c for c in df_trades.columns if c != "_row_idx"] + ["_row_idx"]
 

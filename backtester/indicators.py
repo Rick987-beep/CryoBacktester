@@ -322,11 +322,94 @@ def _build_long_gamma_regime(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return long_gamma_regime(df_raw, **params)
 
 
+def _build_spot_momentum(df_raw: pd.DataFrame, **params) -> pd.Series:
+    """1-bar percent change of close price.
+
+    Works for any kline interval.  Registered under ``spot_mom_4h`` and
+    ``spot_mom_1h`` so strategies can declare two IndicatorDep entries with
+    different intervals and get independent lookups keyed by those names.
+
+    Index: bar open timestamps (Binance convention).
+    Values: pct change from previous bar's close to this bar's close, in %.
+
+    At entry time T (a 4h/1h boundary), look up index T − interval to get
+    the change that ended exactly at T.
+    """
+    return df_raw["close"].pct_change(1) * 100.0
+
+
+def _build_vol_burst_pullback(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
+    """Pre-compute entry signals for Str_VolBurst_Pullback on 1h BTCUSDT OHLCV.
+
+    Columns
+    -------
+    ret_1h           1h close-to-close return (%)
+    ret_4h           Most-recently-completed 4h return (%), forward-filled
+    rv_24h           24-bar annualised realised volatility (%)
+    rv_rank          30-day rolling percentile rank of rv_24h (0–1)
+    vol_z            24-bar volume z-score (ddof=0)
+    stand_aside      True when rv_rank has been < 0.35 for ≥ 12 consecutive bars
+    pullback_signal  bool: (bull or bear pullback) AND rv_rank ≥ 0.60 AND not Saturday
+    vol_burst_signal bool: vol_z ≥ 1.5 AND rv_rank ≥ 0.60 AND not Saturday
+
+    At signal-check time T (top of hour), look up index T − 1h to get the
+    most recently closed bar so there is no lookahead.
+    """
+    import numpy as np
+
+    close = df_raw["close"].astype(float)
+    volume = df_raw["volume"].astype(float)
+    out = pd.DataFrame(index=df_raw.index)
+
+    # ret_1h: close-to-close, percent
+    out["ret_1h"] = close.pct_change(1) * 100.0
+
+    # ret_4h: most-recently-completed 4h bar return, forward-filled to 1h bars.
+    # shift(1) on the 4h series avoids lookahead: at any 4h boundary T,
+    # ret_4h holds the return that completed one 4h bar earlier.
+    df4h_close = close.resample("4h").last()
+    ret_4h_raw = df4h_close.pct_change(1) * 100.0
+    out["ret_4h"] = ret_4h_raw.shift(1).reindex(df_raw.index, method="ffill")
+
+    # rv_24h: 24-bar rolling annualised realised volatility (%)
+    log_ret = np.log(close / close.shift(1))
+    out["rv_24h"] = log_ret.rolling(24, min_periods=24).std(ddof=1) * np.sqrt(8760) * 100.0
+
+    # rv_rank: rolling 30-day (720-bar) percentile rank with 15-day minimum
+    out["rv_rank"] = out["rv_24h"].rolling(720, min_periods=360).rank(pct=True)
+
+    # vol_z: 24-bar volume z-score (population std, ddof=0)
+    vol_mean = volume.rolling(24, min_periods=12).mean()
+    vol_std = volume.rolling(24, min_periods=12).std(ddof=0)
+    safe_std = vol_std.replace(0.0, float("nan"))
+    out["vol_z"] = (volume - vol_mean) / safe_std
+
+    # stand_aside: all 12 most-recent rv_rank values were < 0.35
+    # rolling(12).max() < 0.35  ≡  every value in the window was < 0.35
+    out["stand_aside"] = (out["rv_rank"].rolling(12, min_periods=12).max() < 0.35).fillna(False)
+
+    is_saturday = pd.Series(df_raw.index.dayofweek == 5, index=df_raw.index, dtype=bool)
+    rv_ok = out["rv_rank"] >= 0.60
+
+    # pullback_signal
+    bull_pb = (out["ret_4h"] >= 1.0) & (out["ret_1h"] <= -0.5)
+    bear_pb = (out["ret_4h"] <= -1.0) & (out["ret_1h"] >= 0.5)
+    out["pullback_signal"] = ((bull_pb | bear_pb) & rv_ok & ~is_saturday).fillna(False)
+
+    # vol_burst_signal
+    out["vol_burst_signal"] = ((out["vol_z"] >= 1.5) & rv_ok & ~is_saturday).fillna(False)
+
+    return out
+
+
 # Registry: indicator name → builder function
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
     "supertrend": _build_supertrend,
     "long_gamma_regime": _build_long_gamma_regime,
+    "spot_mom_4h": _build_spot_momentum,
+    "spot_mom_1h": _build_spot_momentum,
+    "vol_burst_pullback": _build_vol_burst_pullback,
 }
 
 
@@ -338,6 +421,7 @@ def build_indicators(
     deps: List[IndicatorDep],
     start: datetime,
     end: datetime,
+    status_cb=None,
 ) -> Dict[str, pd.DataFrame]:
     """
     Fetch/cache klines and compute all declared indicators.
@@ -345,9 +429,11 @@ def build_indicators(
     Called once per grid run, before the replay loop starts.
 
     Args:
-        deps:  List of ``IndicatorDep`` objects declared by the strategy.
-        start: First timestamp of the backtest range (tz-aware UTC).
-        end:   Last timestamp of the backtest range (tz-aware UTC).
+        deps:      List of ``IndicatorDep`` objects declared by the strategy.
+        start:     First timestamp of the backtest range (tz-aware UTC).
+        end:       Last timestamp of the backtest range (tz-aware UTC).
+        status_cb: Optional callable(phase, msg) for progress reporting.
+                   Fires once per indicator dep with phase="building_indicators".
 
     Returns:
         Dict mapping indicator name → computed DataFrame/Series.
@@ -356,6 +442,9 @@ def build_indicators(
     result: Dict[str, pd.DataFrame] = {}
 
     for dep in deps:
+        if status_cb is not None:
+            status_cb("building_indicators", f"Building {dep.name}…")
+
         builder = _BUILDERS.get(dep.name)
         if builder is None:
             raise ValueError(

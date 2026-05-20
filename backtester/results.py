@@ -84,20 +84,25 @@ def _all_combo_stats(df, keys, capital=10000, nav_daily_df=None, date_from=None,
 
         nav_close = nav.pivot(index="date", columns="combo_idx", values="nav_close")
         nav_low   = nav.pivot(index="date", columns="combo_idx", values="nav_low")
+        nav_high  = nav.pivot(index="date", columns="combo_idx", values="nav_high")
         nav_close = nav_close.reindex(all_dates).ffill().fillna(capital)
         nav_low   = nav_low.reindex(all_dates).fillna(nav_close)
+        nav_high  = nav_high.reindex(all_dates).fillna(nav_close)
 
         # Daily returns = diff of nav_close; first day = nav_close[0] - capital
         daily_returns_pivot = nav_close.diff()
         daily_returns_pivot.iloc[0] = nav_close.iloc[0] - capital
 
+        # Running peak: advance from intraday high so HWM captures true highest high
+        running_peak = nav_high.combine(nav_close, np.maximum).cummax()
+        # Keep a close-only peak for Ulcer Index (close-to-close convention)
         running_peak_close = nav_close.cummax()
 
-        # Max drawdown: intraday low vs running close high watermark (conservative)
-        dd_intraday_pivot = (running_peak_close - nav_low) / running_peak_close.replace(0, np.nan)
+        # Max drawdown: intraday low vs running intraday-high watermark
+        dd_intraday_pivot = (running_peak - nav_low) / running_peak.replace(0, np.nan)
         max_dd_pct_all = (dd_intraday_pivot.max() * 100).fillna(0.0)
 
-        # Ulcer Index: RMS of % drawdowns from running close peak
+        # Ulcer Index: RMS of % drawdowns from running close peak (close-to-close)
         pct_dd_close = (running_peak_close - nav_close) / running_peak_close.replace(0, np.nan) * 100
         ulcer_all = np.sqrt((pct_dd_close ** 2).mean()).fillna(0.0)
     else:
@@ -321,14 +326,30 @@ def _score_combos(all_stats, recency_stats=None):
 
     # ── Hard recency gate ────────────────────────────────────────────────────
     # Veto combos whose recent-window Sharpe is below the configured threshold.
+    # Two guard conditions prevent degenerate all-zero scoring:
+    #   1. Only gate combos with enough recent activity (recent_active_days >=
+    #      recency_min_trades).  Combos with no/sparse recent trading produce
+    #      recent_sharpe = 0.0 by arithmetic (flat NAV → zero std), not by
+    #      actual poor performance.
+    #   2. If the gate would fire on *all* eligible combos (e.g. the whole
+    #      strategy had a bad recent period), skip gating entirely.  The gate
+    #      exists to distinguish good-recent from bad-recent combos; when every
+    #      combo is equally bad recently, it carries no signal and zeroing all
+    #      scores is counterproductive.
     gated_keys = set()
     if (recency_stats
             and sc.recency_pct > 0.0
             and sc.recency_gate_enabled):
+        _candidate_gates = set()
         for k, _ in eligible:
             rs = recency_stats.get(k)
-            if rs is not None and rs["recent_sharpe"] < sc.recency_gate_sharpe:
-                gated_keys.add(k)
+            if (rs is not None
+                    and rs["recent_active_days"] >= sc.recency_min_trades
+                    and rs["recent_sharpe"] < sc.recency_gate_sharpe):
+                _candidate_gates.add(k)
+        # Only apply the gate when it would leave at least one combo unvetoed
+        if len(_candidate_gates) < len(eligible):
+            gated_keys = _candidate_gates
 
     # ── Recency overlay ──────────────────────────────────────────────────────
     # Percentile-rank recent Sharpe and PnL across eligible (non-gated) combos,
@@ -416,11 +437,12 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
             pnl = float(daily_returns[i])
             cum += pnl
             eq = float(nav_close.iloc[i])
-            peak_close = max(peak_close, eq)
             low  = float(nav_low.iloc[i])
             high = float(nav_high.iloc[i])
+            # Advance peak from intraday high so HWM captures true highest high
+            peak_close = max(peak_close, high)
 
-            # Max drawdown: intraday low vs running close high watermark (conservative)
+            # Max drawdown: intraday low vs running intraday-high watermark
             dd_pct = (peak_close - low) / peak_close if peak_close > 0 else 0.0
             if dd_pct > max_dd_pct:
                 max_dd_pct = dd_pct

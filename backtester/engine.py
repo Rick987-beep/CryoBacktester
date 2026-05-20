@@ -42,8 +42,8 @@ from backtester.config import cfg as _cfg
 from backtester.strategy_base import Trade, _reprice_legs
 
 
-def _inject_indicators(strategy_cls, instances, replay, progress):
-    # type: (Type, List[Any], Any, bool) -> None
+def _inject_indicators(strategy_cls, instances, replay, progress, status_cb=None):
+    # type: (Type, List[Any], Any, bool, Any) -> None
     """Pre-compute indicators declared by the strategy and inject into all instances."""
     deps = getattr(strategy_cls, "indicator_deps", None)
     if not deps:
@@ -58,7 +58,7 @@ def _inject_indicators(strategy_cls, instances, replay, progress):
         names = [d.name for d in deps]
         print(f"Building indicators {names} ({start_dt.date()} → {end_dt.date()})...")
 
-    ind = build_indicators(deps, start_dt, end_dt)
+    ind = build_indicators(deps, start_dt, end_dt, status_cb=status_cb)
 
     for strategy in instances:
         if hasattr(strategy, "set_indicators"):
@@ -280,6 +280,7 @@ def run_grid_full(
     progress=True,      # type: bool
     progress_cb=None,   # type: Optional[Any]  # Callable[[int, int, str], None] | None
     progress_cb_interval=50,  # type: int  # call progress_cb every N states
+    status_cb=None,     # type: Optional[Any]  # Callable[[str, str], None] | None
 ):
     """Run all parameter combos in a single pass over market data.
 
@@ -322,7 +323,10 @@ def run_grid_full(
         keys.append(_params_to_key(params))
 
     # Inject pre-computed indicators if strategy declares dependencies
-    _inject_indicators(strategy_cls, instances, replay, progress)
+    _inject_indicators(strategy_cls, instances, replay, progress, status_cb=status_cb)
+
+    if status_cb is not None:
+        status_cb("backtesting", "Running backtest…")
 
     # Flat lists — Trade objects are decomposed immediately and discarded
     _combo_idx = []
