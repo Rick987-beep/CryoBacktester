@@ -37,6 +37,10 @@ from backtester.strategies.bt_supertrend_lc import BtSupertrendLc
 from backtester.strategies.long_gamma_whitelist import LongGammaWhitelist
 from backtester.strategies.preopen_straddle import PreopenStraddle
 from backtester.strategies.hedged_put_sell import HedgedPutSell
+from backtester.strategies.long_gamma_MOVE import LongGammaMove
+from backtester.strategies.l_momentum import LMomentum
+from backtester.strategies.str_volburst_pullback import StrVolBurstPullback
+from backtester.strategies.cal_premium_collect import CalPremiumCollect
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -58,6 +62,10 @@ STRATEGIES = {
     "long_gamma_whitelist": LongGammaWhitelist,
     "preopen_straddle": PreopenStraddle,
     "hedged_put_sell": HedgedPutSell,
+    "long_gamma_MOVE": LongGammaMove,
+    "l_momentum": LMomentum,
+    "Str_VolBurst_Pullback": StrVolBurstPullback,
+    "cal_premium_collect":  CalPremiumCollect,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet
@@ -75,6 +83,7 @@ def run_backtest(
     options_path=None,
     spot_path=None,
     progress_cb=None,
+    status_cb=None,
     source="cli",
 ):
     """Run a discovery backtest and write both an HTML report and a run bundle.
@@ -88,6 +97,8 @@ def run_backtest(
         options_path:  Override parquet path (default: config).
         spot_path:     Override parquet path (default: config).
         progress_cb:   Optional callable(current, total, date_iso) — called every 50 states.
+        status_cb:     Optional callable(phase, msg) — called at phase transitions:
+                       "loading_data", "building_indicators", "backtesting".
         source:        "cli" | "ui" recorded in bundle meta.
 
     Returns:
@@ -103,6 +114,9 @@ def run_backtest(
     if date_from is None and date_to is None:
         date_from, date_to = getattr(strategy_cls, "DATE_RANGE", (None, None))
 
+    if status_cb is not None:
+        status_cb("loading_data", "Loading price data…")
+
     t0 = time.time()
     replay = MarketReplay(opts, spot, start=date_from, end=date_to)
 
@@ -110,6 +124,7 @@ def run_backtest(
     df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
         strategy_cls, param_grid, replay,
         progress_cb=progress_cb,
+        status_cb=status_cb,
     )
     grid_time = time.time() - t1
 

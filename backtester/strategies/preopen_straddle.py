@@ -7,18 +7,25 @@ Strategy logic
 --------------
 Entry:
   - NYSE trading day only (weekday + not a market holiday)
-  - State timestamp falls in the 09:00–09:29 ET window
+  - State timestamp falls in the entry_hour_et:entry_min_et ET window
+    (30-minute window; DST-aware via market_hours.to_nyc)
   - One trade per calendar day (no stacking)
   - ATM straddle (offset=0) or OTM strangle (offset>0) on the nearest
     unexpired Deribit daily expiry
 
-Exit (evaluated each 5-min tick, first condition wins):
+Exit — combined mode (individual_exit=0, evaluated each 5-min tick):
   1. Spot excursion: abs spot move from entry >= spot_move_pct (%)
        max(spot_high_since(entry), entry_spot) / entry_spot - 1
        or entry_spot / min(spot_low_since(entry), entry_spot) - 1
   2. Noon hard stop: NYC local time >= 12:00
   3. Max hold: elapsed minutes since entry >= max_hold_min
   4. Expiry guard: underlying option has expired
+
+Exit — individual leg mode (individual_exit=1):
+  - Call leg closes independently when spot moves UP >= spot_move_pct%
+  - Put leg closes independently when spot moves DOWN >= spot_move_pct%
+  - Each leg emits its own Trade record
+  - Hard stops (noon, max hold, expiry) close any remaining open legs
 
 Execution model:
   - Open:  buy both legs at ask price
@@ -55,10 +62,13 @@ class PreopenStraddle:
     )
 
     PARAM_GRID = {
-        "spot_move_pct": [1.00, 1.20, 1.40, 1.60, 1.80],
-        "max_hold_min":  [60, 90, 120],
-        "offset":        [1000],
-        "min_dte":       [1, 7],
+        "spot_move_pct":   [1.00, 1.20, 1.40, 1.60, 1.80],
+        "max_hold_min":    [60, 90, 120, 180],
+        "offset":          [500, 1000, 1500],
+        "min_dte":         [1, 7],
+        "entry_hour_et":   [6,7,8,9],
+        "entry_min_et":    [0],
+        "individual_exit": [0, 1],
     }
 
     def __init__(self):
@@ -67,6 +77,9 @@ class PreopenStraddle:
         self._max_hold_min = 60
         self._offset = 0
         self._min_dte = 1
+        self._entry_hour_et = 9
+        self._entry_min_et = 0
+        self._individual_exit = 0
         self._last_trade_date = None   # type: Optional[Any]
 
     def configure(self, params):
@@ -75,6 +88,9 @@ class PreopenStraddle:
         self._max_hold_min = params["max_hold_min"]
         self._offset = params["offset"]
         self._min_dte = params["min_dte"]
+        self._entry_hour_et = params.get("entry_hour_et", 9)
+        self._entry_min_et = params.get("entry_min_et", 0)
+        self._individual_exit = params.get("individual_exit", 0)
         self._position = None
         self._last_trade_date = None
 
@@ -84,10 +100,21 @@ class PreopenStraddle:
 
         if self._position is not None:
             reason = self._check_expiry(state)
-            if reason is None:
-                reason = self._check_exits(state)
             if reason:
-                trades.append(self._close(state, reason))
+                if self._individual_exit:
+                    trades.extend(self._close_all_remaining(state, reason))
+                else:
+                    trades.append(self._close(state, reason))
+            elif self._individual_exit:
+                trades.extend(self._check_individual_leg_exits(state))
+                if self._position is not None:
+                    hard_stop = self._check_hard_stops(state)
+                    if hard_stop:
+                        trades.extend(self._close_all_remaining(state, hard_stop))
+            else:
+                reason = self._check_exits(state)
+                if reason:
+                    trades.append(self._close(state, reason))
 
         if self._position is None:
             today = state.dt.date()
@@ -99,6 +126,8 @@ class PreopenStraddle:
     def on_end(self, state):
         # type: (Any) -> List[Trade]
         if self._position is not None:
+            if self._individual_exit:
+                return self._close_all_remaining(state, "end_of_data")
             return [self._close(state, "end_of_data")]
         return []
 
@@ -110,10 +139,13 @@ class PreopenStraddle:
     def describe_params(self):
         # type: () -> Dict[str, Any]
         return {
-            "spot_move_pct": self._spot_move_pct,
-            "max_hold_min":  self._max_hold_min,
-            "offset":        self._offset,
-            "min_dte":       self._min_dte,
+            "spot_move_pct":   self._spot_move_pct,
+            "max_hold_min":    self._max_hold_min,
+            "offset":          self._offset,
+            "min_dte":         self._min_dte,
+            "entry_hour_et":   self._entry_hour_et,
+            "entry_min_et":    self._entry_min_et,
+            "individual_exit": self._individual_exit,
         }
 
     # ------------------------------------------------------------------
@@ -126,8 +158,9 @@ class PreopenStraddle:
         if not is_trading_day(state.dt):
             return False
         nyc_dt = to_nyc(state.dt)
-        # 09:00–09:29 ET (exclusive of 09:30 which is the NYSE open itself)
-        return nyc_dt.hour == 9 and nyc_dt.minute < 30
+        nyc_min = nyc_dt.hour * 60 + nyc_dt.minute
+        start_min = self._entry_hour_et * 60 + self._entry_min_et
+        return start_min <= nyc_min < start_min + 30
 
     def _select_expiry(self, state):
         # type: (Any) -> Optional[str]
@@ -180,10 +213,12 @@ class PreopenStraddle:
             legs=[
                 {"strike": call.strike, "is_call": True,
                  "expiry": expiry, "side": "buy",
-                 "entry_price": call.ask, "entry_price_usd": call.ask_usd},
+                 "entry_price": call.ask, "entry_price_usd": call.ask_usd,
+                 "fees_open": fee_call, "closed": False},
                 {"strike": put.strike, "is_call": False,
                  "expiry": expiry, "side": "buy",
-                 "entry_price": put.ask, "entry_price_usd": put.ask_usd},
+                 "entry_price": put.ask, "entry_price_usd": put.ask_usd,
+                 "fees_open": fee_put, "closed": False},
             ],
             entry_price_usd=entry_usd,
             fees_open=fee_call + fee_put,
@@ -199,11 +234,19 @@ class PreopenStraddle:
     # Exit helpers
     # ------------------------------------------------------------------
 
+    def _check_hard_stops(self, state):
+        # type: (Any) -> Optional[str]
+        pos = self._position
+        if to_nyc(state.dt).hour >= 12:
+            return "noon_exit"
+        elapsed_min = (state.dt - pos.entry_time).total_seconds() / 60.0
+        if elapsed_min >= self._max_hold_min:
+            return "time_exit"
+        return None
+
     def _check_exits(self, state):
         # type: (Any) -> Optional[str]
         pos = self._position
-
-        # 1. Spot excursion target
         threshold = self._spot_move_pct / 100.0
         high = state.spot_high_since(int(pos.entry_time.timestamp() * 1_000_000))
         low  = state.spot_low_since(int(pos.entry_time.timestamp() * 1_000_000))
@@ -211,17 +254,86 @@ class PreopenStraddle:
             return "target_hit"
         if (pos.entry_spot - low) / pos.entry_spot >= threshold:
             return "target_hit"
+        return self._check_hard_stops(state)
 
-        # 2. Noon ET hard stop
-        if to_nyc(state.dt).hour >= 12:
-            return "noon_exit"
+    def _check_individual_leg_exits(self, state):
+        # type: (Any) -> List[Trade]
+        pos = self._position
+        trades = []
+        threshold = self._spot_move_pct / 100.0
+        high = state.spot_high_since(int(pos.entry_time.timestamp() * 1_000_000))
+        low  = state.spot_low_since(int(pos.entry_time.timestamp() * 1_000_000))
+        for leg in pos.legs:
+            if leg.get("closed"):
+                continue
+            if leg["is_call"]:
+                if (high - pos.entry_spot) / pos.entry_spot >= threshold:
+                    trades.append(self._close_leg(state, leg, "target_hit"))
+            else:
+                if (pos.entry_spot - low) / pos.entry_spot >= threshold:
+                    trades.append(self._close_leg(state, leg, "target_hit"))
+        if all(leg.get("closed") for leg in pos.legs):
+            self._last_trade_date = pos.entry_time.date()
+            self._position = None
+        return trades
 
-        # 3. Max hold
-        elapsed_min = (state.dt - pos.entry_time).total_seconds() / 60.0
-        if elapsed_min >= self._max_hold_min:
-            return "time_exit"
+    def _close_leg(self, state, leg, reason):
+        # type: (Any, Any, str) -> Trade
+        pos = self._position
+        expiry    = leg["expiry"]
+        strike    = leg["strike"]
+        is_call   = leg["is_call"]
+        entry_usd = leg["entry_price_usd"]
+        fees_open = leg.get("fees_open", 0.0)
 
-        return None
+        if reason == "expiry":
+            exit_usd = max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)
+            fees_close = 0.0
+        else:
+            q = state.get_option(expiry, strike, is_call)
+            bid_usd = (q.bid_usd if q else 0.0) or 0.0
+            if bid_usd != bid_usd:  # NaN guard
+                bid_usd = 0.0
+            exit_usd   = bid_usd
+            fees_close = deribit_fee_per_leg(state.spot, bid_usd)
+
+        total_fees = fees_open + fees_close
+        pnl = exit_usd - entry_usd - total_fees
+        held_s = (state.dt - pos.entry_time).total_seconds()
+        trade = Trade(
+            entry_time=pos.entry_time,
+            exit_time=state.dt,
+            entry_spot=pos.entry_spot,
+            exit_spot=state.spot,
+            entry_price_usd=entry_usd,
+            exit_price_usd=exit_usd,
+            fees=total_fees,
+            pnl=pnl,
+            triggered=(reason == "target_hit"),
+            exit_reason=reason,
+            exit_hour=int(held_s / 3600),
+            entry_date=pos.entry_time.strftime("%Y-%m-%d"),
+            metadata={
+                **pos.metadata,
+                "leg":           "call" if is_call else "put",
+                "strike":        strike,
+                "spot_move_pct": self._spot_move_pct,
+                "max_hold_min":  self._max_hold_min,
+                "min_dte":       self._min_dte,
+            },
+        )
+        leg["closed"] = True
+        return trade
+
+    def _close_all_remaining(self, state, reason):
+        # type: (Any, str) -> List[Trade]
+        trades = []
+        for leg in self._position.legs:
+            if not leg.get("closed"):
+                trades.append(self._close_leg(state, leg, reason))
+        self._last_trade_date = self._position.entry_time.date()
+        self._position = None
+        return trades
 
     def _check_expiry(self, state):
         # type: (Any) -> Optional[str]
@@ -239,7 +351,7 @@ class PreopenStraddle:
     def _close(self, state, reason):
         # type: (Any, str) -> Trade
         pos = self._position
-        expiry     = pos.metadata["expiry"]
+        expiry      = pos.metadata["expiry"]
         call_strike = pos.metadata["call_strike"]
         put_strike  = pos.metadata["put_strike"]
 

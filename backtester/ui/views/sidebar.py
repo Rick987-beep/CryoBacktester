@@ -5,6 +5,9 @@ Phase 1: runs list (buttons, Refresh).
 Phase 3: strategy dropdown, param CSV editor, date range, Run / Cancel,
          progress bar + periodic progress tailing.
 """
+import importlib
+import sys
+
 import panel as pn
 
 from backtester.ui.log import get_ui_logger
@@ -170,15 +173,32 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
     except Exception as exc:
         log.warning("scan_bundles failed: %s", exc)
 
+    _RECENT_LIMIT = 10          # runs visible before the "show all" toggle
+
+    _show_all_runs: dict = {"v": False}  # mutable flag, toggled per session
+
     runs_container = pn.Column(sizing_mode="stretch_width")
+    _show_all_btn = pn.widgets.Button(
+        name="",
+        button_type="light",
+        sizing_mode="stretch_width",
+        margin=(2, 4),
+        visible=False,
+    )
 
     def _refresh_runs():
         rows = store.list_runs()
         if not rows:
             runs_container[:] = [pn.pane.Markdown("_No runs found._")]
+            _show_all_btn.visible = False
             return
+
+        total = len(rows)
+        show_all = _show_all_runs["v"]
+        visible_rows = rows if (show_all or total <= _RECENT_LIMIT) else rows[:_RECENT_LIMIT]
+
         items = []
-        for rr in rows:
+        for rr in visible_rows:
             label = rr.label or rr.strategy
             ts_short = rr.created_at[:16].replace("T", " ")
             n_str = f"{rr.n_combos} combos" if rr.n_combos else ""
@@ -200,6 +220,23 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
             items.append(btn)
         runs_container[:] = items
 
+        # Toggle button: only shown when there are more than _RECENT_LIMIT runs
+        if total > _RECENT_LIMIT:
+            hidden = total - _RECENT_LIMIT
+            _show_all_btn.name = (
+                f"↑ Show recent {_RECENT_LIMIT}" if show_all
+                else f"↓ Show {hidden} older run{'s' if hidden != 1 else ''}"
+            )
+            _show_all_btn.visible = True
+        else:
+            _show_all_btn.visible = False
+
+    def _on_toggle_all(event):
+        _show_all_runs["v"] = not _show_all_runs["v"]
+        _refresh_runs()
+
+    _show_all_btn.on_click(_on_toggle_all)
+
     _refresh_runs()
 
     refresh_btn = pn.widgets.Button(
@@ -212,6 +249,7 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
         pn.Row(refresh_btn, sizing_mode="stretch_width"),
         pn.pane.HTML("<hr style='margin:4px 0;border-color:#ccc'>"),
         runs_container,
+        _show_all_btn,
         sizing_mode="stretch_width",
     )
 
@@ -227,6 +265,11 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
         options=sorted(STRATEGIES.keys()),
         value="short_generic" if "short_generic" in STRATEGIES else sorted(STRATEGIES.keys())[0],
         sizing_mode="stretch_width",
+    )
+    reload_btn = pn.widgets.Button(
+        name="↻", button_type="light", width=36,
+        margin=(22, 0, 0, 4),
+        stylesheets=["button { font-size: 16px; padding: 2px 6px; }"],
     )
 
     # ── Param editor ───────────────────────────────────────────────────────────
@@ -353,6 +396,23 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
 
     strategy_select.param.watch(_on_strategy_change, "value")
 
+    # ── Strategy reload (re-imports module so PARAM_GRID changes are picked up) ─
+    def _on_reload(event):
+        key = strategy_select.value
+        cls = STRATEGIES.get(key)
+        if cls is None:
+            return
+        module_name = cls.__module__
+        if module_name in sys.modules:
+            module = importlib.reload(sys.modules[module_name])
+            new_cls = getattr(module, cls.__name__, None)
+            if new_cls is not None:
+                STRATEGIES[key] = new_cls
+        _load_strategy_params(key)
+        _load_date_range(key)
+
+    reload_btn.on_click(_on_reload)
+
     _load_strategy_params(strategy_select.value)
     _load_date_range(strategy_select.value)
 
@@ -448,11 +508,25 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
             if h is None:
                 return
             for line in run_service.tail_progress(h):
-                if "current" in line and "total" in line:
+                if "phase" in line:
+                    # Phase-change lines from run_backtest / build_indicators.
+                    # Claim a slice of the bar so the user sees movement during
+                    # data loading and indicator building (before the backtest loop).
+                    phase = line["phase"]
+                    msg = line.get("msg", "")
+                    progress_label.object = msg
+                    if phase == "loading_data":
+                        progress_bar.value = 3
+                    elif phase == "building_indicators":
+                        progress_bar.value = 8
+                    elif phase == "backtesting":
+                        progress_bar.value = 12
+                elif "current" in line and "total" in line:
                     total = line["total"]
                     current = line["current"]
                     if total > 0:
-                        progress_bar.value = int(100 * current / total)
+                        # Phases 1 & 2 own 0–12%; backtest progress fills 12–100%.
+                        progress_bar.value = 12 + int(88 * current / total)
                     if line.get("date"):
                         progress_label.object = f"Processing {line['date']}"
                 elif line.get("status") == "done":
@@ -577,7 +651,7 @@ def build_sidebar(state, store, cache, run_service=None) -> pn.Column:
     run_control = pn.Column(
         pn.pane.HTML("<hr style='margin:8px 0;border-color:#ccc'>"),
         pn.pane.Markdown("## New Run", margin=(8, 4)),
-        strategy_select,
+        pn.Row(strategy_select, reload_btn, sizing_mode="stretch_width"),
         pn.pane.Markdown("**Parameters** (CSV or range `start..end:step` per row):", margin=(4, 4)),
         param_editor_col,
         date_from_input,
