@@ -308,7 +308,9 @@ def _reprice_legs(state, pos):
         if quote is None:
             return None
         _leg_qty = float(leg.get("qty", 1.0))
-        if direction == "sell":
+        _leg_side = leg.get("side")
+        _use_ask = (_leg_side == "sell") if _leg_side is not None else (direction == "sell")
+        if _use_ask:
             if quote.ask == 0.0:
                 # Zero-price fallback: use mark × (1 + slip) if mark is meaningful
                 if quote.mark_usd > _min_mark_usd:
@@ -431,20 +433,28 @@ def close_short_strangle(state, pos, reason):
     if reason == "expiry":
         call_exit_usd = max(0.0, state.spot - call_strike) * quantity
         put_exit_usd  = max(0.0, put_strike - state.spot) * quantity
+        call_exit_btc = (call_exit_usd / quantity) / state.spot if state.spot else 0.0
+        put_exit_btc  = (put_exit_usd  / quantity) / state.spot if state.spot else 0.0
     else:
         _min_tick_usd = 0.0001 * state.spot
         call_q = state.get_option(expiry, call_strike, True)
         put_q  = state.get_option(expiry, put_strike,  False)
         call_exit_usd = (call_q.ask_usd if call_q and call_q.ask > 0 else _min_tick_usd) * quantity
         put_exit_usd  = (put_q.ask_usd  if put_q  and put_q.ask  > 0 else _min_tick_usd) * quantity
+        call_exit_btc = call_q.ask if call_q and call_q.ask > 0 else 0.0001
+        put_exit_btc  = put_q.ask  if put_q  and put_q.ask  > 0 else 0.0001
 
-    # Annotate each leg with its actual exit price so _append_fills can display
-    # the correct per-leg amount rather than a proportional split.
+    # Annotate each leg with BTC exit price (per contract) for engine fill logging.
+    # Also set fee_btc_close=0 for expiry (no fee on settlement).
     for leg in pos.legs:
         if leg.get("is_call"):
-            leg["exit_price_usd"] = call_exit_usd
+            leg["exit_price_btc"] = call_exit_btc
+            if reason == "expiry":
+                leg["fee_btc_close"] = 0.0
         else:
-            leg["exit_price_usd"] = put_exit_usd
+            leg["exit_price_btc"] = put_exit_btc
+            if reason == "expiry":
+                leg["fee_btc_close"] = 0.0
 
     exit_usd   = call_exit_usd + put_exit_usd
     fees_close = 0.0 if reason == "expiry" else (
