@@ -27,7 +27,10 @@ from backtester.experiment import load_experiment
 from backtester.strategies.ss_turb_dyn_mk2 import SsTurbDynMk2
 from backtester.strategies.preopen_straddle import PreopenStraddle
 from backtester.strategies.cal_premium_collect import CalPremiumCollect
+from backtester.strategies.cal_premium_collect_mk2 import CalPremiumCollectMk2
+from backtester.strategies.cal_spread_weekend import CalSpreadWeekend
 from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
+from backtester.strategies.ss_geronimo import SsGeronimo
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -40,8 +43,11 @@ from backtester.config import cfg as _cfg
 STRATEGIES = {
     "ss_turb_dyn_mk2": SsTurbDynMk2,
     "preopen_straddle": PreopenStraddle,
-    "cal_premium_collect":  CalPremiumCollect,
+    "cal_premium_collect":     CalPremiumCollect,
+    "cal_premium_collect_mk2": CalPremiumCollectMk2,
+    "cal_spread_weekend":      CalSpreadWeekend,
     "short_str_turb_dyn": ShortStrTurbDyn,
+    "ss_geronimo":        SsGeronimo,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet

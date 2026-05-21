@@ -150,11 +150,8 @@ def _open_unrealized_pnl(strategy, state, pos_cache):
                         pnl += cur_val - entry_usd
                 pnl -= float(pos.fees_open)
             else:
-                direction = pos.metadata.get("direction", "buy")
-                if direction == "sell":
-                    pnl = float(pos.entry_price_usd - current_usd - pos.fees_open)
-                else:
-                    pnl = float(current_usd - pos.entry_price_usd - pos.fees_open)
+                # Leg annotations absent for unrealized PnL — carry forward.
+                pnl = pos_cache.get(pid, -float(pos.fees_open))
 
         pos_cache[pid] = pnl
         total += pnl
@@ -441,14 +438,12 @@ def run_grid_full(
         fee_btc (positive, from fee model), and spot for USD derivation.
 
         For side=="open" Trades: emits open rows only.
-        For side=="close" Trades with metadata["skip_open_fill"]==True:
-            emits close rows only (strategy already emitted an explicit open Trade).
+        For side=="close" Trades: emits close rows only. The strategy must
+            yield an explicit side='open' Trade so open fills are present.
         For side=="close" Trades with metadata["partial_close"]==True:
             emits close rows only for the closed legs; the pos_id → open_idx
             mapping is RETAINED so the surviving legs' eventual close still
             links back to the original open.
-        For side=="close" Trades without those flags:
-            emits both open and close rows (backward-compatible inference).
         Silently skips if the trade has no 'legs' in metadata.
 
         Leg dict expected keys:
@@ -532,7 +527,7 @@ def run_grid_full(
 
             # Record open trade_idx ON the leg so close fills can link
             # back without needing the position-level pos_id map.
-            # Also stamp the entry spot so leg-aware PnL in close_trade /
+            # Also stamp the entry spot so leg-aware PnL in close_position /
             # partial_close uses the correct spot for legs added later
             # (e.g. via add_legs at a different timestamp).
             if not is_close:
@@ -558,13 +553,7 @@ def run_grid_full(
         else:
             _open_tidx = None
         if _open_tidx is None:
-            _open_tidx = tidx  # backward-compat: open+close same trade_idx
-        skip_open = trade.metadata.get('skip_open_fill', False)
-
-        if not skip_open:
-            for leg in legs:
-                _emit(leg, tidx, trade.entry_time, trade.entry_spot,
-                      "open", "", 0, is_close=False)
+            _open_tidx = tidx
 
         for leg in legs:
             _emit(leg, _open_tidx, trade.exit_time, trade.exit_spot,

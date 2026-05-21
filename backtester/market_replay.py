@@ -34,6 +34,10 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
 
 # ------------------------------------------------------------------
@@ -347,6 +351,14 @@ class MarketState:
 # MarketReplay — the iterator
 # ------------------------------------------------------------------
 
+# Columns read from each parquet type — unused columns are never decompressed.
+_OPT_COLS = [
+    "timestamp", "expiry", "strike", "is_call",
+    "bid_price", "ask_price", "mark_price", "mark_iv", "delta",
+]
+_SPOT_COLS = ["timestamp", "open", "high", "low", "close"]
+
+
 class MarketReplay:
     """Loads snapshot parquets and iterates as MarketState objects.
 
@@ -377,44 +389,65 @@ class MarketReplay:
         # ----------------------------------------------------------
         # Load option snapshots (single file or directory of per-day files)
         # ----------------------------------------------------------
-        opt_df = self._load_parquets(snapshot_path, "options_")
-        if expiry_filter:
-            opt_df = opt_df[opt_df["expiry"].isin(expiry_filter)].reset_index(drop=True)
-
-        # Load spot track
-        spot_df = self._load_parquets(spot_track_path, "spot_")
-
-        # Time filtering
+        # Build Arrow filter expressions — applied at scan time so only
+        # matching rows are decompressed and allocated.
+        opt_filters = []
+        spot_filters = []
         if start is not None:
             start_us = self._to_us(start)
-            opt_df = opt_df[opt_df["timestamp"] >= start_us].reset_index(drop=True)
-            spot_df = spot_df[spot_df["timestamp"] >= start_us].reset_index(drop=True)
+            opt_filters.append(pc.field("timestamp") >= start_us)
+            spot_filters.append(pc.field("timestamp") >= start_us)
         if end is not None:
             end_us = self._to_us(end)
-            opt_df = opt_df[opt_df["timestamp"] <= end_us].reset_index(drop=True)
-            spot_df = spot_df[spot_df["timestamp"] <= end_us].reset_index(drop=True)
+            opt_filters.append(pc.field("timestamp") <= end_us)
+            spot_filters.append(pc.field("timestamp") <= end_us)
+        if expiry_filter:
+            opt_filters.append(pc.field("expiry").isin(expiry_filter))
+
+        def _and(exprs):
+            # type: (list) -> Optional[pc.Expression]
+            if not exprs:
+                return None
+            result = exprs[0]
+            for e in exprs[1:]:
+                result = result & e
+            return result
+
+        opt_table = self._load_parquets(
+            snapshot_path, "options_",
+            columns=_OPT_COLS, filter_expr=_and(opt_filters),
+        )
+
+        # Load spot track
+        spot_table = self._load_parquets(
+            spot_track_path, "spot_",
+            columns=_SPOT_COLS, filter_expr=_and(spot_filters),
+        )
 
         # ----------------------------------------------------------
         # Columnar NumPy storage for option data
         # ----------------------------------------------------------
         # Sort by timestamp for contiguous slicing
-        opt_df.sort_values("timestamp", inplace=True, kind="mergesort")
-        opt_df.reset_index(drop=True, inplace=True)
+        sort_idx = pc.sort_indices(opt_table, sort_keys=[("timestamp", "ascending")])
+        opt_table = opt_table.take(sort_idx)
 
-        # Encode expiry strings as uint16 indices (up to 65535 unique expiries)
-        expiry_cat = opt_df["expiry"].astype("category")
-        self._expiry_table = list(expiry_cat.cat.categories)  # str lookup table
-        self._opt_expiry_idx = expiry_cat.cat.codes.values.astype(np.uint16)
+        # Encode expiry strings as uint16 indices (up to 65535 unique expiries).
+        # expiry was loaded as plain string (dictionary decoding suppressed in
+        # _load_parquets). Combine string chunks then re-encode with a single
+        # globally-consistent dictionary using Arrow's dictionary_encode().
+        expiry_col = opt_table.column("expiry").combine_chunks().dictionary_encode()
+        self._expiry_table = expiry_col.dictionary.to_pylist()
+        self._opt_expiry_idx = expiry_col.indices.to_numpy(zero_copy_only=False).astype(np.uint16)
 
-        # Extract columns as contiguous NumPy arrays
-        self._opt_timestamps = opt_df["timestamp"].values.astype(np.int64)
-        self._opt_strike = opt_df["strike"].values.astype(np.float32)
-        self._opt_is_call = opt_df["is_call"].values.astype(np.bool_)
-        self._opt_bid = opt_df["bid_price"].values.astype(np.float32)
-        self._opt_ask = opt_df["ask_price"].values.astype(np.float32)
-        self._opt_mark = opt_df["mark_price"].values.astype(np.float32)
-        self._opt_mark_iv = opt_df["mark_iv"].values.astype(np.float32)
-        self._opt_delta = opt_df["delta"].values.astype(np.float32)
+        # Extract columns as contiguous NumPy arrays directly from Arrow
+        self._opt_timestamps = opt_table.column("timestamp").to_numpy(zero_copy_only=False).astype(np.int64)
+        self._opt_strike = opt_table.column("strike").to_numpy(zero_copy_only=False).astype(np.float32)
+        self._opt_is_call = opt_table.column("is_call").to_numpy(zero_copy_only=False).astype(np.bool_)
+        self._opt_bid = opt_table.column("bid_price").to_numpy(zero_copy_only=False).astype(np.float32)
+        self._opt_ask = opt_table.column("ask_price").to_numpy(zero_copy_only=False).astype(np.float32)
+        self._opt_mark = opt_table.column("mark_price").to_numpy(zero_copy_only=False).astype(np.float32)
+        self._opt_mark_iv = opt_table.column("mark_iv").to_numpy(zero_copy_only=False).astype(np.float32)
+        self._opt_delta = opt_table.column("delta").to_numpy(zero_copy_only=False).astype(np.float32)
 
         n_opt = len(self._opt_timestamps)
 
@@ -431,8 +464,8 @@ class MarketReplay:
         for i, ts_val in enumerate(self._ts_sorted):
             self._ts_to_idx[int(ts_val)] = i
 
-        # Free the DataFrame
-        del opt_df
+        # Free the Arrow table
+        del opt_table
 
         # Filter timestamps by step
         all_ts = self._ts_sorted.copy()
@@ -444,13 +477,16 @@ class MarketReplay:
         # ----------------------------------------------------------
         # Spot track as NumPy arrays
         # ----------------------------------------------------------
-        self._spot_ts = spot_df["timestamp"].values.astype(np.int64)
-        self._spot_open = spot_df["open"].values.astype(np.float64)
-        self._spot_high = spot_df["high"].values.astype(np.float64)
-        self._spot_low = spot_df["low"].values.astype(np.float64)
-        self._spot_close = spot_df["close"].values.astype(np.float64)
+        spot_sort_idx = pc.sort_indices(spot_table, sort_keys=[("timestamp", "ascending")])
+        spot_table = spot_table.take(spot_sort_idx)
 
-        del spot_df
+        self._spot_ts = spot_table.column("timestamp").to_numpy(zero_copy_only=False).astype(np.int64)
+        self._spot_open = spot_table.column("open").to_numpy(zero_copy_only=False).astype(np.float64)
+        self._spot_high = spot_table.column("high").to_numpy(zero_copy_only=False).astype(np.float64)
+        self._spot_low = spot_table.column("low").to_numpy(zero_copy_only=False).astype(np.float64)
+        self._spot_close = spot_table.column("close").to_numpy(zero_copy_only=False).astype(np.float64)
+
+        del spot_table
 
         n_ts = len(self._timestamps)
         n_spot = len(self._spot_ts)
@@ -464,16 +500,26 @@ class MarketReplay:
         )
 
     @staticmethod
-    def _load_parquets(path, prefix):
-        # type: (str, str) -> pd.DataFrame
-        """Load a single parquet file or all matching parquets from a directory.
+    def _load_parquets(path, prefix, columns=None, filter_expr=None):
+        # type: (str, str, Optional[List[str]], Optional[pc.Expression]) -> pa.Table
+        """Load parquet(s) via PyArrow with parallel I/O and column pruning.
 
+        Uses pyarrow.dataset so multiple files are scanned in parallel.
+        Column selection and filter expressions are pushed down to the scan
+        level — only the required data is decompressed and allocated.
         Supports both the old single-file layout and the new per-day layout.
-        """
-        if os.path.isfile(path):
-            return pd.read_parquet(path)
 
-        if os.path.isdir(path):
+        Parquets encode `expiry` as dictionary<int8, string> (max 127 values
+        per file). With 200+ unique expiry strings across many files, PyArrow
+        overflows the int8 index when it tries to unify dictionaries inside
+        to_table(). Fix: iterate batches, cast expiry to plain string within
+        each batch (which has its own safe local dictionary), then concat.
+        The caller re-encodes expiry with a fresh int32 dictionary_encode().
+        """
+        fmt = ds.ParquetFileFormat(dictionary_columns=[])
+        if os.path.isfile(path):
+            dataset = ds.dataset(path, format=fmt)
+        elif os.path.isdir(path):
             pattern = os.path.join(path, f"{prefix}*.parquet")
             files = sorted(glob.glob(pattern))
             if not files:
@@ -483,10 +529,27 @@ class MarketReplay:
                 raise FileNotFoundError(
                     f"No parquet files found in {path} (prefix={prefix})"
                 )
-            dfs = [pd.read_parquet(f) for f in files]
-            return pd.concat(dfs, ignore_index=True)
+            dataset = ds.dataset(files, format=fmt)
+        else:
+            raise FileNotFoundError(f"Path not found: {path}")
 
-        raise FileNotFoundError(f"Path not found: {path}")
+        batches = []
+        for batch in dataset.to_batches(columns=columns, filter=filter_expr):
+            exp_idx = batch.schema.get_field_index("expiry")
+            if exp_idx >= 0 and pa.types.is_dictionary(
+                batch.schema.field("expiry").type
+            ):
+                batch = batch.set_column(
+                    exp_idx, "expiry",
+                    pc.cast(batch.column(exp_idx), pa.string()),
+                )
+            batches.append(batch)
+        if not batches:
+            # Return empty table with the right schema
+            schema = dataset.schema
+            return pa.table({c: pa.array([], type=schema.field(c).type)
+                             for c in (columns or schema.names)})
+        return pa.Table.from_batches(batches)
 
     @staticmethod
     def _to_us(t):

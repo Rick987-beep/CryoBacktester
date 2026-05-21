@@ -117,7 +117,6 @@ class _CloseFullStrategy:
 
         trade = close_position(state, pos, "take_profit",
                                current_usd=exit_usd, fees_close=fee_close_usd)
-        trade.metadata["skip_open_fill"] = True
         self._position = None
         return [trade]
 
@@ -260,7 +259,6 @@ class _CalendarStrategy:
 
         trade = close_position(state, pos, "end",
                                current_usd=exit_usd, fees_close=fee_close_usd)
-        trade.metadata["skip_open_fill"] = True
         self._position = None
         return [trade]
 
@@ -462,7 +460,6 @@ class _AddLegsStrategy:
 
         trade = close_position(state, pos, "end",
                                current_usd=exit_usd, fees_close=fee_close_usd)
-        trade.metadata["skip_open_fill"] = True
         self._position = None
         return [trade]
 
@@ -563,6 +560,5 @@ class TestPartialCloseValidation:
         pos = self._make_two_leg_pos()
         trade = partial_close(self._state(), pos, [1], "test")
         assert trade.metadata.get("partial_close") is True
-        assert trade.metadata.get("skip_open_fill") is True
         assert len(trade.metadata["legs"]) == 1
         assert trade.metadata["legs"][0]["strike"] == 90_000.0

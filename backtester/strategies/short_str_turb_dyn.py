@@ -623,7 +623,6 @@ class ShortStrTurbDyn:
         else:
             trade = self._close_single_leg(state, pos, reason)
 
-        trade.metadata["skip_open_fill"]       = True
         trade.metadata["leg_type"]             = leg_type
         trade.metadata["dte"]                  = self._dte
         trade.metadata["stop_loss_pct"]        = self._sl_pct

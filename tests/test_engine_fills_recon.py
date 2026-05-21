@@ -2,10 +2,10 @@
 tests/test_engine_fills_recon.py — Fills ↔ trade PnL reconciliation.
 
 For each closed trade the engine produces, the sum of per-fill USD cash flows
-minus per-fill USD fees must equal the trade-level PnL computed by close_trade().
+minus per-fill USD fees must equal the trade-level PnL computed by close_position().
 
 Both paths are independent:
-  • trade.pnl   — computed by close_trade() inside the strategy
+  • trade.pnl   — computed by close_position() inside the strategy
   • fills PnL   — computed by _append_fills() inside run_grid_full from
                   leg["price_btc"] / leg["exit_price_btc"] × spot × qty
 
@@ -125,7 +125,7 @@ class _SingleLegSellStrategy:
         return [open_trade]
 
     def _close(self, state):
-        from backtester.strategy_base import close_trade
+        from backtester.strategy_base import close_position
         from backtester.pricing import fee_btc_per_contract
 
         pos = self._position
@@ -136,8 +136,7 @@ class _SingleLegSellStrategy:
         fee_close_usd = fee_close_btc * state.spot
         net_exit_usd  = _EXIT_BTC * state.spot * _QTY
 
-        trade = close_trade(state, pos, "take_profit", net_exit_usd, fee_close_usd)
-        trade.metadata["skip_open_fill"] = True   # open fill already emitted
+        trade = close_position(state, pos, "take_profit", net_exit_usd, fee_close_usd)
         self._position = None
         return [trade]
 

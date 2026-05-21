@@ -33,10 +33,10 @@ from typing import Any, Dict, List, Optional
 from backtester.bt_option_selection import select_by_delta
 from backtester.expiry_utils import parse_expiry_date, expiry_dt_utc, select_expiry
 from backtester.indicators import IndicatorDep
-from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
+from backtester.pricing import deribit_fee_per_leg
 from backtester.strategy_base import (
     OpenPosition, Trade, close_position,
-    check_expiry, check_take_profit_strangle, close_short_strangle,
+    check_expiry, check_take_profit_strangle,
     stop_loss_pct, max_hold_hours,
 )
 from market_hours import to_nyc, to_utc
@@ -711,8 +711,6 @@ class SsTurbDynMk2:
         else:
             trade = self._close_single_leg(state, pos, reason)
 
-        # Open fills already emitted by the explicit side='open' Trade.
-        trade.metadata["skip_open_fill"]       = True
         trade.metadata["leg_type"]             = leg_type
         trade.metadata["dte"]                  = self._dte
         trade.metadata["stop_loss_pct"]        = self._sl_pct

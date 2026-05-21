@@ -349,7 +349,6 @@ class PreopenStraddle:
             trade = partial_close(state, pos, [leg_idx], reason, fees_close)
         else:
             trade = close_position(state, pos, reason, exit_usd_per, fees_close)
-            trade.metadata["skip_open_fill"] = True
             self._last_trade_date = pos.entry_time.date()
             self._position = None
 
@@ -432,8 +431,6 @@ class PreopenStraddle:
                 leg["fee_btc_close"] = 0.0
 
         trade = close_position(state, pos, reason, exit_usd, fees_close)
-        # Open fills were already emitted by the explicit side='open' Trade.
-        trade.metadata["skip_open_fill"] = True
         trade.metadata.update({
             "spot_move_pct": self._spot_move_pct,
             "max_hold_min":  self._max_hold_min,

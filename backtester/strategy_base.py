@@ -350,14 +350,9 @@ def close_trade(state, pos, reason, current_usd=None, fees_close=0.0):
     """Helper to build a Trade from an OpenPosition being closed.
 
     PnL is computed leg-by-leg using each leg's ``side`` and explicit
-    ``price_btc`` / ``exit_price_btc`` when ALL legs carry that info. This
-    correctly handles mixed-side positions (e.g. a calendar's surviving
-    long after a partial close) regardless of the position-level
-    ``metadata['direction']``.
-
-    Falls back to the legacy direction-based formula when legs lack the
-    per-leg pricing (preserves behavior for older strategies that do not
-    annotate ``exit_price_btc`` on every leg).
+    ``price_btc`` / ``exit_price_btc``. All legs must carry these fields;
+    a missing annotation raises ValueError immediately so the bug is
+    surfaced during development rather than silently producing wrong PnL.
     """
     if current_usd is None:
         current_usd = _reprice_legs(state, pos) or 0.0
@@ -385,11 +380,11 @@ def close_trade(state, pos, reason, current_usd=None, fees_close=0.0):
                 pnl += _exit_usd - _entry_usd
         pnl -= total_fees
     else:
-        direction = pos.metadata.get("direction", "buy")
-        if direction == "sell":
-            pnl = pos.entry_price_usd - current_usd - total_fees
-        else:
-            pnl = current_usd - pos.entry_price_usd - total_fees
+        raise ValueError(
+            "Leg-aware PnL requires all legs to carry 'side', "
+            "'price_btc'/'entry_price', and 'exit_price_btc'. "
+            "Missing annotations in legs: {}".format(pos.legs)
+        )
 
     held_s = (state.dt - pos.entry_time).total_seconds()
     return Trade(
@@ -572,10 +567,6 @@ def partial_close(state, pos, leg_indices, reason, fees_close=0.0):
             "legs": closed_legs,
             "fees_open": closed_fees_open_alloc,
             "partial_close": True,
-            # 'skip_open_fill' is implied for partial closes — the open
-            # fills for these legs were already emitted when the position
-            # was first opened (via the strategy's side='open' Trade).
-            "skip_open_fill": True,
         },
     )
 
@@ -603,8 +594,7 @@ def add_legs(pos, new_legs, new_entry_price_usd, new_fees_open):
 
 
 # ------------------------------------------------------------------
-# Short strangle helpers (shared by delta_tp, turbulence_tp,
-# weekend, weekly_tp strategies)
+# Exit condition helpers
 # ------------------------------------------------------------------
 
 def check_expiry(state, pos):
@@ -639,54 +629,3 @@ def check_take_profit_strangle(state, pos, tp_pct):
         return "take_profit"
     return None
 
-
-def close_short_strangle(state, pos, reason):
-    # type: (Any, OpenPosition, str) -> Trade
-    """Build a Trade for closing a 2-leg short strangle.
-
-    On 'expiry': intrinsic settlement (call: max(0, spot-K); put: max(0, K-spot)).
-    Otherwise:   buy back at ask; fallback to Deribit min tick (0.0001 BTC) when
-                 ask is absent or zero — options are never free to close on Deribit.
-
-    The caller is responsible for appending strategy-specific keys to
-    trade.metadata after this call returns.
-    """
-    from backtester.pricing import deribit_fee_per_leg
-    expiry      = pos.metadata["expiry"]
-    call_strike = pos.metadata["call_strike"]
-    put_strike  = pos.metadata["put_strike"]
-
-    quantity = float(pos.metadata.get("quantity", 1.0))
-
-    if reason == "expiry":
-        call_exit_usd = max(0.0, state.spot - call_strike) * quantity
-        put_exit_usd  = max(0.0, put_strike - state.spot) * quantity
-        call_exit_btc = (call_exit_usd / quantity) / state.spot if state.spot else 0.0
-        put_exit_btc  = (put_exit_usd  / quantity) / state.spot if state.spot else 0.0
-    else:
-        _min_tick_usd = 0.0001 * state.spot
-        call_q = state.get_option(expiry, call_strike, True)
-        put_q  = state.get_option(expiry, put_strike,  False)
-        call_exit_usd = (call_q.ask_usd if call_q and call_q.ask > 0 else _min_tick_usd) * quantity
-        put_exit_usd  = (put_q.ask_usd  if put_q  and put_q.ask  > 0 else _min_tick_usd) * quantity
-        call_exit_btc = call_q.ask if call_q and call_q.ask > 0 else 0.0001
-        put_exit_btc  = put_q.ask  if put_q  and put_q.ask  > 0 else 0.0001
-
-    # Annotate each leg with BTC exit price (per contract) for engine fill logging.
-    # Also set fee_btc_close=0 for expiry (no fee on settlement).
-    for leg in pos.legs:
-        if leg.get("is_call"):
-            leg["exit_price_btc"] = call_exit_btc
-            if reason == "expiry":
-                leg["fee_btc_close"] = 0.0
-        else:
-            leg["exit_price_btc"] = put_exit_btc
-            if reason == "expiry":
-                leg["fee_btc_close"] = 0.0
-
-    exit_usd   = call_exit_usd + put_exit_usd
-    fees_close = 0.0 if reason == "expiry" else (
-        deribit_fee_per_leg(state.spot, call_exit_usd) +
-        deribit_fee_per_leg(state.spot, put_exit_usd)
-    )
-    return close_trade(state, pos, reason, exit_usd, fees_close)

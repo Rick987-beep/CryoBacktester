@@ -20,6 +20,27 @@ class _SimpleStrategy:
         return []
 
 
+class _MinimalRunnableStrategy:
+    """Minimal strategy for progress-callback tests — produces no trades."""
+    name = "minimal_runnable"
+    PARAM_GRID = {"dummy": [0]}
+
+    def configure(self, params):
+        pass
+
+    def reset(self):
+        pass
+
+    def describe_params(self):
+        return {}
+
+    def on_market_state(self, state):
+        return []
+
+    def on_end(self, state):
+        return []
+
+
 def _make_minimal_replay(n=120):
     """Build a tiny in-memory MarketReplay-like iterator of n states."""
     from datetime import datetime, timezone, timedelta
@@ -63,9 +84,8 @@ def test_callback_invoked_with_totals():
     def _cb(current, total, date_iso):
         calls.append((current, total, date_iso))
 
-    from backtester.archive.strategies_to_be_fixed.short_generic import ShortGeneric
     # Use one value per param to keep the run tiny
-    param_grid = {k: [v[0]] for k, v in ShortGeneric.PARAM_GRID.items()}
+    param_grid = {k: [v[0]] for k, v in _MinimalRunnableStrategy.PARAM_GRID.items()}
 
     try:
         replay = MarketReplay(opts, spot, start="2025-10-01", end="2025-10-10")
@@ -73,7 +93,7 @@ def test_callback_invoked_with_totals():
         pytest.skip("data range unavailable")
 
     run_grid_full(
-        ShortGeneric,
+        _MinimalRunnableStrategy,
         param_grid,
         replay,
         progress=False,
@@ -109,8 +129,7 @@ def test_bad_callback_does_not_break_run():
     def _bad_cb(current, total, date_iso):
         raise RuntimeError("intentional test error")
 
-    from backtester.archive.strategies_to_be_fixed.short_generic import ShortGeneric
-    param_grid = {k: [v[0]] for k, v in ShortGeneric.PARAM_GRID.items()}
+    param_grid = {k: [v[0]] for k, v in _MinimalRunnableStrategy.PARAM_GRID.items()}
 
     try:
         replay = MarketReplay(opts, spot, start="2025-10-01", end="2025-10-10")
@@ -119,7 +138,7 @@ def test_bad_callback_does_not_break_run():
 
     # Should complete without raising
     df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
-        ShortGeneric,
+        _MinimalRunnableStrategy,
         param_grid,
         replay,
         progress=False,

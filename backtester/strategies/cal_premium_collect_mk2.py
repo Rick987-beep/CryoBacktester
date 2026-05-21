@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-cal_premium_collect.py — Calendar spread premium collection with structural protection.
+cal_premium_collect_mk2.py — Calendar spread premium collection with configurable DTE targets.
+
+Extends cal_premium_collect with two new grid parameters:
+
+    long_dte   — target DTE for the long (protective) leg.
+                 Replaces the hardcoded ~45 DTE search.
+    short_dte  — target DTE for the short (theta-collector) leg.
+                 Replaces the hardcoded 7 DTE search.
 
 Structure:
     Two independent calendar pairs (put pair below ATM, call pair above ATM).
-    Each pair = long option (~45 DTE, min 29 DTE) + short option (7 DTE) at the
-    same strike.  The long leg provides downside/upside protection while the short
-    leg collects faster theta decay.
+    Each pair = long option (long_dte DTE, min long_dte−16 DTE) + short option
+    (short_dte DTE) at the same strike.  The long leg provides downside/upside
+    protection while the short leg collects faster theta decay.
 
 Entry:
     Every Friday at 09:00 UTC.  Both pairs opened on first entry Friday.
@@ -14,7 +21,7 @@ Entry:
 
 Weekly roll (every subsequent Friday at 09:00 UTC):
     Short leg: always close (buy back at ask; 0 cost if already expired) and
-               reopen a fresh 7 DTE short at the current long's strike.
+               reopen a fresh short_dte DTE short at the current long's strike.
     Long leg:  keep open if |current_delta − target_delta| ≤ delta_drift_threshold.
                Otherwise close (sell at bid) and reopen at target_delta / target DTE.
                When a fresh long is selected the new short also moves to that strike.
@@ -28,6 +35,8 @@ Grid parameters:
     sides                 ["puts", "calls", "both"]
     target_delta          [0.15, 0.20, 0.25]   — absolute delta for long strike selection
     delta_drift_threshold [0.08, 0.10, 0.12]   — max allowed delta drift before rolling long
+    long_dte              [35, 45, 60]          — target DTE for long leg
+    short_dte             [7, 14]               — target DTE for short leg
 
 Fees:
     Deribit model applied at each open and close event.
@@ -66,18 +75,28 @@ log = logging.getLogger(__name__)
 # Expiry selection helpers
 # ---------------------------------------------------------------------------
 
-def _select_long_expiry(state, min_dte=29):
-    # type: (Any, int) -> Optional[str]
-    """Return the expiry closest to 45 DTE, searching from week 6 outward.
+def _select_long_expiry(state, target_dte, min_dte):
+    # type: (Any, int, int) -> Optional[str]
+    """Return the expiry closest to target_dte, searching outward from the
+    target week.
 
-    Uses select_expiry_for_week from expiry_utils.  Each call returns the
-    lowest DTE in the bucket [weeks*7, weeks*7+6].  Priority order tries
-    the 42-48 DTE bucket first (closest to target 45), then expands.
+    target_week = target_dte // 7.  Priority order:
+        target_week, target_week+1, target_week-1, target_week+2, target_week-2
+
     Enforces min_dte to avoid selecting an expiry too close to expiry.
     """
     today = state.dt.date()
-    # Priority: week 6 (42-48 DTE), 7 (49-55), 5 (35-41), 8, 4 (28-34)
-    for week in [6, 7, 5, 8, 4]:
+    target_week = target_dte // 7
+    week_order = [
+        target_week,
+        target_week + 1,
+        target_week - 1,
+        target_week + 2,
+        target_week - 2,
+    ]
+    for week in week_order:
+        if week < 1:
+            continue
         exp = select_expiry_for_week(state, week)
         if exp is None:
             continue
@@ -89,15 +108,22 @@ def _select_long_expiry(state, min_dte=29):
     return None
 
 
-def _select_short_expiry(state):
-    # type: (Any,) -> Optional[str]
-    """Return the expiry closest to 7 DTE.
+def _select_short_expiry(state, target_dte):
+    # type: (Any, int) -> Optional[str]
+    """Return the expiry closest to target_dte DTE.
 
-    Uses select_expiry from expiry_utils (exact DTE match), probing from
-    the target outward: 7, 6, 8, 5, 9.  This mirrors the batman_calendar
-    approach of walking DTEs until a match is found.
+    Probes: target_dte, target_dte−1, target_dte+1, target_dte−2, target_dte+2
     """
-    for dte in [7, 6, 8, 5, 9]:
+    probe_order = [
+        target_dte,
+        target_dte - 1,
+        target_dte + 1,
+        target_dte - 2,
+        target_dte + 2,
+    ]
+    for dte in probe_order:
+        if dte < 1:
+            continue
         exp = select_expiry(state, dte)
         if exp is not None:
             return exp
@@ -108,36 +134,37 @@ def _select_short_expiry(state):
 # Strategy
 # ---------------------------------------------------------------------------
 
-class CalPremiumCollect:
-    """Calendar spread premium collection with long-leg protection.
+class CalPremiumCollectMk2:
+    """Calendar spread premium collection with configurable long/short DTE targets.
 
     Each calendar pair is modelled as an OpenPosition with two legs:
-        legs[0]  — long  (buy, protective, ~45 DTE)
-        legs[1]  — short (sell, theta collector, 7 DTE)
+        legs[0]  — long  (buy, protective, long_dte DTE)
+        legs[1]  — short (sell, theta collector, short_dte DTE)
     """
 
-    name = "cal_premium_collect"
-    DATE_RANGE = ("2026-03-20", "2026-04-04")
+    name = "cal_premium_collect_mk2"
+    DATE_RANGE = ("2026-03-20", "2026-05-15")
     DESCRIPTION = (
-        "Sells a 7 DTE option and buys a ~45 DTE option at the same strike "
-        "(one put pair below ATM, one call pair above ATM). "
+        "Sells a short_dte DTE option and buys a long_dte DTE option at the same "
+        "strike (one put pair below ATM, one call pair above ATM). "
         "Rolls short every Friday; rolls long only when delta drifts."
     )
 
     PARAM_GRID = {
         "sides":                 ["puts"],
         "target_delta":          [0.25],
-        "delta_drift_threshold": [0.10],
+        "delta_drift_threshold": [0.0],
+        "long_dte":              [45],
+        "short_dte":             [7],
     }
-
-    # Long DTE targets (fixed — not in grid to keep combo count manageable)
-    LONG_MIN_DTE = 29
 
     def __init__(self):
         self._positions = []  # List[OpenPosition] — one per active pair
         self._sides = "both"
         self._target_delta = 0.20
         self._drift_threshold = 0.10
+        self._long_dte = 45
+        self._short_dte = 7
         self._last_roll_isoweek = None  # Optional[Tuple[int, int]]
         self._pos_counter = 0  # int — monotonically increasing pos_id
 
@@ -150,6 +177,8 @@ class CalPremiumCollect:
         self._sides = params.get("sides", "both")
         self._target_delta = params["target_delta"]
         self._drift_threshold = params["delta_drift_threshold"]
+        self._long_dte = params["long_dte"]
+        self._short_dte = params["short_dte"]
         self._positions = []
         self._last_roll_isoweek = None
         self._pos_counter = 0
@@ -194,6 +223,8 @@ class CalPremiumCollect:
             "sides":                 self._sides,
             "target_delta":          self._target_delta,
             "delta_drift_threshold": self._drift_threshold,
+            "long_dte":              self._long_dte,
+            "short_dte":             self._short_dte,
         }
 
     # ------------------------------------------------------------------
@@ -253,20 +284,21 @@ class CalPremiumCollect:
         """
         is_call = (pair_type == "call")
 
-        long_expiry = _select_long_expiry(state, self.LONG_MIN_DTE)
+        long_min_dte = max(self._long_dte - 16, 7)
+        long_expiry = _select_long_expiry(state, self._long_dte, long_min_dte)
         if long_expiry is None:
-            log.warning("cal_premium_collect: no long expiry available for %s pair", pair_type)
+            log.warning("cal_premium_collect_mk2: no long expiry available for %s pair", pair_type)
             return None
 
-        short_expiry = _select_short_expiry(state)
+        short_expiry = _select_short_expiry(state, self._short_dte)
         if short_expiry is None:
-            log.warning("cal_premium_collect: no short expiry available for %s pair", pair_type)
+            log.warning("cal_premium_collect_mk2: no short expiry available for %s pair", pair_type)
             return None
 
         # Must not select the same expiry for both legs
         if long_expiry == short_expiry:
             log.warning(
-                "cal_premium_collect: long and short expiry identical (%s) for %s pair",
+                "cal_premium_collect_mk2: long and short expiry identical (%s) for %s pair",
                 long_expiry, pair_type,
             )
             return None
@@ -308,8 +340,10 @@ class CalPremiumCollect:
 
         Returns (list_of_trades, kept_or_new_position).
 
-        Three outcomes:
+        Four outcomes:
           • Data gap: returns ([], pos) — carry the position forward unchanged.
+          • Long expired: settle both legs at intrinsic (0 fees), close, reopen fresh.
+              Returns ([expiry_close_trade, open_trade], new_pos).
           • Long drifted: full close of the pair + open of a fresh pair.
               Returns ([close_trade, open_trade], new_pos).
           • Long kept: partial close of the short leg only + add a fresh short.
@@ -344,6 +378,40 @@ class CalPremiumCollect:
             short_exit_usd = short_q.ask_usd if short_q.ask > 0 else short_q.mark_usd
             short_close_fee = deribit_fee_per_leg(state.spot, short_exit_usd)
 
+        # --- Locate leg indices within pos.legs ---
+        long_idx = next(i for i, leg in enumerate(pos.legs) if leg.get("layer") == "long")
+        short_idx = next(i for i, leg in enumerate(pos.legs) if leg.get("layer") == "short")
+
+        # --- Common: annotate short leg exit price (always closes on roll) ---
+        _short_exit_btc = short_exit_usd / state.spot if state.spot else 0.0
+        pos.legs[short_idx]["exit_price_btc"] = _short_exit_btc
+        if short_already_expired:
+            pos.legs[short_idx]["fee_btc_close"] = 0.0
+
+        # --- Check long leg expiry ---
+        # If the long expired it disappears from the chain — distinguish this from
+        # a genuine data gap by checking long_expiry_dt before calling get_option.
+        # In practice the short also expires at the same time (both on Fridays),
+        # so short_already_expired is True and short_exit_usd is intrinsic above.
+        long_exp_dt = md.get("long_expiry_dt")
+        long_already_expired = (long_exp_dt is not None and state.dt >= long_exp_dt)
+
+        if long_already_expired:
+            if is_call:
+                long_exit_usd = max(0.0, state.spot - long_strike)
+            else:
+                long_exit_usd = max(0.0, long_strike - state.spot)
+            pos.legs[long_idx]["exit_price_btc"] = long_exit_usd / state.spot if state.spot else 0.0
+            pos.legs[long_idx]["fee_btc_close"] = 0.0
+            net_exit_usd = short_exit_usd - long_exit_usd
+            expiry_close = close_position(state, pos, "long_expired", net_exit_usd, 0.0)
+            expiry_close.metadata["pair_type"] = pair_type
+            result = self._open_pair(state, pair_type)
+            if result is None:
+                return [expiry_close], None
+            open_trade, new_pos = result
+            return [expiry_close, open_trade], new_pos
+
         # --- Price the long leg (needed for drift detection) ---
         long_q = state.get_option(long_expiry, long_strike, is_call)
         if long_q is None:
@@ -357,16 +425,6 @@ class CalPremiumCollect:
         abs_delta = abs(current_delta) if current_delta is not None else 0.0
         long_drifted = abs(abs_delta - self._target_delta) > self._drift_threshold
 
-        # --- Locate leg indices within pos.legs ---
-        long_idx = next(i for i, leg in enumerate(pos.legs) if leg.get("layer") == "long")
-        short_idx = next(i for i, leg in enumerate(pos.legs) if leg.get("layer") == "short")
-
-        # --- Common: annotate short leg exit price (always closes on roll) ---
-        _short_exit_btc = short_exit_usd / state.spot if state.spot else 0.0
-        pos.legs[short_idx]["exit_price_btc"] = _short_exit_btc
-        if short_already_expired:
-            pos.legs[short_idx]["fee_btc_close"] = 0.0
-
         # =================================================================
         # Path A — Long drifted: full close + full reopen.
         # =================================================================
@@ -378,7 +436,7 @@ class CalPremiumCollect:
             long_close_fee = deribit_fee_per_leg(state.spot, long_exit_bid)
             fees_close = short_close_fee + long_close_fee
 
-            roll_close = close_position(state, pos, "roll", net_exit_usd, fees_close)
+            roll_close = close_position(state, pos, "delta_drift", net_exit_usd, fees_close)
             roll_close.metadata["pair_type"] = pair_type
 
             # Open a fresh pair (new long + new short) at target params.
@@ -392,7 +450,7 @@ class CalPremiumCollect:
         # =================================================================
         # Path B — Long kept: partial close of short + add fresh short.
         # =================================================================
-        partial_reason = "expiry" if short_already_expired else "roll"
+        partial_reason = "short_expired" if short_already_expired else "roll_short"
         partial = partial_close(
             state, pos, [short_idx], partial_reason, fees_close=short_close_fee,
         )
@@ -401,17 +459,17 @@ class CalPremiumCollect:
         # pos.legs is now [long_leg]; pos.metadata still carries the old
         # short_strike/expiry — we will overwrite them when the new short attaches.
 
-        # Select new short expiry
-        new_short_expiry = _select_short_expiry(state)
+        # Select new short expiry using the configured short_dte target
+        new_short_expiry = _select_short_expiry(state, self._short_dte)
         if new_short_expiry is None:
             log.warning(
-                "cal_premium_collect: no short expiry for roll of %s pair", pair_type
+                "cal_premium_collect_mk2: no short expiry for roll of %s pair", pair_type
             )
             return [partial], pos
 
         if new_short_expiry == long_expiry:
             log.warning(
-                "cal_premium_collect: short and long expiry identical after roll (%s), %s pair",
+                "cal_premium_collect_mk2: short and long expiry identical after roll (%s), %s pair",
                 new_short_expiry, pair_type,
             )
             return [partial], pos
