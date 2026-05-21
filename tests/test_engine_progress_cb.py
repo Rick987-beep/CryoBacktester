@@ -63,7 +63,7 @@ def test_callback_invoked_with_totals():
     def _cb(current, total, date_iso):
         calls.append((current, total, date_iso))
 
-    from backtester.strategies.short_generic import ShortGeneric
+    from backtester.archive.strategies_to_be_fixed.short_generic import ShortGeneric
     # Use one value per param to keep the run tiny
     param_grid = {k: [v[0]] for k, v in ShortGeneric.PARAM_GRID.items()}
 
@@ -109,7 +109,7 @@ def test_bad_callback_does_not_break_run():
     def _bad_cb(current, total, date_iso):
         raise RuntimeError("intentional test error")
 
-    from backtester.strategies.short_generic import ShortGeneric
+    from backtester.archive.strategies_to_be_fixed.short_generic import ShortGeneric
     param_grid = {k: [v[0]] for k, v in ShortGeneric.PARAM_GRID.items()}
 
     try:

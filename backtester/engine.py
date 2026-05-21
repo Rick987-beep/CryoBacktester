@@ -39,6 +39,7 @@ import time as _time
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 from backtester.config import cfg as _cfg
+from backtester.pricing import fee_btc_per_contract as _fee_btc
 from backtester.strategy_base import Trade, _reprice_legs
 
 
@@ -106,24 +107,54 @@ def _open_unrealized_pnl(strategy, state, pos_cache):
         pid = id(pos)
         # Use reprice result cached by _reprice_legs this tick if available.
         current_usd = pos._last_reprice_usd
+        per_leg_vals = pos._last_reprice_legs
         if current_usd is None:
             current_usd = _reprice_legs(state, pos)
+            per_leg_vals = pos._last_reprice_legs
         else:
             # Consume the cached value — reset so a stale value isn't reused
             # on a future tick where _reprice_legs was not called (e.g. expiry
             # check fired and bypassed the SL/TP path).
             pos._last_reprice_usd = None
+            pos._last_reprice_legs = None
         if current_usd is None:
             pnl = pos_cache.get(pid)
             if pnl is None:
                 # First unseen tick with missing quotes: assume flat mark.
                 pnl = -float(pos.fees_open)
         else:
-            direction = pos.metadata.get("direction", "buy")
-            if direction == "sell":
-                pnl = float(pos.entry_price_usd - current_usd - pos.fees_open)
+            # Leg-aware path: when ALL legs carry side + entry price, compute
+            # per-leg PnL directly. This correctly handles mixed-side positions
+            # (e.g. calendar spreads) where entry_price_usd is a net value that
+            # can't be combined with the gross _reprice_legs total.
+            _can_leg_aware = (
+                per_leg_vals is not None
+                and len(per_leg_vals) == len(pos.legs)
+                and bool(pos.legs)
+                and all(
+                    leg.get("side") in ("buy", "sell")
+                    and ("price_btc" in leg or "entry_price" in leg)
+                    for leg in pos.legs
+                )
+            )
+            if _can_leg_aware:
+                pnl = 0.0
+                for leg, cur_val in zip(pos.legs, per_leg_vals):
+                    qty = float(leg.get("qty", 1.0))
+                    entry_btc = float(leg.get("price_btc", leg.get("entry_price", 0.0)))
+                    entry_spot_leg = float(leg.get("entry_spot", pos.entry_spot))
+                    entry_usd = entry_btc * entry_spot_leg * qty
+                    if leg["side"] == "sell":
+                        pnl += entry_usd - cur_val
+                    else:
+                        pnl += cur_val - entry_usd
+                pnl -= float(pos.fees_open)
             else:
-                pnl = float(current_usd - pos.entry_price_usd - pos.fees_open)
+                direction = pos.metadata.get("direction", "buy")
+                if direction == "sell":
+                    pnl = float(pos.entry_price_usd - current_usd - pos.fees_open)
+                else:
+                    pnl = float(current_usd - pos.entry_price_usd - pos.fees_open)
 
         pos_cache[pid] = pnl
         total += pnl
@@ -347,15 +378,19 @@ def run_grid_full(
     # Fill-level lists — one row per leg per event (open/close)
     _f_combo_idx = []
     _f_trade_idx = []
-    _f_open_idx = []   # trade_idx of the matching open event (0 if unknown)
+    _f_open_idx = []   # trade_idx of the matching open event
     _f_ts = []
     _f_event = []
     _f_contract = []
     _f_side = []
     _f_qty = []
-    _f_amount_usd = []
-    _f_fees = []
-    _f_spot = []
+    _f_price_btc = []   # option price in BTC per contract (always positive)
+    _f_amount_btc = []  # signed BTC cash flow: +sell / -buy
+    _f_fee_btc = []     # fee in BTC (always positive, deducted)
+    _f_spot = []        # BTC/USD index at fill time
+    _f_amount_usd = []  # derived: amount_btc × spot
+    _f_fee_usd = []     # derived: fee_btc × spot
+    _f_balance_usd = []  # running USD cash balance per combo after this fill
     _f_exit_reason = []
     _f_status = []
 
@@ -368,17 +403,20 @@ def run_grid_full(
     realized_pnl = [0.0] * n_combos
     last_open_pnl = [0.0] * n_combos
     pos_pnl_cache = [{} for _ in range(n_combos)]  # type: List[Dict[int, float]]
+    running_balance = [account_size] * n_combos  # type: List[float]
 
     current_day = [None] * n_combos        # type: List[Optional[str]]
     day_low = [0.0] * n_combos
     day_high = [0.0] * n_combos
     day_close = [0.0] * n_combos
+    day_realized_close = [0.0] * n_combos
 
     _nav_combo_idx = []
     _nav_date = []
     _nav_low = []
     _nav_high = []
     _nav_close = []
+    _nav_realized_close = []
 
     def _append(i, trade):
         _combo_idx.append(i)
@@ -397,14 +435,30 @@ def run_grid_full(
         _status.append(getattr(trade, 'status', 0))
 
     def _append_fills(i, trade):
-        """Expand a Trade into per-leg fill rows.
+        """Expand a Trade into per-leg fill rows (BTC-native).
 
-        For side=="open" Trades: emits open rows only (no PnL).
+        Each fill row records: price_btc (per contract), amount_btc (signed),
+        fee_btc (positive, from fee model), and spot for USD derivation.
+
+        For side=="open" Trades: emits open rows only.
         For side=="close" Trades with metadata["skip_open_fill"]==True:
             emits close rows only (strategy already emitted an explicit open Trade).
-        For side=="close" Trades without that flag:
+        For side=="close" Trades with metadata["partial_close"]==True:
+            emits close rows only for the closed legs; the pos_id → open_idx
+            mapping is RETAINED so the surviving legs' eventual close still
+            links back to the original open.
+        For side=="close" Trades without those flags:
             emits both open and close rows (backward-compatible inference).
         Silently skips if the trade has no 'legs' in metadata.
+
+        Leg dict expected keys:
+            price_btc       — BTC price per contract at open (fallback: entry_price)
+            exit_price_btc  — BTC price per contract at close (strategy annotates)
+            qty             — contracts (default: 1.0)
+            side            — "buy" | "sell"
+            fee_btc_open    — override per-contract fee at open (e.g. 0 for free rolls)
+            fee_btc_close   — override per-contract fee at close (e.g. 0 for expiry)
+            strike, is_call, expiry  — for contract name construction
         """
         legs = trade.metadata.get("legs")
         if not legs:
@@ -415,112 +469,106 @@ def run_grid_full(
 
         trade_side = getattr(trade, 'side', 'close')
         trade_status = getattr(trade, 'status', 0)
-        pos_id = trade.metadata.get('pos_id')  # optional strategy-supplied linkage key
-        entry_total = float(trade.entry_price_usd) if trade.entry_price_usd else 0.0
+        pos_id = trade.metadata.get('pos_id')
 
-        if trade_side == 'open':
-            # Explicit open event — emit open rows only
-            fees_open = float(trade.fees)
-            # Record pos_id → tidx mapping for later close linkage
-            if pos_id is not None:
-                _pos_open_idx[i][pos_id] = tidx
-            for leg in legs:
-                strike = leg.get("strike", 0)
-                expiry = leg.get("expiry", "")
-                opt_type = "C" if leg.get("is_call") else "P"
-                contract = f"BTC-{expiry}-{int(strike)}-{opt_type}"
-                leg_entry_usd = float(leg.get("entry_price_usd", 0.0))
-                leg_fees = (
-                    fees_open * (leg_entry_usd / entry_total)
-                    if entry_total > 0 else 0.0
-                )
-                _f_combo_idx.append(i)
-                _f_trade_idx.append(tidx)
-                _f_open_idx.append(tidx)   # open references itself
-                _f_ts.append(trade.entry_time)
-                _f_event.append("open")
-                _f_contract.append(contract)
-                _leg_side = leg.get("side", "buy")
-                _f_side.append(_leg_side)
-                _f_qty.append(float(leg.get("qty", 1.0)))
-                _f_amount_usd.append(leg_entry_usd if _leg_side == "sell" else -leg_entry_usd)
-                _f_fees.append(-leg_fees)
-                _f_spot.append(float(trade.entry_spot))
-                _f_exit_reason.append("")
-                _f_status.append(trade_status)
-            return
-
-        # side == 'close'
-        # Resolve open_idx from pos_id if available
-        _open_tidx = _pos_open_idx[i].pop(pos_id, 0) if pos_id is not None else 0
-        skip_open = trade.metadata.get('skip_open_fill', False)
-        fees_open = float(trade.metadata.get("fees_open", 0.0))
-        fees_close = float(trade.fees) - fees_open
-        exit_total = float(trade.exit_price_usd) if trade.exit_price_usd else 0.0
-
-        if not skip_open:
-            # Backward-compat: infer open rows for strategies without explicit open Trades
-            for leg in legs:
-                strike = leg.get("strike", 0)
-                expiry = leg.get("expiry", "")
-                opt_type = "C" if leg.get("is_call") else "P"
-                contract = f"BTC-{expiry}-{int(strike)}-{opt_type}"
-                side = leg.get("side", "sell")
-                leg_entry_usd = float(leg.get("entry_price_usd", 0.0))
-                leg_open_fees = (
-                    fees_open * (leg_entry_usd / entry_total)
-                    if entry_total > 0 else 0.0
-                )
-                _f_combo_idx.append(i)
-                _f_trade_idx.append(tidx)
-                _f_open_idx.append(tidx)
-                _f_ts.append(trade.entry_time)
-                _f_event.append("open")
-                _f_contract.append(contract)
-                _f_side.append(side)
-                _f_qty.append(float(leg.get("qty", 1.0)))
-                _f_amount_usd.append(leg_entry_usd if side == "sell" else -leg_entry_usd)
-                _f_fees.append(-leg_open_fees)
-                _f_spot.append(float(trade.entry_spot))
-                _f_exit_reason.append("")
-                _f_status.append(0)
-
-        # Close rows
-        for leg in legs:
+        def _emit(leg, open_tidx, ts, spot, event, reason, status, is_close):
             strike = leg.get("strike", 0)
             expiry = leg.get("expiry", "")
             opt_type = "C" if leg.get("is_call") else "P"
-            contract = f"BTC-{expiry}-{int(strike)}-{opt_type}"
-            open_side = leg.get("side", "sell")
-            close_side = "buy" if open_side == "sell" else "sell"
-            leg_entry_usd = float(leg.get("entry_price_usd", 0.0))
-            # Use per-leg exit price if annotated by the close helper (e.g. expiry
-            # intrinsic), otherwise fall back to proportional distribution.
-            _leg_exit_annotated = leg.get("exit_price_usd")
-            if _leg_exit_annotated is not None:
-                leg_exit_usd = float(_leg_exit_annotated)
+            contract = leg.get("contract") or f"BTC-{expiry}-{int(strike)}-{opt_type}"
+            leg_side = leg.get("side", "buy")
+            fill_side = ("buy" if leg_side == "sell" else "sell") if is_close else leg_side
+            qty = float(leg.get("qty", 1.0))
+
+            if is_close:
+                # Per-leg open_idx tracking: leg["_open_idx"] is set on the open
+                # fill (see below) and read here. This handles multi-vintage
+                # positions where legs were added at different times via
+                # add_legs() — each leg points to its own open fill regardless
+                # of the position-level pos_id.
+                _leg_open_idx = leg.get("_open_idx")
+                if _leg_open_idx is not None:
+                    open_tidx = _leg_open_idx
+
+                price_btc = float(leg.get("exit_price_btc", 0.0))
+                if price_btc == 0.0:
+                    # fallback: derive from USD annotation (exit_price_usd is per-contract)
+                    _ex_usd = leg.get("exit_price_usd")
+                    if _ex_usd is not None and spot > 0 and qty > 0:
+                        price_btc = float(_ex_usd) / spot
+                fee_override = leg.get("fee_btc_close")
             else:
-                leg_exit_usd = (
-                    exit_total * (leg_entry_usd / entry_total)
-                    if entry_total > 0 else 0.0
-                )
-            leg_close_fees = (
-                fees_close * (leg_entry_usd / entry_total)
-                if entry_total > 0 else 0.0
-            )
+                price_btc = float(leg.get("price_btc", leg.get("entry_price", 0.0)))
+                fee_override = leg.get("fee_btc_open")
+
+            if fee_override is not None:
+                fee_btc = float(fee_override) * qty
+            else:
+                fee_btc = _fee_btc(price_btc) * qty
+
+            sign = 1.0 if fill_side == "sell" else -1.0
+            amount_btc = sign * qty * price_btc
+            spot_f = float(spot)
+            amount_usd = amount_btc * spot_f
+            fee_usd = fee_btc * spot_f
+            running_balance[i] += amount_usd - fee_usd
             _f_combo_idx.append(i)
             _f_trade_idx.append(tidx)
-            _f_open_idx.append(_open_tidx)
-            _f_ts.append(trade.exit_time)
-            _f_event.append("close")
+            _f_open_idx.append(open_tidx)
+            _f_ts.append(ts)
+            _f_event.append(event)
             _f_contract.append(contract)
-            _f_side.append(close_side)
-            _f_qty.append(float(leg.get("qty", 1.0)))
-            _f_amount_usd.append(leg_exit_usd if close_side == "sell" else -leg_exit_usd)
-            _f_fees.append(-leg_close_fees)
-            _f_spot.append(float(trade.exit_spot))
-            _f_exit_reason.append(trade.exit_reason or "")
-            _f_status.append(trade_status)
+            _f_side.append(fill_side)
+            _f_qty.append(qty)
+            _f_price_btc.append(price_btc)
+            _f_amount_btc.append(amount_btc)
+            _f_fee_btc.append(fee_btc)
+            _f_spot.append(spot_f)
+            _f_amount_usd.append(amount_usd)
+            _f_fee_usd.append(fee_usd)
+            _f_balance_usd.append(running_balance[i])
+            _f_exit_reason.append(reason)
+            _f_status.append(status)
+
+            # Record open trade_idx ON the leg so close fills can link
+            # back without needing the position-level pos_id map.
+            # Also stamp the entry spot so leg-aware PnL in close_trade /
+            # partial_close uses the correct spot for legs added later
+            # (e.g. via add_legs at a different timestamp).
+            if not is_close:
+                leg["_open_idx"] = tidx
+                leg["entry_spot"] = float(spot)
+
+        if trade_side == 'open':
+            if pos_id is not None:
+                _pos_open_idx[i][pos_id] = tidx
+            for leg in legs:
+                _emit(leg, tidx, trade.entry_time, trade.entry_spot,
+                      "open", "", trade_status, is_close=False)
+            return
+
+        # side == 'close'
+        is_partial = bool(trade.metadata.get('partial_close'))
+        if pos_id is not None:
+            if is_partial:
+                # Retain mapping — survivors' eventual close still needs it.
+                _open_tidx = _pos_open_idx[i].get(pos_id, None)
+            else:
+                _open_tidx = _pos_open_idx[i].pop(pos_id, None)
+        else:
+            _open_tidx = None
+        if _open_tidx is None:
+            _open_tidx = tidx  # backward-compat: open+close same trade_idx
+        skip_open = trade.metadata.get('skip_open_fill', False)
+
+        if not skip_open:
+            for leg in legs:
+                _emit(leg, tidx, trade.entry_time, trade.entry_spot,
+                      "open", "", 0, is_close=False)
+
+        for leg in legs:
+            _emit(leg, _open_tidx, trade.exit_time, trade.exit_spot,
+                  "close", trade.exit_reason or "", trade_status, is_close=True)
 
     t0 = _time.time()
     n_states = 0
@@ -550,16 +598,19 @@ def run_grid_full(
                     _nav_low.append(day_low[i])
                     _nav_high.append(day_high[i])
                     _nav_close.append(day_close[i])
+                    _nav_realized_close.append(day_realized_close[i])
                 current_day[i] = day_key
                 day_low[i] = nav
                 day_high[i] = nav
                 day_close[i] = nav
+                day_realized_close[i] = realized_pnl[i]
             else:
                 if nav < day_low[i]:
                     day_low[i] = nav
                 if nav > day_high[i]:
                     day_high[i] = nav
                 day_close[i] = nav
+                day_realized_close[i] = realized_pnl[i]
         last_state = state
 
         if progress:
@@ -596,6 +647,7 @@ def run_grid_full(
         _nav_low.append(day_low[i])
         _nav_high.append(day_high[i])
         _nav_close.append(day_close[i])
+        _nav_realized_close.append(day_realized_close[i])
 
     elapsed = _time.time() - t0
     total_trades = len(_pnl)
@@ -631,6 +683,7 @@ def run_grid_full(
         "nav_low": pd.array(_nav_low, dtype="float32"),
         "nav_high": pd.array(_nav_high, dtype="float32"),
         "nav_close": pd.array(_nav_close, dtype="float32"),
+        "realized_close": pd.array(_nav_realized_close, dtype="float32"),
     })
 
     final_nav = [account_size + realized_pnl[i] + last_open_pnl[i] for i in range(n_combos)]
@@ -652,16 +705,21 @@ def run_grid_full(
             "contract":    pd.Categorical(_f_contract),
             "side":        pd.Categorical(_f_side, categories=["sell", "buy"]),
             "qty":         pd.array(_f_qty, dtype="float32"),
-            "amount_usd":  pd.array(_f_amount_usd, dtype="float32"),
-            "fees":        pd.array(_f_fees, dtype="float32"),
+            "price_btc":   pd.array(_f_price_btc, dtype="float32"),
+            "amount_btc":  pd.array(_f_amount_btc, dtype="float32"),
+            "fee_btc":     pd.array(_f_fee_btc, dtype="float32"),
             "spot":        pd.array(_f_spot, dtype="float32"),
+            "amount_usd":  pd.array(_f_amount_usd, dtype="float32"),
+            "fee_usd":     pd.array(_f_fee_usd, dtype="float32"),
+            "balance_usd": pd.array(_f_balance_usd, dtype="float32"),
             "exit_reason": pd.Categorical(_f_exit_reason),
             "status":      pd.array(_f_status, dtype="uint16"),
         })
     else:
         df_fills = pd.DataFrame(columns=[
-            "combo_idx", "trade_idx", "open_idx", "ts", "event",
-            "contract", "side", "qty", "amount_usd", "fees", "spot", "exit_reason", "status",
+            "combo_idx", "trade_idx", "open_idx", "ts", "event", "contract",
+            "side", "qty", "price_btc", "amount_btc", "fee_btc", "spot",
+            "amount_usd", "fee_usd", "balance_usd", "exit_reason", "status",
         ])
 
     return df, keys, nav_daily_df, final_nav_df, df_fills

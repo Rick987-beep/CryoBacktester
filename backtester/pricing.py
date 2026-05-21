@@ -133,6 +133,16 @@ def deribit_fee_per_leg(btc_price, leg_price_usd):
     return min(base, cap)
 
 
+def fee_btc_per_contract(price_btc: float) -> float:
+    """Deribit option fee in BTC per contract: MIN(0.03% of index, 12.5% × option price).
+
+    This is the BTC-native version of deribit_fee_per_leg.
+    Used by the engine to compute fill-level fees from the leg's BTC price.
+    Multiply by qty to get total fee for the fill.
+    """
+    return min(_cfg.fees.index_rate, _cfg.fees.price_cap_frac * max(price_btc, 0.0))
+
+
 def deribit_perp_fee(notional_usd):
     """Deribit BTC-PERPETUAL taker fee: 0.05% of |notional| per trade."""
     return _cfg.fees.perp_taker_rate * abs(notional_usd)

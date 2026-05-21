@@ -425,6 +425,11 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
         nav_low = nav_low.fillna(nav_close)
         nav_high = nav.set_index("date")["nav_high"].reindex(all_dates)
         nav_high = nav_high.fillna(nav_close)
+        if "realized_close" in nav.columns:
+            realized_close = (nav.set_index("date")["realized_close"]
+                              .reindex(all_dates).ffill().fillna(0.0))
+        else:
+            realized_close = pd.Series(nav_close.values - capital, index=nav_close.index)
 
         daily_returns = nav_close.diff().fillna(nav_close.iloc[0] - capital).tolist()
         cumulative = []
@@ -439,6 +444,8 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
             eq = float(nav_close.iloc[i])
             low  = float(nav_low.iloc[i])
             high = float(nav_high.iloc[i])
+            balance = capital + float(realized_close.iloc[i])
+            open_pos_pnl = eq - balance
             # Advance peak from intraday high so HWM captures true highest high
             peak_close = max(peak_close, high)
 
@@ -447,7 +454,7 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
             if dd_pct > max_dd_pct:
                 max_dd_pct = dd_pct
                 peak_close_at_max_dd = peak_close
-            cumulative.append((ds, pnl, cum, high, low, eq))
+            cumulative.append((ds, pnl, cum, high, low, eq, balance, open_pos_pnl))
     else:
         if df_combo is None or df_combo.empty:
             return None
@@ -480,7 +487,7 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
             if dd_pct > max_dd_pct:
                 max_dd_pct = dd_pct
                 peak_close_at_max_dd = peak_close
-            cumulative.append((ds, pnl, cum, eq, eq, eq))  # no intraday data in fallback
+            cumulative.append((ds, pnl, cum, eq, eq, eq, eq, 0.0))  # no intraday/open data in fallback
 
         daily_returns = [pnl for _, pnl in daily]
 

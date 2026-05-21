@@ -23,7 +23,7 @@ from backtester.engine import run_grid_full
 from backtester.results import GridResult
 from backtester.reporting_v2 import generate_html
 from backtester.config import cfg as _cfg
-from backtester.strategies.short_generic import ShortGeneric
+from backtester.archive.strategies_to_be_fixed.short_generic import ShortGeneric  # noqa: F401  (archived strategy; this script is a legacy UI smoke test)
 
 # ── Trimmed grid: 2 × 3 × 2 × 3 = 36 combos ─────────────────────────────────
 _TEST_GRID = {

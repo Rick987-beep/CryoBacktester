@@ -69,6 +69,9 @@ class OpenPosition:
     # Reprice cache: set by _reprice_legs on each call; read by the engine's
     # _open_unrealized_pnl to avoid a second reprice of the same tick.
     _last_reprice_usd: Optional[float] = field(default=None, repr=False)
+    # Per-leg reprice cache (parallel to self.legs list): USD value per leg.
+    # Set alongside _last_reprice_usd; used by engine for leg-aware PnL.
+    _last_reprice_legs: Optional[List[float]] = field(default=None, repr=False)
 
 
 # ------------------------------------------------------------------
@@ -301,6 +304,7 @@ def _reprice_legs(state, pos):
     direction = pos.metadata.get("direction", "buy")
     _min_mark_usd = _cfg.repricing.min_mark_usd
     _slip = _cfg.repricing.slip_pct_zero_price
+    per_leg = []
     for leg in pos.legs:
         quote = state.get_option(
             leg["expiry"], leg["strike"], leg["is_call"]
@@ -322,17 +326,22 @@ def _reprice_legs(state, pos):
                 _a = quote.ask
                 _m = quote.mark
                 effective_ask = _a if _a > _m else _m
-            total += effective_ask * quote.spot * _leg_qty
+            leg_val = effective_ask * quote.spot * _leg_qty
+            total += leg_val
+            per_leg.append(leg_val)
         else:
             if quote.bid == 0.0:
                 # Zero-price fallback: use mark × (1 - slip) if mark is meaningful
                 if quote.mark_usd > _min_mark_usd:
-                    total += quote.mark * (1.0 - _slip) * quote.spot * _leg_qty
+                    leg_val = quote.mark * (1.0 - _slip) * quote.spot * _leg_qty
                 else:
                     return None  # Too illiquid to estimate — skip tick
             else:
-                total += quote.bid_usd * _leg_qty
+                leg_val = quote.bid_usd * _leg_qty
+            total += leg_val
+            per_leg.append(leg_val)
     pos._last_reprice_usd = total
+    pos._last_reprice_legs = per_leg
     return total
 
 
@@ -340,17 +349,47 @@ def close_trade(state, pos, reason, current_usd=None, fees_close=0.0):
     # type: (Any, OpenPosition, str, Optional[float], float) -> Trade
     """Helper to build a Trade from an OpenPosition being closed.
 
-    Handles both long and short PnL formulas.
+    PnL is computed leg-by-leg using each leg's ``side`` and explicit
+    ``price_btc`` / ``exit_price_btc`` when ALL legs carry that info. This
+    correctly handles mixed-side positions (e.g. a calendar's surviving
+    long after a partial close) regardless of the position-level
+    ``metadata['direction']``.
+
+    Falls back to the legacy direction-based formula when legs lack the
+    per-leg pricing (preserves behavior for older strategies that do not
+    annotate ``exit_price_btc`` on every leg).
     """
     if current_usd is None:
         current_usd = _reprice_legs(state, pos) or 0.0
 
     total_fees = pos.fees_open + fees_close
-    direction = pos.metadata.get("direction", "buy")
-    if direction == "sell":
-        pnl = pos.entry_price_usd - current_usd - total_fees
+
+    _can_leg_aware = bool(pos.legs) and all(
+        leg.get("side") in ("buy", "sell")
+        and ("price_btc" in leg or "entry_price" in leg)
+        and "exit_price_btc" in leg
+        for leg in pos.legs
+    )
+    if _can_leg_aware:
+        pnl = 0.0
+        for leg in pos.legs:
+            _qty = float(leg.get("qty", 1.0))
+            _entry_btc = float(leg.get("price_btc", leg.get("entry_price", 0.0)))
+            _exit_btc  = float(leg["exit_price_btc"])
+            _leg_entry_spot = float(leg.get("entry_spot", pos.entry_spot))
+            _entry_usd = _entry_btc * _leg_entry_spot * _qty
+            _exit_usd  = _exit_btc  * state.spot      * _qty
+            if leg["side"] == "sell":
+                pnl += _entry_usd - _exit_usd
+            else:
+                pnl += _exit_usd - _entry_usd
+        pnl -= total_fees
     else:
-        pnl = current_usd - pos.entry_price_usd - total_fees
+        direction = pos.metadata.get("direction", "buy")
+        if direction == "sell":
+            pnl = pos.entry_price_usd - current_usd - total_fees
+        else:
+            pnl = current_usd - pos.entry_price_usd - total_fees
 
     held_s = (state.dt - pos.entry_time).total_seconds()
     return Trade(
@@ -372,6 +411,195 @@ def close_trade(state, pos, reason, current_usd=None, fees_close=0.0):
             "fees_open": pos.fees_open,
         },
     )
+
+
+# ------------------------------------------------------------------
+# Engine-owned position lifecycle API (Phase A of fills refactor)
+# ------------------------------------------------------------------
+# The functions below are the canonical way for strategies to close or
+# partially close a position. They derive Trades that the engine then
+# expands into per-leg fills. Strategies should NOT author exit prices
+# on legs that are not actually being transacted.
+#
+# close_position()  — full close, drop-in replacement for close_trade().
+# partial_close()   — close a subset of legs; mutate pos to retain the rest.
+# add_legs()        — extend an open position with additional legs.
+#
+# All three preserve the strategy's existing pos_id linkage so fills
+# emit with correct open_idx → close_idx references.
+
+
+def close_position(state, pos, reason, current_usd=None, fees_close=0.0):
+    # type: (Any, OpenPosition, str, Optional[float], float) -> Trade
+    """Close a full position.
+
+    Drop-in replacement for close_trade(). The returned Trade should be
+    yielded by the strategy with side='close'; the engine derives close
+    fills from trade.metadata['legs'] and links them to the original open
+    fills via pos.metadata['pos_id'] (if present).
+
+    Strategies must set leg['exit_price_btc'] on each leg BEFORE calling
+    (and optionally leg['fee_btc_close'] for fee overrides).
+    """
+    return close_trade(state, pos, reason, current_usd=current_usd, fees_close=fees_close)
+
+
+def partial_close(state, pos, leg_indices, reason, fees_close=0.0):
+    # type: (Any, OpenPosition, List[int], str, float) -> Trade
+    """Close a subset of legs from a multi-leg position.
+
+    Mutates ``pos`` in place to drop the closed legs and reduce
+    ``entry_price_usd`` and ``fees_open`` by the closed legs' contribution.
+    The surviving legs remain in ``pos`` and continue to be marked-to-market
+    under the original open trade (same pos_id, same entry_time).
+
+    Returns a Trade representing the closed legs only. The Trade has
+    ``side='close'`` and ``metadata['partial_close']=True`` so the engine
+    emits close fills for the closed legs while RETAINING the pos_id →
+    open_trade_idx mapping for the surviving legs' eventual close.
+
+    PnL is computed per-leg by side:
+      sell leg: leg_entry_usd - leg_exit_usd
+      buy  leg: leg_exit_usd  - leg_entry_usd
+    minus the partial fees (closed legs' fees_open + fees_close).
+
+    Caller responsibilities BEFORE calling:
+      • Set leg['exit_price_btc'] on each closed leg.
+      • Optionally set leg['fee_btc_close'] for fee overrides.
+      • Each closed leg MUST have 'price_btc' (per-contract BTC at open),
+        'side' ('buy'|'sell'), and 'qty' for entry-value reconstruction.
+      • Each closed leg MUST have 'fee_usd_open' (per-leg USD fee at open)
+        OR the position's fees_open will be allocated by entry-value.
+    """
+    n = len(pos.legs)
+    leg_indices = sorted(set(int(i) for i in leg_indices))
+    if not leg_indices:
+        raise ValueError("partial_close: leg_indices must be non-empty")
+    if leg_indices[0] < 0 or leg_indices[-1] >= n:
+        raise ValueError("partial_close: leg_indices out of range (n={})".format(n))
+    if len(leg_indices) == n:
+        raise ValueError(
+            "partial_close: all legs requested — use close_position() instead"
+        )
+
+    closed_legs = [pos.legs[i] for i in leg_indices]
+    survivors = [leg for i, leg in enumerate(pos.legs) if i not in set(leg_indices)]
+
+    # Per-leg entry USD: price_btc * leg.entry_spot (or pos.entry_spot fallback) * qty.
+    # Legs added later via add_legs() may carry their own entry_spot.
+    closed_entry_usd_total = 0.0
+    closed_leg_entries = []  # parallel list: per-closed-leg entry_usd
+    for leg in closed_legs:
+        _qty = float(leg.get("qty", 1.0))
+        _price_btc = float(leg.get("price_btc", leg.get("entry_price", 0.0)))
+        _leg_entry_spot = float(leg.get("entry_spot", pos.entry_spot))
+        _e = _price_btc * _leg_entry_spot * _qty
+        closed_leg_entries.append(_e)
+        closed_entry_usd_total += _e
+
+    # Per-leg exit USD: exit_price_btc * exit_spot * qty.
+    _exit_spot = state.spot
+    closed_exit_usd_total = 0.0
+    closed_leg_exits = []
+    for leg in closed_legs:
+        _qty = float(leg.get("qty", 1.0))
+        _ex_btc = float(leg.get("exit_price_btc", 0.0))
+        _x = _ex_btc * _exit_spot * _qty
+        closed_leg_exits.append(_x)
+        closed_exit_usd_total += _x
+
+    # Fees: prefer per-leg ``fee_usd_open`` when every closed leg carries it
+    # (most accurate); else allocate ``pos.fees_open`` across all legs
+    # proportional to entry value; else equal-split as a last resort.
+    _all_have_fee_usd_open = all("fee_usd_open" in leg for leg in closed_legs)
+    if _all_have_fee_usd_open:
+        closed_fees_open_alloc = sum(
+            float(leg["fee_usd_open"]) for leg in closed_legs
+        )
+    else:
+        _all_entries_total = 0.0
+        for leg in pos.legs:
+            _q = float(leg.get("qty", 1.0))
+            _p = float(leg.get("price_btc", leg.get("entry_price", 0.0)))
+            _ls = float(leg.get("entry_spot", pos.entry_spot))
+            _all_entries_total += _p * _ls * _q
+        if _all_entries_total > 0.0:
+            closed_fees_open_alloc = (
+                closed_entry_usd_total / _all_entries_total
+            ) * pos.fees_open
+        else:
+            closed_fees_open_alloc = pos.fees_open * (len(closed_legs) / float(n))
+
+    closed_fees_total = closed_fees_open_alloc + float(fees_close)
+
+    # Per-leg PnL (side-aware), then sum and subtract fees.
+    pnl = 0.0
+    for leg, _e, _x in zip(closed_legs, closed_leg_entries, closed_leg_exits):
+        _side = leg.get("side", "buy")
+        if _side == "sell":
+            pnl += _e - _x
+        else:
+            pnl += _x - _e
+    pnl -= closed_fees_total
+
+    held_s = (state.dt - pos.entry_time).total_seconds()
+
+    # Mutate pos: drop closed legs, reduce entry_price_usd, fees_open.
+    # entry_price_usd convention in existing strategies: sum of positive
+    # leg-entry USD values (premium received for shorts, premium paid for
+    # longs — both stored as positive). We subtract the closed legs'
+    # positive contribution to preserve that convention for survivors.
+    pos.legs = survivors
+    pos.entry_price_usd = max(0.0, pos.entry_price_usd - closed_entry_usd_total)
+    pos.fees_open = max(0.0, pos.fees_open - closed_fees_open_alloc)
+    pos._last_reprice_usd = None  # force re-mark on next tick
+
+    return Trade(
+        entry_time=pos.entry_time,
+        exit_time=state.dt,
+        entry_spot=pos.entry_spot,
+        exit_spot=state.spot,
+        entry_price_usd=closed_entry_usd_total,
+        exit_price_usd=closed_exit_usd_total,
+        fees=closed_fees_total,
+        pnl=pnl,
+        triggered=(reason == "trigger"),
+        exit_reason=reason,
+        exit_hour=int(held_s / 3600),
+        entry_date=pos.entry_time.strftime("%Y-%m-%d"),
+        metadata={
+            **pos.metadata,
+            "legs": closed_legs,
+            "fees_open": closed_fees_open_alloc,
+            "partial_close": True,
+            # 'skip_open_fill' is implied for partial closes — the open
+            # fills for these legs were already emitted when the position
+            # was first opened (via the strategy's side='open' Trade).
+            "skip_open_fill": True,
+        },
+    )
+
+
+def add_legs(pos, new_legs, new_entry_price_usd, new_fees_open):
+    # type: (OpenPosition, List[Dict[str, Any]], float, float) -> None
+    """Extend an open position with additional legs.
+
+    Appends ``new_legs`` to ``pos.legs`` and adds the corresponding
+    ``new_entry_price_usd`` and ``new_fees_open`` contributions to the
+    position aggregates. Does NOT create a Trade — the caller is
+    responsible for yielding a separate side='open' Trade (with its own
+    pos_id or sharing the existing pos.metadata['pos_id']) so the engine
+    emits open fills for the new legs.
+
+    Invalidates the reprice cache so the next mark-to-market call sees
+    the extended leg set.
+    """
+    if not new_legs:
+        return
+    pos.legs = list(pos.legs) + list(new_legs)
+    pos.entry_price_usd = float(pos.entry_price_usd) + float(new_entry_price_usd)
+    pos.fees_open = float(pos.fees_open) + float(new_fees_open)
+    pos._last_reprice_usd = None
 
 
 # ------------------------------------------------------------------

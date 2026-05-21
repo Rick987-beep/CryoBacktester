@@ -1,0 +1,229 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- /Users/ulrikdeichsel/CryoBacktester/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ulrikdeichsel/CryoBacktester
+configfile: pyproject.toml
+collecting ... collected 17 items
+
+backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_opens_both_pairs_on_first_friday FAILED [  5%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_opens_only_put_pair_when_sides_puts FAILED [ 11%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_opens_only_call_pair_when_sides_calls FAILED [ 17%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_no_entry_outside_friday_09 PASSED [ 23%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_no_entry_friday_wrong_hour PASSED [ 29%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_position_metadata_structure FAILED [ 35%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestStopLoss::test_sl_fires_when_combined_loss_exceeds_threshold FAILED [ 41%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestStopLoss::test_sl_does_not_fire_when_within_threshold FAILED [ 47%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestStopLoss::test_sl_pairs_are_independent FAILED [ 52%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestWeeklyRoll::test_roll_produces_close_trade_and_new_position PASSED [ 58%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestWeeklyRoll::test_roll_keeps_long_when_delta_within_threshold FAILED [ 64%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestWeeklyRoll::test_roll_refreshes_long_when_delta_drifted PASSED [ 70%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestWeeklyRoll::test_no_roll_on_non_friday PASSED [ 76%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestWeeklyRoll::test_roll_fires_once_per_iso_week PASSED [ 82%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestOnEnd::test_on_end_closes_all_positions FAILED [ 88%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestOnEnd::test_on_end_clears_positions PASSED [ 94%]
+backtester/strategies/tests/test_cal_premium_collect.py::TestReset::test_reset_clears_state FAILED [100%]
+
+=================================== FAILURES ===================================
+_____________ TestFirstEntry.test_opens_both_pairs_on_first_friday _____________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestFirstEntry object at 0x1099270e0>
+
+    def test_opens_both_pairs_on_first_friday(self):
+        s = _make_strategy(sides="both")
+        state = _make_state(_friday_09())
+        trades = s.on_market_state(state)
+>       assert len(s._positions) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a2a84a0>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:167: AssertionError
+___________ TestFirstEntry.test_opens_only_put_pair_when_sides_puts ____________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestFirstEntry object at 0x10a768e90>
+
+    def test_opens_only_put_pair_when_sides_puts(self):
+        s = _make_strategy(sides="puts")
+        state = _make_state(_friday_09())
+        s.on_market_state(state)
+>       assert len(s._positions) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a792480>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:176: AssertionError
+__________ TestFirstEntry.test_opens_only_call_pair_when_sides_calls ___________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestFirstEntry object at 0x10a769130>
+
+    def test_opens_only_call_pair_when_sides_calls(self):
+        s = _make_strategy(sides="calls")
+        state = _make_state(_friday_09())
+        s.on_market_state(state)
+>       assert len(s._positions) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a7fa360>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:183: AssertionError
+_______________ TestFirstEntry.test_position_metadata_structure ________________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestFirstEntry object at 0x10a7694c0>
+
+    def test_position_metadata_structure(self):
+        s = _make_strategy(sides="puts")
+        state = _make_state(_friday_09())
+        s.on_market_state(state)
+>       pos = s._positions[0]
+              ^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+backtester/strategies/tests/test_cal_premium_collect.py:206: IndexError
+_______ TestStopLoss.test_sl_fires_when_combined_loss_exceeds_threshold ________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestStopLoss object at 0x10a769ac0>
+
+    def test_sl_fires_when_combined_loss_exceeds_threshold(self):
+        """
+        short_entry_premium = SHORT_BID_USD (~188 USD)
+        sl_mult = 2.0 → threshold = -376 USD
+    
+        Simulate: short ask doubled (big loss on short) and long bid halved.
+            short_pnl = SHORT_BID_USD - short_ask_usd
+            long_pnl  = long_bid_usd  - LONG_ASK_USD
+    
+        Set short_ask = 3 * SHORT_BID_BTC (short moved against us)
+        Set long_bid  = 0.001 (long lost value too)
+        combined_pnl should be < -2 * SHORT_BID_USD → SL fires
+        """
+>       s = self._opened_strategy(sl_mult=2.0)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backtester/strategies/tests/test_cal_premium_collect.py:245: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestStopLoss object at 0x10a769ac0>
+sl_mult = 2.0, sides = 'puts'
+
+    def _opened_strategy(self, sl_mult=2.0, sides="puts"):
+        """Open one pair and return (strategy, open_state)."""
+        s = _make_strategy(stop_loss_mult=sl_mult, sides=sides)
+        open_dt = _friday_09()
+        state = _make_state(open_dt)
+        s.on_market_state(state)
+>       assert len(s._positions) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a76b5f0>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:229: AssertionError
+___________ TestStopLoss.test_sl_does_not_fire_when_within_threshold ___________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestStopLoss object at 0x10a769d60>
+
+    def test_sl_does_not_fire_when_within_threshold(self):
+        """
+        Combined loss < -sl_mult * short_entry_premium → SL should NOT fire.
+        Set short_ask = 1.5x entry (manageable loss), long bid ~ entry.
+        """
+>       s = self._opened_strategy(sl_mult=2.0)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backtester/strategies/tests/test_cal_premium_collect.py:266: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestStopLoss object at 0x10a769d60>
+sl_mult = 2.0, sides = 'puts'
+
+    def _opened_strategy(self, sl_mult=2.0, sides="puts"):
+        """Open one pair and return (strategy, open_state)."""
+        s = _make_strategy(stop_loss_mult=sl_mult, sides=sides)
+        open_dt = _friday_09()
+        state = _make_state(open_dt)
+        s.on_market_state(state)
+>       assert len(s._positions) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a7f6810>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:229: AssertionError
+__________________ TestStopLoss.test_sl_pairs_are_independent __________________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestStopLoss object at 0x10a76a060>
+
+    def test_sl_pairs_are_independent(self):
+        """
+        With sides='both', triggering SL for put pair should not close call pair.
+        We achieve this by making put-chain quotes show a big loss while call
+        chain shows normal quotes.
+        """
+        s = _make_strategy(stop_loss_mult=2.0, sides="both")
+        open_state = _make_state(_friday_09())
+        s.on_market_state(open_state)
+>       assert len(s._positions) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a822660>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:289: AssertionError
+_______ TestWeeklyRoll.test_roll_keeps_long_when_delta_within_threshold ________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestWeeklyRoll object at 0x10a76a5a0>
+
+    def test_roll_keeps_long_when_delta_within_threshold(self):
+        """Delta -0.20, threshold 0.10 → drift = 0.0 → long kept."""
+        s = _make_strategy(sides="puts", target_delta=0.20, delta_drift_threshold=0.10)
+        s.on_market_state(_make_state(self.FIRST_FRIDAY))
+    
+        # Roll: same delta, long should stay at same expiry/strike
+        roll_state = self._state_for_next_friday(long_delta=-0.20)
+        s.on_market_state(roll_state)
+    
+        new_pos = s._positions[0]
+        assert new_pos.metadata["long_expiry"] == LONG_EXPIRY  # kept
+        assert new_pos.metadata["long_strike"] == PUT_STRIKE
+        # No long open fee (kept long → long_fee=0)
+        # fees_open should only reflect short_fee
+>       assert new_pos.fees_open < deribit_fee_per_leg(SPOT, LONG_ASK_USD) * 0.5
+                                   ^^^^^^^^^^^^^^^^^^^
+E       NameError: name 'deribit_fee_per_leg' is not defined
+
+backtester/strategies/tests/test_cal_premium_collect.py:433: NameError
+__________________ TestOnEnd.test_on_end_closes_all_positions __________________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestOnEnd object at 0x10a76b110>
+
+    def test_on_end_closes_all_positions(self):
+        s = _make_strategy(sides="both")
+        s.on_market_state(_make_state(_friday_09()))
+>       assert len(s._positions) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a7164e0>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:550: AssertionError
+______________________ TestReset.test_reset_clears_state _______________________
+
+self = <backtester.strategies.tests.test_cal_premium_collect.TestReset object at 0x10a76b6e0>
+
+    def test_reset_clears_state(self):
+        s = _make_strategy()
+        s.on_market_state(_make_state(_friday_09()))
+>       assert len(s._positions) > 0
+E       assert 0 > 0
+E        +  where 0 = len([])
+E        +    where [] = <backtester.strategies.cal_premium_collect.CalPremiumCollect object at 0x10a7e1bb0>._positions
+
+backtester/strategies/tests/test_cal_premium_collect.py:572: AssertionError
+=========================== short test summary info ============================
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_opens_both_pairs_on_first_friday
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_opens_only_put_pair_when_sides_puts
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_opens_only_call_pair_when_sides_calls
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestFirstEntry::test_position_metadata_structure
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestStopLoss::test_sl_fires_when_combined_loss_exceeds_threshold
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestStopLoss::test_sl_does_not_fire_when_within_threshold
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestStopLoss::test_sl_pairs_are_independent
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestWeeklyRoll::test_roll_keeps_long_when_delta_within_threshold
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestOnEnd::test_on_end_closes_all_positions
+FAILED backtester/strategies/tests/test_cal_premium_collect.py::TestReset::test_reset_clears_state
+========================= 10 failed, 7 passed in 0.10s =========================
