@@ -24,48 +24,24 @@ from backtester.results import GridResult
 from backtester.reporting_v2 import generate_html
 from backtester.walk_forward import run_walk_forward
 from backtester.experiment import load_experiment
-from backtester.strategies.l_straddle_index_move import LStraddleIndexMove
-from backtester.strategies.daily_put_sell import DailyPutSell
-from backtester.strategies.short_generic import ShortGeneric
-from backtester.strategies.deltaswipswap import DeltaSwipSwap
-from backtester.strategies.short_strangle_weekly_cap import ShortStrangleWeeklyCap
-from backtester.strategies.batman_calendar import BatmanCalendar
-from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
-from backtester.strategies.ss_turb_dyn_sl import SsTurbDynSl
 from backtester.strategies.ss_turb_dyn_mk2 import SsTurbDynMk2
-from backtester.strategies.bt_supertrend_lc import BtSupertrendLc
-from backtester.strategies.long_gamma_whitelist import LongGammaWhitelist
 from backtester.strategies.preopen_straddle import PreopenStraddle
-from backtester.strategies.hedged_put_sell import HedgedPutSell
-from backtester.strategies.long_gamma_MOVE import LongGammaMove
-from backtester.strategies.l_momentum import LMomentum
-from backtester.strategies.str_volburst_pullback import StrVolBurstPullback
 from backtester.strategies.cal_premium_collect import CalPremiumCollect
+from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
+#
+# Only strategies migrated to the leg-aware engine-owned fills API
+# (close_position / partial_close / add_legs) are registered here.
+# Legacy strategies live in backtester/archive/strategies_to_be_fixed/
+# and are not run from the CLI/UI until they are migrated.
 
 STRATEGIES = {
-    "straddle": LStraddleIndexMove,
-    "l_straddle_index_move": LStraddleIndexMove,
-    "put_sell": DailyPutSell,
-    "delta_strangle_tp": ShortGeneric,
-    "short_option":       ShortGeneric,
-    "short_generic":      ShortGeneric,
-    "deltaswipswap": DeltaSwipSwap,
-    "weekly_strangle_cap": ShortStrangleWeeklyCap,
-    "batman_calendar": BatmanCalendar,
-    "short_str_turb_dyn": ShortStrTurbDyn,
-    "ss_turb_dyn_sl": SsTurbDynSl,
     "ss_turb_dyn_mk2": SsTurbDynMk2,
-    "bt_supertrend_lc": BtSupertrendLc,
-    "long_gamma_whitelist": LongGammaWhitelist,
     "preopen_straddle": PreopenStraddle,
-    "hedged_put_sell": HedgedPutSell,
-    "long_gamma_MOVE": LongGammaMove,
-    "l_momentum": LMomentum,
-    "Str_VolBurst_Pullback": StrVolBurstPullback,
     "cal_premium_collect":  CalPremiumCollect,
+    "short_str_turb_dyn": ShortStrTurbDyn,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet

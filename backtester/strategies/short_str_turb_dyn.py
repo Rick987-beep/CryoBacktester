@@ -44,8 +44,8 @@ from backtester.expiry_utils import parse_expiry_date, expiry_dt_utc, select_exp
 from backtester.indicators import IndicatorDep
 from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
 from backtester.strategy_base import (
-    OpenPosition, Trade, close_trade,
-    check_expiry, check_take_profit_strangle, close_short_strangle,
+    OpenPosition, Trade, close_position,
+    check_expiry, check_take_profit_strangle,
     stop_loss_pct, max_hold_hours,
 )
 from market_hours import to_nyc, to_utc
@@ -151,6 +151,7 @@ class ShortStrTurbDyn:
         self._last_trade_date = None  # type: Optional[Any]
         self._watch_start = None      # type: Optional[datetime]  # when watching began
         self._exit_conditions = []
+        self._pos_counter = 0         # monotonic pos_id source
 
         # Turbulence DataFrame (hourly index, "composite" column); None until injected.
         self._turbulence = None       # type: Optional[Any]
@@ -189,6 +190,7 @@ class ShortStrTurbDyn:
         self._positions = []
         self._last_trade_date = None
         self._watch_start = None
+        self._pos_counter = 0
 
         self._exit_conditions = [
             stop_loss_pct(self._sl_pct),
@@ -238,7 +240,9 @@ class ShortStrTurbDyn:
                     pass  # skip Saturday/Sunday
 
                 else:
-                    self._maybe_open(state)
+                    open_trade = self._maybe_open(state)
+                    if open_trade is not None:
+                        trades.append(open_trade)
 
         return trades
 
@@ -255,6 +259,12 @@ class ShortStrTurbDyn:
         self._positions = []
         self._last_trade_date = None
         self._watch_start = None
+        self._pos_counter = 0
+
+    def _next_pos_id(self):
+        # type: () -> int
+        self._pos_counter += 1
+        return self._pos_counter
 
     def describe_params(self):
         # type: () -> Dict[str, Any]
@@ -327,7 +337,7 @@ class ShortStrTurbDyn:
             return  # wait for next tick
 
         # All gates passed — try to open
-        self._try_open(state)
+        return self._try_open(state)
 
     def _turbulence_ok(self, dt):
         # type: (datetime) -> bool
@@ -356,65 +366,77 @@ class ShortStrTurbDyn:
     # ------------------------------------------------------------------
 
     def _try_open(self, state):
-        # type: (Any) -> None
+        # type: (Any) -> Optional[Trade]
         expiry = select_expiry(state, self._dte)
         if expiry is None:
-            return
+            return None
 
         chain = state.get_chain(expiry)
         if not chain:
-            return
+            return None
 
         calls = [q for q in chain if q.is_call]
         puts  = [q for q in chain if not q.is_call]
         exp_dt = expiry_dt_utc(expiry, state.dt.tzinfo)
 
         if self._leg_type == "strangle":
-            self._open_strangle(state, expiry, exp_dt, calls, puts)
+            return self._open_strangle(state, expiry, exp_dt, calls, puts)
         elif self._leg_type == "call":
-            self._open_single(state, expiry, exp_dt, calls, is_call=True)
+            return self._open_single(state, expiry, exp_dt, calls, is_call=True)
         else:  # put
-            self._open_single(state, expiry, exp_dt, puts, is_call=False)
+            return self._open_single(state, expiry, exp_dt, puts, is_call=False)
 
     def _open_strangle(self, state, expiry, exp_dt, calls, puts):
-        # type: (Any, str, Any, list, list) -> None
+        # type: (Any, str, Any, list, list) -> Optional[Trade]
         call = select_by_delta(calls, +self._delta)
         put  = select_by_delta(puts,  -self._delta)
         if call is None or put is None:
-            return
+            return None
         if self._min_otm_pct > 0:
             call = _apply_min_otm(calls, call, state.spot, self._min_otm_pct, is_call=True)
             put  = _apply_min_otm(puts,  put,  state.spot, self._min_otm_pct, is_call=False)
             if call is None or put is None:
-                return  # no qualifying strike this tick — skip entry
+                return None  # no qualifying strike this tick — skip entry
         # Price floor: both legs must meet leg_min_price (BTC) before we open.
         # When leg_min_price == 0 the check is disabled; fall back to the
         # standard zero-bid guard so we never trade on stale/bad quotes.
         _min_p = self._leg_min_price
         if _min_p > 0:
             if call.bid < _min_p or put.bid < _min_p:
-                return  # retry next 5-min tick
+                return None  # retry next 5-min tick
         elif call.bid <= 0 or put.bid <= 0:
-            return
+            return None
         call_usd  = call.bid_usd
         put_usd   = put.bid_usd
         entry_usd = call_usd + put_usd
         if entry_usd <= 0:
-            return
+            return None
         quantity = self._compute_quantity(entry_usd)
+        fee_call = deribit_fee_per_leg(state.spot, call_usd)
+        fee_put  = deribit_fee_per_leg(state.spot, put_usd)
+        legs = [
+            {"strike": call.strike, "is_call": True,  "expiry": expiry, "side": "sell",
+             "qty": quantity,
+             "price_btc":       call.bid,
+             "entry_price":     call.bid,
+             "entry_price_usd": call_usd,
+             "entry_delta":     call.delta,
+             "fee_usd_open":    fee_call},
+            {"strike": put.strike,  "is_call": False, "expiry": expiry, "side": "sell",
+             "qty": quantity,
+             "price_btc":       put.bid,
+             "entry_price":     put.bid,
+             "entry_price_usd": put_usd,
+             "entry_delta":     put.delta,
+             "fee_usd_open":    fee_put},
+        ]
+        pos_id = self._next_pos_id()
         pos = OpenPosition(
             entry_time=state.dt,
             entry_spot=state.spot,
-            legs=[
-                {"strike": call.strike, "is_call": True,  "expiry": expiry, "side": "sell",
-                 "entry_price": call.bid, "entry_price_usd": call_usd * quantity, "entry_delta": call.delta,
-                 "qty": quantity},
-                {"strike": put.strike,  "is_call": False, "expiry": expiry, "side": "sell",
-                 "entry_price": put.bid, "entry_price_usd": put_usd * quantity,  "entry_delta": put.delta,
-                 "qty": quantity},
-            ],
+            legs=legs,
             entry_price_usd=entry_usd * quantity,
-            fees_open=(deribit_fee_per_leg(state.spot, call_usd) + deribit_fee_per_leg(state.spot, put_usd)) * quantity,
+            fees_open=(fee_call + fee_put) * quantity,
             metadata={
                 "leg_type":      "strangle",
                 "target_delta":  self._delta,
@@ -426,46 +448,75 @@ class ShortStrTurbDyn:
                 "call_delta":    call.delta,
                 "put_delta":     put.delta,
                 "quantity":      quantity,
+                "pos_id":        pos_id,
             },
         )
         self._positions.append(pos)
         self._last_trade_date = state.dt.date()
 
+        return Trade(
+            entry_time=state.dt,
+            exit_time=state.dt,
+            entry_spot=state.spot,
+            exit_spot=state.spot,
+            entry_price_usd=entry_usd * quantity,
+            exit_price_usd=0.0,
+            fees=(fee_call + fee_put) * quantity,
+            pnl=0.0,
+            triggered=False,
+            exit_reason="",
+            exit_hour=0,
+            entry_date=state.dt.strftime("%Y-%m-%d"),
+            side="open",
+            metadata={
+                "direction": "sell",
+                "pos_id":    pos_id,
+                "legs":      legs,
+            },
+        )
+
     def _open_single(self, state, expiry, exp_dt, quotes, is_call):
-        # type: (Any, str, Any, list, bool) -> None
+        # type: (Any, str, Any, list, bool) -> Optional[Trade]
         target_delta = +self._delta if is_call else -self._delta
         leg = select_by_delta(quotes, target_delta)
         if leg is None:
-            return
+            return None
         if self._min_otm_pct > 0:
             leg = _apply_min_otm(quotes, leg, state.spot, self._min_otm_pct, is_call=is_call)
             if leg is None:
-                return  # no qualifying strike this tick — skip entry
+                return None  # no qualifying strike this tick — skip entry
         # Price floor: the leg must meet leg_min_price (BTC) before we open.
         # When leg_min_price == 0 the check is disabled; fall back to zero-bid guard.
         _min_p = self._leg_min_price
         if _min_p > 0:
             if leg.bid < _min_p:
-                return  # retry next 5-min tick
+                return None  # retry next 5-min tick
         elif leg.bid <= 0:
-            return
+            return None
         entry_usd = leg.bid_usd
         if entry_usd <= 0:
-            return
+            return None
         quantity   = self._compute_quantity(entry_usd)
         leg_type   = "call" if is_call else "put"
         strike_key = "call_strike" if is_call else "put_strike"
         delta_key  = "call_delta"  if is_call else "put_delta"
+        fee_leg    = deribit_fee_per_leg(state.spot, entry_usd)
+        legs = [
+            {"strike": leg.strike, "is_call": is_call, "expiry": expiry, "side": "sell",
+             "qty": quantity,
+             "price_btc":       leg.bid,
+             "entry_price":     leg.bid,
+             "entry_price_usd": entry_usd,
+             "entry_delta":     leg.delta,
+             "fee_usd_open":    fee_leg},
+        ]
+        pos_id = self._next_pos_id()
         pos = OpenPosition(
             entry_time=state.dt,
             entry_spot=state.spot,
-            legs=[
-                {"strike": leg.strike, "is_call": is_call, "expiry": expiry, "side": "sell",
-                 "entry_price": leg.bid, "entry_price_usd": entry_usd * quantity, "entry_delta": leg.delta,
-                 "qty": quantity},
-            ],
+            legs=legs,
             entry_price_usd=entry_usd * quantity,
-            fees_open=deribit_fee_per_leg(state.spot, entry_usd) * quantity,
+            fees_open=fee_leg * quantity,
             metadata={
                 "leg_type":     leg_type,
                 "target_delta": self._delta,
@@ -475,10 +526,32 @@ class ShortStrTurbDyn:
                 strike_key:     leg.strike,
                 delta_key:      leg.delta,
                 "quantity":     quantity,
+                "pos_id":       pos_id,
             },
         )
         self._positions.append(pos)
         self._last_trade_date = state.dt.date()
+
+        return Trade(
+            entry_time=state.dt,
+            exit_time=state.dt,
+            entry_spot=state.spot,
+            exit_spot=state.spot,
+            entry_price_usd=entry_usd * quantity,
+            exit_price_usd=0.0,
+            fees=fee_leg * quantity,
+            pnl=0.0,
+            triggered=False,
+            exit_reason="",
+            exit_hour=0,
+            entry_date=state.dt.strftime("%Y-%m-%d"),
+            side="open",
+            metadata={
+                "direction": "sell",
+                "pos_id":    pos_id,
+                "legs":      legs,
+            },
+        )
 
     def _check_expiry(self, state, pos):
         # type: (Any, OpenPosition) -> Optional[str]
@@ -504,17 +577,60 @@ class ShortStrTurbDyn:
     def _close(self, state, pos, reason):
         # type: (Any, OpenPosition, str) -> Trade
         leg_type = pos.metadata["leg_type"]
+        quantity = float(pos.metadata.get("quantity", 1.0))
+
         if leg_type == "strangle":
-            trade = close_short_strangle(state, pos, reason)
+            expiry      = pos.metadata["expiry"]
+            call_strike = pos.metadata["call_strike"]
+            put_strike  = pos.metadata["put_strike"]
+
+            if reason == "expiry":
+                call_exit_usd_per = max(0.0, state.spot - call_strike)
+                put_exit_usd_per  = max(0.0, put_strike  - state.spot)
+                call_exit_btc_per = (call_exit_usd_per / state.spot) if state.spot else 0.0
+                put_exit_btc_per  = (put_exit_usd_per  / state.spot) if state.spot else 0.0
+                fee_call_per   = 0.0
+                fee_put_per    = 0.0
+                fees_close_per = 0.0
+            else:
+                _min_tick_btc = 0.0001
+                _min_tick_usd = _min_tick_btc * state.spot
+                call_q = state.get_option(expiry, call_strike, True)
+                put_q  = state.get_option(expiry, put_strike,  False)
+                call_exit_usd_per = (call_q.ask_usd if call_q and call_q.ask > 0 else _min_tick_usd)
+                put_exit_usd_per  = (put_q.ask_usd  if put_q  and put_q.ask  > 0 else _min_tick_usd)
+                call_exit_btc_per = call_q.ask if call_q and call_q.ask > 0 else _min_tick_btc
+                put_exit_btc_per  = put_q.ask  if put_q  and put_q.ask  > 0 else _min_tick_btc
+                fee_call_per   = deribit_fee_per_leg(state.spot, call_exit_usd_per)
+                fee_put_per    = deribit_fee_per_leg(state.spot, put_exit_usd_per)
+                fees_close_per = fee_call_per + fee_put_per
+
+            for leg in pos.legs:
+                if leg["is_call"]:
+                    leg["exit_price_btc"] = call_exit_btc_per
+                    leg["exit_price_usd"] = call_exit_usd_per
+                    leg["fee_btc_close"]  = (fee_call_per / state.spot) if state.spot else 0.0
+                else:
+                    leg["exit_price_btc"] = put_exit_btc_per
+                    leg["exit_price_usd"] = put_exit_usd_per
+                    leg["fee_btc_close"]  = (fee_put_per / state.spot) if state.spot else 0.0
+
+            trade = close_position(
+                state, pos, reason,
+                (call_exit_usd_per + put_exit_usd_per) * quantity,
+                fees_close_per * quantity,
+            )
         else:
             trade = self._close_single_leg(state, pos, reason)
+
+        trade.metadata["skip_open_fill"]       = True
         trade.metadata["leg_type"]             = leg_type
         trade.metadata["dte"]                  = self._dte
         trade.metadata["stop_loss_pct"]        = self._sl_pct
         trade.metadata["take_profit_pct"]      = self._tp_pct
         trade.metadata["max_hold_hours"]       = self._max_hold_hours
         trade.metadata["turbulence_threshold"] = self._turbulence_threshold
-        trade.metadata["quantity"]             = pos.metadata.get("quantity", 1.0)
+        trade.metadata["quantity"]             = quantity
         return trade
 
     def _close_single_leg(self, state, pos, reason):
@@ -523,19 +639,27 @@ class ShortStrTurbDyn:
         is_call  = (leg_type == "call")
         expiry   = pos.metadata["expiry"]
         strike   = pos.metadata["call_strike"] if is_call else pos.metadata["put_strike"]
-
         quantity = float(pos.metadata.get("quantity", 1.0))
+        leg      = pos.legs[0]
+
         if reason == "expiry":
-            exit_usd   = (max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)) * quantity
-            fees_close = 0.0
+            exit_usd_per = max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)
+            exit_btc_per = (exit_usd_per / state.spot) if state.spot else 0.0
+            fee_per      = 0.0
         else:
-            _min_tick_usd = 0.0001 * state.spot
+            _min_tick_btc = 0.0001
+            _min_tick_usd = _min_tick_btc * state.spot
             q = state.get_option(expiry, strike, is_call)
-            exit_usd   = (q.ask_usd if q and q.ask > 0 else _min_tick_usd) * quantity
-            fees_close = deribit_fee_per_leg(state.spot, exit_usd)
+            exit_usd_per = q.ask_usd if q and q.ask > 0 else _min_tick_usd
+            exit_btc_per = q.ask     if q and q.ask > 0 else _min_tick_btc
+            fee_per      = deribit_fee_per_leg(state.spot, exit_usd_per)
 
-        # Annotate the leg with its actual exit price for fills table display.
-        for leg in pos.legs:
-            leg["exit_price_usd"] = exit_usd
+        leg["exit_price_btc"] = exit_btc_per
+        leg["exit_price_usd"] = exit_usd_per
+        leg["fee_btc_close"]  = (fee_per / state.spot) if state.spot else 0.0
 
-        return close_trade(state, pos, reason, exit_usd, fees_close)
+        return close_position(
+            state, pos, reason,
+            exit_usd_per * quantity,
+            fee_per * quantity,
+        )

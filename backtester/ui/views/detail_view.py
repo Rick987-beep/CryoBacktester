@@ -20,7 +20,7 @@ log = get_ui_logger(__name__)
 
 # Fills-view columns (used when result.df_fills is available — one row per leg per event)
 _FILLS_COLS = ["ts", "trade_idx", "event", "contract", "side", "qty",
-               "amount_usd", "fees", "spot", "exit_reason"]
+               "amount_usd", "balance_usd", "fee_usd", "spot", "exit_reason"]
 
 # Summary-view columns (fallback when df_fills is absent)
 _TRADE_COLS = ["entry_time", "exit_time", "days_held", "entry_spot", "pnl",
@@ -59,7 +59,7 @@ def _fmt(v) -> str:
 # Columns whose values are USD amounts → format as xx,xxx.xx
 _DOLLAR_COLS = frozenset({
     "entry_spot", "exit_spot", "entry_price_usd", "exit_price_usd", "fees", "pnl",
-    "amount_usd", "spot",  # fills-view columns
+    "amount_usd", "fee_usd", "balance_usd", "spot",  # fills-view columns
 })
 # Columns that are percentages → format as xx.xx
 _PCT_COLS = frozenset({"pnl_pct", "win_rate", "max_dd_pct"})

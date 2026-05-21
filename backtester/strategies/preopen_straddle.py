@@ -41,7 +41,9 @@ from typing import Any, Dict, List, Optional
 
 from backtester.expiry_utils import parse_expiry_date, nearest_valid_expiry
 from backtester.pricing import deribit_fee_per_leg, HOURS_PER_YEAR, EXPIRY_HOUR_UTC
-from backtester.strategy_base import OpenPosition, Trade, close_trade
+from backtester.strategy_base import (
+    OpenPosition, Trade, close_position, partial_close,
+)
 from market_hours import is_trading_day, to_nyc
 
 
@@ -81,6 +83,12 @@ class PreopenStraddle:
         self._entry_min_et = 0
         self._individual_exit = 0
         self._last_trade_date = None   # type: Optional[Any]
+        self._pos_counter = 0          # monotonic pos_id source
+
+    def _next_pos_id(self):
+        # type: () -> int
+        self._pos_counter += 1
+        return self._pos_counter
 
     def configure(self, params):
         # type: (Dict[str, Any]) -> None
@@ -93,6 +101,7 @@ class PreopenStraddle:
         self._individual_exit = params.get("individual_exit", 0)
         self._position = None
         self._last_trade_date = None
+        self._pos_counter = 0
 
     def on_market_state(self, state):
         # type: (Any) -> List[Trade]
@@ -119,7 +128,9 @@ class PreopenStraddle:
         if self._position is None:
             today = state.dt.date()
             if self._last_trade_date != today and self._is_valid_entry(state):
-                self._try_open(state)
+                open_trade = self._try_open(state)
+                if open_trade is not None:
+                    trades.append(open_trade)
 
         return trades
 
@@ -135,6 +146,7 @@ class PreopenStraddle:
         # type: () -> None
         self._position = None
         self._last_trade_date = None
+        self._pos_counter = 0
 
     def describe_params(self):
         # type: () -> Dict[str, Any]
@@ -185,10 +197,10 @@ class PreopenStraddle:
         return best
 
     def _try_open(self, state):
-        # type: (Any) -> None
+        # type: (Any) -> Optional[Trade]
         expiry = self._select_expiry(state)
         if expiry is None:
-            return
+            return None
 
         if self._offset == 0:
             call, put = state.get_straddle(expiry)
@@ -196,37 +208,66 @@ class PreopenStraddle:
             call, put = state.get_strangle(expiry, self._offset)
 
         if call is None or put is None:
-            return
+            return None
         if call.ask <= 0 or put.ask <= 0:
-            return
+            return None
 
         entry_usd = call.ask_usd + put.ask_usd
         if entry_usd <= 0 or entry_usd != entry_usd:
-            return
+            return None
 
         fee_call = deribit_fee_per_leg(state.spot, call.ask_usd)
         fee_put  = deribit_fee_per_leg(state.spot, put.ask_usd)
 
+        legs = [
+            {"strike": call.strike, "is_call": True,
+             "expiry": expiry, "side": "buy", "qty": 1.0,
+             "price_btc": call.ask,
+             "entry_price": call.ask, "entry_price_usd": call.ask_usd,
+             "fee_usd_open": fee_call, "fees_open": fee_call},
+            {"strike": put.strike,  "is_call": False,
+             "expiry": expiry, "side": "buy", "qty": 1.0,
+             "price_btc": put.ask,
+             "entry_price": put.ask, "entry_price_usd": put.ask_usd,
+             "fee_usd_open": fee_put, "fees_open": fee_put},
+        ]
+
+        pos_id = self._next_pos_id()
         self._position = OpenPosition(
             entry_time=state.dt,
             entry_spot=state.spot,
-            legs=[
-                {"strike": call.strike, "is_call": True,
-                 "expiry": expiry, "side": "buy",
-                 "entry_price": call.ask, "entry_price_usd": call.ask_usd,
-                 "fees_open": fee_call, "closed": False},
-                {"strike": put.strike, "is_call": False,
-                 "expiry": expiry, "side": "buy",
-                 "entry_price": put.ask, "entry_price_usd": put.ask_usd,
-                 "fees_open": fee_put, "closed": False},
-            ],
+            legs=legs,
             entry_price_usd=entry_usd,
             fees_open=fee_call + fee_put,
             metadata={
+                "direction":    "buy",
+                "pos_id":       pos_id,
                 "offset":       self._offset,
                 "expiry":       expiry,
                 "call_strike":  call.strike,
                 "put_strike":   put.strike,
+            },
+        )
+
+        # Explicit open Trade — engine emits open fills, stamps leg['_open_idx'].
+        return Trade(
+            entry_time=state.dt,
+            exit_time=state.dt,
+            entry_spot=state.spot,
+            exit_spot=state.spot,
+            entry_price_usd=entry_usd,
+            exit_price_usd=0.0,
+            fees=fee_call + fee_put,
+            pnl=0.0,
+            triggered=False,
+            exit_reason="",
+            exit_hour=0,
+            entry_date=state.dt.strftime("%Y-%m-%d"),
+            side="open",
+            metadata={
+                "direction": "buy",
+                "pos_id":    pos_id,
+                "legs":      legs,
             },
         )
 
@@ -263,76 +304,72 @@ class PreopenStraddle:
         threshold = self._spot_move_pct / 100.0
         high = state.spot_high_since(int(pos.entry_time.timestamp() * 1_000_000))
         low  = state.spot_low_since(int(pos.entry_time.timestamp() * 1_000_000))
-        for leg in pos.legs:
-            if leg.get("closed"):
-                continue
+        # Snapshot pos.legs — _close_leg mutates it (via partial_close).
+        for leg in list(pos.legs):
             if leg["is_call"]:
                 if (high - pos.entry_spot) / pos.entry_spot >= threshold:
                     trades.append(self._close_leg(state, leg, "target_hit"))
             else:
                 if (pos.entry_spot - low) / pos.entry_spot >= threshold:
                     trades.append(self._close_leg(state, leg, "target_hit"))
-        if all(leg.get("closed") for leg in pos.legs):
-            self._last_trade_date = pos.entry_time.date()
-            self._position = None
+            if self._position is None:
+                break  # last leg closed — position torn down
         return trades
 
     def _close_leg(self, state, leg, reason):
         # type: (Any, Any, str) -> Trade
         pos = self._position
-        expiry    = leg["expiry"]
-        strike    = leg["strike"]
-        is_call   = leg["is_call"]
-        entry_usd = leg["entry_price_usd"]
-        fees_open = leg.get("fees_open", 0.0)
+        expiry  = leg["expiry"]
+        strike  = leg["strike"]
+        is_call = leg["is_call"]
 
         if reason == "expiry":
-            exit_usd = max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)
+            exit_usd_per = max(0.0, state.spot - strike) if is_call else max(0.0, strike - state.spot)
+            exit_btc_per = (exit_usd_per / state.spot) if state.spot else 0.0
             fees_close = 0.0
         else:
             q = state.get_option(expiry, strike, is_call)
             bid_usd = (q.bid_usd if q else 0.0) or 0.0
             if bid_usd != bid_usd:  # NaN guard
                 bid_usd = 0.0
-            exit_usd   = bid_usd
+            bid_btc = (q.bid if q else 0.0) or 0.0
+            if bid_btc != bid_btc:
+                bid_btc = 0.0
+            exit_usd_per = bid_usd
+            exit_btc_per = bid_btc
             fees_close = deribit_fee_per_leg(state.spot, bid_usd)
 
-        total_fees = fees_open + fees_close
-        pnl = exit_usd - entry_usd - total_fees
-        held_s = (state.dt - pos.entry_time).total_seconds()
-        trade = Trade(
-            entry_time=pos.entry_time,
-            exit_time=state.dt,
-            entry_spot=pos.entry_spot,
-            exit_spot=state.spot,
-            entry_price_usd=entry_usd,
-            exit_price_usd=exit_usd,
-            fees=total_fees,
-            pnl=pnl,
-            triggered=(reason == "target_hit"),
-            exit_reason=reason,
-            exit_hour=int(held_s / 3600),
-            entry_date=pos.entry_time.strftime("%Y-%m-%d"),
-            metadata={
-                **pos.metadata,
-                "leg":           "call" if is_call else "put",
-                "strike":        strike,
-                "spot_move_pct": self._spot_move_pct,
-                "max_hold_min":  self._max_hold_min,
-                "min_dte":       self._min_dte,
-            },
-        )
-        leg["closed"] = True
+        leg["exit_price_btc"] = exit_btc_per
+        leg["exit_price_usd"] = exit_usd_per
+        if reason == "expiry":
+            leg["fee_btc_close"] = 0.0
+
+        if len(pos.legs) > 1:
+            leg_idx = pos.legs.index(leg)
+            trade = partial_close(state, pos, [leg_idx], reason, fees_close)
+        else:
+            trade = close_position(state, pos, reason, exit_usd_per, fees_close)
+            trade.metadata["skip_open_fill"] = True
+            self._last_trade_date = pos.entry_time.date()
+            self._position = None
+
+        trade.metadata.update({
+            "leg":           "call" if is_call else "put",
+            "strike":        strike,
+            "spot_move_pct": self._spot_move_pct,
+            "max_hold_min":  self._max_hold_min,
+            "min_dte":       self._min_dte,
+        })
         return trade
 
     def _close_all_remaining(self, state, reason):
         # type: (Any, str) -> List[Trade]
         trades = []
-        for leg in self._position.legs:
-            if not leg.get("closed"):
-                trades.append(self._close_leg(state, leg, reason))
-        self._last_trade_date = self._position.entry_time.date()
-        self._position = None
+        # _close_leg removes the leg (via partial_close) or tears down the
+        # position (on the final leg). Loop until empty.
+        while self._position is not None and self._position.legs:
+            leg = self._position.legs[0]
+            trades.append(self._close_leg(state, leg, reason))
         return trades
 
     def _check_expiry(self, state):
@@ -356,25 +393,47 @@ class PreopenStraddle:
         put_strike  = pos.metadata["put_strike"]
 
         if reason == "expiry":
-            call_intrinsic = max(0.0, state.spot - call_strike)
-            put_intrinsic  = max(0.0, put_strike  - state.spot)
-            exit_usd   = call_intrinsic + put_intrinsic
+            call_exit_usd = max(0.0, state.spot - call_strike)
+            put_exit_usd  = max(0.0, put_strike  - state.spot)
+            call_exit_btc = (call_exit_usd / state.spot) if state.spot else 0.0
+            put_exit_btc  = (put_exit_usd  / state.spot) if state.spot else 0.0
             fees_close = 0.0
         else:
             call_q = state.get_option(expiry, call_strike, True)
             put_q  = state.get_option(expiry, put_strike,  False)
             call_bid_usd = (call_q.bid_usd if call_q else 0.0) or 0.0
             put_bid_usd  = (put_q.bid_usd  if put_q  else 0.0) or 0.0
-            # NaN guard
-            if call_bid_usd != call_bid_usd:
-                call_bid_usd = 0.0
-            if put_bid_usd != put_bid_usd:
-                put_bid_usd = 0.0
-            exit_usd   = call_bid_usd + put_bid_usd
+            call_bid_btc = (call_q.bid if call_q else 0.0) or 0.0
+            put_bid_btc  = (put_q.bid  if put_q  else 0.0) or 0.0
+            # NaN guards
+            if call_bid_usd != call_bid_usd: call_bid_usd = 0.0
+            if put_bid_usd  != put_bid_usd:  put_bid_usd  = 0.0
+            if call_bid_btc != call_bid_btc: call_bid_btc = 0.0
+            if put_bid_btc  != put_bid_btc:  put_bid_btc  = 0.0
+            call_exit_usd = call_bid_usd
+            put_exit_usd  = put_bid_usd
+            call_exit_btc = call_bid_btc
+            put_exit_btc  = put_bid_btc
             fees_close = (deribit_fee_per_leg(state.spot, call_bid_usd) +
                           deribit_fee_per_leg(state.spot, put_bid_usd))
 
-        trade = close_trade(state, pos, reason, exit_usd, fees_close)
+        exit_usd = call_exit_usd + put_exit_usd
+
+        # Annotate legs with BTC exit price (per contract) — engine uses for
+        # close fills; close_position uses for leg-aware PnL.
+        for leg in pos.legs:
+            if leg["is_call"]:
+                leg["exit_price_btc"] = call_exit_btc
+                leg["exit_price_usd"] = call_exit_usd
+            else:
+                leg["exit_price_btc"] = put_exit_btc
+                leg["exit_price_usd"] = put_exit_usd
+            if reason == "expiry":
+                leg["fee_btc_close"] = 0.0
+
+        trade = close_position(state, pos, reason, exit_usd, fees_close)
+        # Open fills were already emitted by the explicit side='open' Trade.
+        trade.metadata["skip_open_fill"] = True
         trade.metadata.update({
             "spot_move_pct": self._spot_move_pct,
             "max_hold_min":  self._max_hold_min,

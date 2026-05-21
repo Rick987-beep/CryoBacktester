@@ -860,12 +860,19 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         parts.append('<div class="hm-wrap"><table>')
         parts.append(
             '<tr><th style="text-align:left">Date</th>'
-            '<th>Day PnL</th><th>Cumulative</th><th>Equity</th>'
+            '<th>Day PnL</th><th>Cumulative</th>'
+            '<th>Balance</th><th>Open Pos PnL</th><th>Equity</th>'
             '<th style="min-width:120px">Visual</th></tr>')
         max_abs = max(abs(row[1]) for row in best_eq["daily"]) or 1
-        for ds, pnl, cum, high, low, eq in best_eq["daily"]:
+        for row in best_eq["daily"]:
+            ds, pnl, cum, high, low, eq = row[0], row[1], row[2], row[3], row[4], row[5]
+            if len(row) >= 8:
+                balance, open_pos_pnl = row[6], row[7]
+            else:
+                balance, open_pos_pnl = eq, 0.0
             pnl_cls = _pnl_class(pnl)
             cum_cls = _pnl_class(cum)
+            open_cls = _pnl_class(open_pos_pnl)
             bar_w = min(abs(pnl) / max_abs * 100, 100)
             bar_cls = "eq-pos" if pnl >= 0 else "eq-neg"
             sign = "+" if pnl > 0 else ""
@@ -873,6 +880,8 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
                 f'<tr><td style="text-align:left">{ds}</td>'
                 f'<td class="{pnl_cls}">{sign}{_fmt_pnl(pnl)}</td>'
                 f'<td class="{cum_cls}">{_fmt_pnl(cum)}</td>'
+                f'<td>${balance:,.2f}</td>'
+                f'<td class="{open_cls}">{_fmt_pnl(open_pos_pnl)}</td>'
                 f'<td>{_fmt_pnl(eq)}</td>'
                 f'<td><span class="eq-bar {bar_cls}" '
                 f'style="width:{bar_w:.0f}%"></span></td></tr>'
@@ -913,6 +922,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
             '<th>Side</th>'
             '<th style="text-align:right">Qty</th>'
             '<th style="text-align:right">Amount</th>'
+            '<th style="text-align:right">Balance</th>'
             '<th style="text-align:right">Fees</th>'
             '<th style="text-align:right">Spot</th>'
             '<th style="text-align:left">Reason</th>'
@@ -938,9 +948,12 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
             _amt = row.amount_usd
             _amt_cls = 'color:#1b5e20' if _amt >= 0 else 'color:#b71c1c'
             _open_idx = int(getattr(row, 'open_idx', 0))
-            _opens_str = str(_open_idx) if (_open_idx and _open_idx != row.trade_idx) else ''
+            _opens_str = str(_open_idx) if (row.event == 'close' and _open_idx != row.trade_idx) else ''
             _qty = getattr(row, 'qty', None)
             _qty_str = f'{_qty:g}' if _qty is not None else ''
+            _fee = getattr(row, 'fee_usd', getattr(row, 'fees', 0.0))
+            _bal = getattr(row, 'balance_usd', None)
+            _bal_str = f'${_bal:,.2f}' if _bal is not None else ''
             parts.append(
                 f'<tr class="{row_cls}">'
                 f'<td style="text-align:left;white-space:nowrap">{ts_str}</td>'
@@ -951,7 +964,8 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
                 f'<td style="text-align:center;{side_cls}">{row.side}</td>'
                 f'<td style="text-align:right">{_qty_str}</td>'
                 f'<td style="text-align:right;{_amt_cls}">${_amt:+,.2f}</td>'
-                f'<td style="text-align:right">${row.fees:,.2f}</td>'
+                f'<td style="text-align:right">{_bal_str}</td>'
+                f'<td style="text-align:right">${_fee:,.2f}</td>'
                 f'<td style="text-align:right">${row.spot:,.0f}</td>'
                 f'<td style="text-align:left">{reason_str}</td>'
                 '</tr>'

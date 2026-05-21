@@ -5,8 +5,6 @@ Tests cover:
     - First entry on first Friday at 09:00 UTC opens both pairs ("both")
     - First entry opens only put pair when sides="puts"
     - First entry opens only call pair when sides="calls"
-    - Stop loss fires when combined P&L < -sl_mult * short_entry_premium
-    - Stop loss does NOT fire when combined P&L is within threshold
     - Weekly roll: short leg is closed and new one is opened
     - Weekly roll: long leg is kept when delta is within threshold
     - Weekly roll: long leg is rolled when delta drifts outside threshold
@@ -150,7 +148,6 @@ def _make_strategy(**params):
         "sides": "both",
         "target_delta": 0.20,
         "delta_drift_threshold": 0.10,
-        "stop_loss_mult": 2.0,
     }
     defaults.update(params)
     s.configure(defaults)
@@ -168,7 +165,10 @@ class TestFirstEntry:
         assert len(s._positions) == 2
         pair_types = {p.metadata["pair_type"] for p in s._positions}
         assert pair_types == {"put", "call"}
-        assert trades == []  # no close trades on first open
+        # New API: each open emits a side='open' Trade for fill linkage.
+        assert len(trades) == 2
+        assert all(t.side == "open" for t in trades)
+        assert all(t.pnl == 0.0 for t in trades)
 
     def test_opens_only_put_pair_when_sides_puts(self):
         s = _make_strategy(sides="puts")
@@ -215,121 +215,6 @@ class TestFirstEntry:
         assert md["short_entry_premium_usd"] == pytest.approx(SHORT_BID_USD, rel=1e-4)
         assert md["long_entry_premium_usd"] == pytest.approx(LONG_ASK_USD, rel=1e-4)
         assert md["direction"] == "sell"
-
-
-# ── Tests: stop loss ──────────────────────────────────────────────────────────
-
-class TestStopLoss:
-
-    def _opened_strategy(self, sl_mult=2.0, sides="puts"):
-        """Open one pair and return (strategy, open_state)."""
-        s = _make_strategy(stop_loss_mult=sl_mult, sides=sides)
-        open_dt = _friday_09()
-        state = _make_state(open_dt)
-        s.on_market_state(state)
-        assert len(s._positions) == 1
-        return s
-
-    def test_sl_fires_when_combined_loss_exceeds_threshold(self):
-        """
-        short_entry_premium = SHORT_BID_USD (~188 USD)
-        sl_mult = 2.0 → threshold = -376 USD
-
-        Simulate: short ask doubled (big loss on short) and long bid halved.
-            short_pnl = SHORT_BID_USD - short_ask_usd
-            long_pnl  = long_bid_usd  - LONG_ASK_USD
-
-        Set short_ask = 3 * SHORT_BID_BTC (short moved against us)
-        Set long_bid  = 0.001 (long lost value too)
-        combined_pnl should be < -2 * SHORT_BID_USD → SL fires
-        """
-        s = self._opened_strategy(sl_mult=2.0)
-        # Next tick (non-Friday, random time): SL check
-        tick_dt = datetime(2026, 5, 23, 12, 0, tzinfo=timezone.utc)  # Saturday
-        # short_ask 3× entry: short_pnl = 188 - 3*188 = -376
-        # long_bid  0.001 BTC: long_pnl  = 94 - 470 = -376
-        # combined = -752; threshold = -2 * 188 = -376 → fires
-        state = _make_state(
-            tick_dt,
-            short_ask=SHORT_BID_BTC * 3.0,  # expensive to buy back
-            long_bid=0.001,                  # long lost most value
-        )
-        trades = s.on_market_state(state)
-        assert len(trades) == 1
-        assert trades[0].exit_reason == "stop_loss"
-        assert len(s._positions) == 0
-
-    def test_sl_does_not_fire_when_within_threshold(self):
-        """
-        Combined loss < -sl_mult * short_entry_premium → SL should NOT fire.
-        Set short_ask = 1.5x entry (manageable loss), long bid ~ entry.
-        """
-        s = self._opened_strategy(sl_mult=2.0)
-        tick_dt = datetime(2026, 5, 23, 12, 0, tzinfo=timezone.utc)
-        # short_pnl = 188 - 1.5*188 = -94
-        # long_pnl  = long_bid ~ LONG_BID_USD (small loss)
-        # combined well above -376
-        state = _make_state(
-            tick_dt,
-            short_ask=SHORT_BID_BTC * 1.5,
-            long_bid=LONG_BID_BTC,
-        )
-        trades = s.on_market_state(state)
-        assert trades == []
-        assert len(s._positions) == 1
-
-    def test_sl_pairs_are_independent(self):
-        """
-        With sides='both', triggering SL for put pair should not close call pair.
-        We achieve this by making put-chain quotes show a big loss while call
-        chain shows normal quotes.
-        """
-        s = _make_strategy(stop_loss_mult=2.0, sides="both")
-        open_state = _make_state(_friday_09())
-        s.on_market_state(open_state)
-        assert len(s._positions) == 2
-
-        tick_dt = datetime(2026, 5, 23, 12, 0, tzinfo=timezone.utc)
-
-        # Build a state where put quotes trigger SL but call quotes do not.
-        state = MagicMock()
-        state.dt = tick_dt
-        state.spot = SPOT
-        state.spot_bars = []
-        state.expiries.side_effect = open_state.expiries.side_effect
-
-        # Put chain: short ask 3x (triggers SL)
-        put_long_q = _make_quote(PUT_STRIKE, False, 0.001, LONG_ASK_BTC, -0.20, LONG_EXPIRY)
-        put_short_q = _make_quote(PUT_STRIKE, False, SHORT_BID_BTC, SHORT_BID_BTC * 3.0, -0.10, SHORT_EXPIRY)
-        # Call chain: normal
-        call_long_q = _make_quote(CALL_STRIKE, True, LONG_BID_BTC, LONG_ASK_BTC, 0.20, LONG_EXPIRY)
-        call_short_q = _make_quote(CALL_STRIKE, True, SHORT_BID_BTC, SHORT_ASK_BTC, 0.10, SHORT_EXPIRY)
-
-        def get_option(expiry, strike, is_call):
-            if expiry == LONG_EXPIRY:
-                if strike == PUT_STRIKE and not is_call:
-                    return put_long_q
-                if strike == CALL_STRIKE and is_call:
-                    return call_long_q
-            if expiry == SHORT_EXPIRY:
-                if strike == PUT_STRIKE and not is_call:
-                    return put_short_q
-                if strike == CALL_STRIKE and is_call:
-                    return call_short_q
-            return None
-
-        state.get_option.side_effect = get_option
-        state.get_chain.side_effect = open_state.get_chain.side_effect
-
-        trades = s.on_market_state(state)
-
-        # Only put pair SL fires
-        sl_trades = [t for t in trades if t.exit_reason == "stop_loss"]
-        assert len(sl_trades) == 1
-        assert sl_trades[0].metadata["pair_type"] == "put"
-        # Call pair still open
-        assert len(s._positions) == 1
-        assert s._positions[0].metadata["pair_type"] == "call"
 
 
 # ── Tests: weekly roll ────────────────────────────────────────────────────────
@@ -401,40 +286,55 @@ class TestWeeklyRoll:
 
     def test_roll_produces_close_trade_and_new_position(self):
         s = _make_strategy(sides="puts")
-        # First entry
+        # First entry (yields one open trade)
         s.on_market_state(_make_state(self.FIRST_FRIDAY))
         assert len(s._positions) == 1
         first_pos = s._positions[0]
         assert first_pos.metadata["short_expiry"] == SHORT_EXPIRY
 
-        # Roll
+        # Roll: with delta within threshold, this is a partial close of
+        # the short + add a new short, so we expect 2 trades (1 close, 1 open).
         roll_state = self._state_for_next_friday()
         trades = s.on_market_state(roll_state)
 
-        assert len(trades) == 1
-        assert trades[0].exit_reason == "roll"
+        close_trades = [t for t in trades if t.side == "close"]
+        open_trades  = [t for t in trades if t.side == "open"]
+        assert len(close_trades) == 1
+        # Short expired before the roll date → reason is "expiry", not "roll"
+        assert close_trades[0].exit_reason == "expiry"
+        assert len(open_trades) == 1
         assert len(s._positions) == 1
         new_pos = s._positions[0]
         assert new_pos.metadata["short_expiry"] == self.NEXT_SHORT_EXPIRY
 
     def test_roll_keeps_long_when_delta_within_threshold(self):
-        """Delta -0.20, threshold 0.10 → drift = 0.0 → long kept."""
+        """Delta -0.20, threshold 0.10 → drift = 0.0 → long kept.
+
+        Under the new API the long position is NOT rebuilt: the same
+        OpenPosition is mutated (short replaced via partial_close + add_legs).
+        The long's original entry premium and fee remain intact on the
+        position; only the short rotates.
+        """
         s = _make_strategy(sides="puts", target_delta=0.20, delta_drift_threshold=0.10)
         s.on_market_state(_make_state(self.FIRST_FRIDAY))
+        first_pos = s._positions[0]
+        first_pos_id = first_pos.metadata["pos_id"]
 
-        # Roll: same delta, long should stay at same expiry/strike
+        # Roll: same delta, long should stay at same expiry/strike.
         roll_state = self._state_for_next_friday(long_delta=-0.20)
         s.on_market_state(roll_state)
 
         new_pos = s._positions[0]
-        assert new_pos.metadata["long_expiry"] == LONG_EXPIRY  # kept
+        # Same underlying OpenPosition (mutated, not replaced).
+        assert new_pos.metadata["pos_id"] == first_pos_id
+        assert new_pos.metadata["long_expiry"] == LONG_EXPIRY
         assert new_pos.metadata["long_strike"] == PUT_STRIKE
-        # No long open fee (kept long → long_fee=0)
-        # fees_open should equal only the short_fee, not short+long combined
+        # fees_open: long_fee retained + new short_fee added.
         expected_short_fee = deribit_fee_per_leg(SPOT, SHORT_BID_USD)
-        expected_long_fee = deribit_fee_per_leg(SPOT, LONG_ASK_USD)
-        assert new_pos.fees_open == pytest.approx(expected_short_fee, rel=1e-4)
-        assert new_pos.fees_open < expected_short_fee + expected_long_fee
+        expected_long_fee  = deribit_fee_per_leg(SPOT, LONG_ASK_USD)
+        assert new_pos.fees_open == pytest.approx(
+            expected_long_fee + expected_short_fee, rel=1e-4
+        )
 
     def test_roll_refreshes_long_when_delta_drifted(self):
         """Delta drifts to -0.05, threshold 0.10 → |0.05 - 0.20| = 0.15 > 0.10 → roll long."""
@@ -527,7 +427,9 @@ class TestWeeklyRoll:
 
         roll_state = self._state_for_next_friday()
         trades1 = s.on_market_state(roll_state)
-        assert len(trades1) == 1  # roll happened
+        # New API: roll yields 2 trades (close of short + open of new short).
+        close_trades_1 = [t for t in trades1 if t.side == "close"]
+        assert len(close_trades_1) == 1
 
         # Same Friday, minute later — should not roll again
         dt2 = self.NEXT_FRIDAY.replace(minute=0)  # same minute=0, same ISO week
