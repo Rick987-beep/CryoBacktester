@@ -40,7 +40,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 2. Run a strategy discovery grid (requires data in backtester/data/)
-python -m backtester.run --strategy long_gamma_whitelist
+python -m backtester.run --strategy short_str_turb_dyn
 
 # 3. Sensitivity analysis around a known-good candidate
 python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
@@ -268,8 +268,10 @@ at_interval(every_n_ticks)          # fire every N ticks
 
 **Exit conditions** — `(MarketState, OpenPosition) → str | None`:
 ```python
-stop_loss_pct(pct)                  # close if unrealised loss > pct% of entry
-profit_target_pct(pct)              # close if unrealised gain > pct% of entry
+stop_loss_pct(pct, price_mode="mark")       # close if position value > pct% of entry
+                                            # price_mode="mark": stable; use for SL
+profit_target_pct(pct, price_mode="executable") # close if gain > pct% of entry
+                                            # price_mode="executable": real bid/ask; use for TP
 max_hold_hours(hours)               # close after N hours
 max_hold_days(days)                 # close after N days
 time_exit(hour)                     # close at specific UTC hour
@@ -277,9 +279,26 @@ index_move_trigger(pct)             # close if spot moved pct% since entry
                                     # (checks 1-min bars, not just 5-min close)
 ```
 
+`price_mode` controls which price is used for SL/TP evaluation:
+- `"mark"` — exchange model price; stable against wide bid/ask spreads. **Default for SL.**
+- `"executable"` — ask for sell legs, bid for buy legs; only fires when you can actually get out. **Default for TP.**
+
+**Configure them in `configure()`:**
+```python
+self._exit_conds = [stop_loss_pct(self._sl_pct, price_mode="mark")]
+if self._tp_pct > 0:
+    self._exit_conds.append(profit_target_pct(self._tp_pct, price_mode="executable"))
+```
+
 ### Reprice caching
 
-`_reprice_legs(pos, state)` marks all legs to market and caches the result in `pos._last_reprice_usd`. The engine reads this cache for NAV accounting instead of repricing twice per tick per position. The cache is cleared after each read.
+`price_legs(state, pos, mode)` marks all legs to market and returns the total position USD value.
+Result is also cached in `pos._last_reprice_usd`. The engine reads this cache for NAV accounting
+without repricing twice per tick.
+
+`_reprice_legs(state, pos)` is a backward-compat alias for `price_legs(state, pos, mode="executable")`.
+
+Available modes: `"mark"`, `"executable"`, `"bid"`, `"ask"`.
 
 ---
 
@@ -520,55 +539,84 @@ All strategies live in `backtester/strategies/`. Register them in `backtester/ru
 
 | CLI key | File | Description |
 |---|---|---|
-| `long_gamma_whitelist` | `long_gamma_whitelist.py` | Buy straddle/strangle on whitelisted bull/bear regime days |
-| `short_str_turb_dyn` | `short_str_turb_dyn.py` | Short strangle; enter only in low-turbulence regime |
-| `ss_turb_dyn_mk2` | `ss_turb_dyn_mk2.py` | Short strangle turbulence v2 |
-| `ss_turb_dyn_sl` | `ss_turb_dyn_sl.py` | Short strangle turbulence with stop-loss variant |
-| `short_generic` | `short_generic.py` | Generic configurable short strangle |
-| `short_strangle_weekly_cap` | `short_strangle_weekly_cap.py` | Weekly strangle with premium cap |
-| `daily_put_sell` | `daily_put_sell.py` | Sell 1DTE OTM put, delta-selected |
-| `deltaswipswap` | `deltaswipswap.py` | Delta-selected swap entry |
-| `l_straddle_index_move` | `l_straddle_index_move.py` | Long straddle, exit on BTC index move |
-| `preopen_straddle` | `preopen_straddle.py` | Pre-open straddle entry |
-| `batman_calendar` | `batman_calendar.py` | Batman calendar spread |
-| `bt_supertrend_lc` | `bt_supertrend_lc.py` | Long call with SuperTrend regime filter |
+| `short_str_turb_dyn` | `short_str_turb_dyn.py` | Short strangle; enter only in low-turbulence regime; dynamic sizing |
+| `blueprint_howto` | `blueprint_howto.py` | Canonical annotated reference implementation for new strategy authors |
+
+All other strategies have been moved to `backtester/archive/strategies_to_be_fixed/`
+and are not registered. They used the legacy `close_trade` / `close_short_strangle` API
+and must be migrated to `close_position` before re-registering.
 
 ---
 
 ## Adding a New Strategy
 
-1. Create `backtester/strategies/my_strategy.py` implementing the `Strategy` protocol:
+The canonical reference implementation is `backtester/strategies/blueprint_howto.py` — read it first.
+Full step-by-step instructions are in `docs/strategy_howto.md`.
 
+1. Create `backtester/strategies/my_strategy.py` implementing the `Strategy` protocol.
+
+**Key imports:**
 ```python
-class MyStrategy:
-    name = "my_strategy"
-    PARAM_GRID = {
-        "delta":    [0.10, 0.15, 0.20],
-        "dte":      [1, 2],
-        "sl_pct":   [50, 100, 150],
-    }
+from backtester.bt_option_selection import select_by_delta
+from backtester.expiry_utils import expiry_dt_utc, select_expiry
+from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
+from backtester.strategy_base import (
+    OpenPosition, Trade, check_expiry, close_position,
+    price_legs, profit_target_pct, stop_loss_pct, max_hold_hours,
+)
+```
 
-    def configure(self, params):
-        self.delta  = params["delta"]
-        self.dte    = params["dte"]
-        self.sl_pct = params["sl_pct"]
-        self.pos    = None
+**configure() — wire exit conditions:**
+```python
+def configure(self, params):
+    self._sl_pct = float(params["stop_loss_pct"])
+    self._tp_pct = float(params.get("take_profit_pct", 0.0))
+    self._pos    = None
+    # SL: mark mode — stable against wide spreads in thin books
+    # TP: executable mode — only fires when you can actually get that price
+    self._exit_conds = [stop_loss_pct(self._sl_pct, price_mode="mark")]
+    if self._tp_pct > 0:
+        self._exit_conds.append(profit_target_pct(self._tp_pct, price_mode="executable"))
+```
 
-    def on_market_state(self, state):
-        # entry logic → open self.pos
-        # exit logic  → call close_trade(), return [trade]
-        return []
+**Required leg fields at open** (all mandatory):
+```python
+leg = {
+    "strike":          float,   # USD
+    "is_call":         bool,
+    "expiry":          str,     # e.g. "28MAY26"
+    "side":            "sell",  # or "buy" — drives price_legs() per-leg pricing
+    "qty":             float,
+    "price_btc":       float,   # fill price (bid for short, ask for long)
+    "entry_price":     float,   # same as price_btc (alias)
+    "entry_price_usd": float,   # price_btc × spot (per contract)
+    "entry_spot":      float,   # spot at entry
+    "entry_bid":       float,
+    "entry_ask":       float,
+    "entry_mark":      float,
+    "entry_iv":        float,   # mark_iv from parquet — already % (34.4 = 34.4%)
+    "entry_delta":     float,
+    "fee_usd_open":    float,   # deribit_fee_per_leg(spot, entry_price_usd)
+}
+```
 
-    def on_end(self, state):
-        if self.pos:
-            return [close_trade(self.pos, state, exit_reason="end")]
-        return []
+> **IV note:** `mark_iv` in the parquet is stored as a percentage (e.g. `34.4` = 34.4%).
+> Store it as-is in the leg dict. Do NOT multiply by 100.
 
-    def reset(self):
-        self.pos = None
+**Required leg fields before calling `close_position`:**
+```python
+leg["exit_price_btc"] = float   # fill price at close
+leg["exit_price_usd"] = float   # exit_price_btc × exit_spot (per contract)
+```
 
-    def describe_params(self):
-        return {"delta": self.delta, "dte": self.dte, "sl_pct": self.sl_pct}
+**pos.metadata — mandatory keys:**
+```python
+metadata = {
+    "direction": "sell",   # or "buy" — required by stop_loss_pct / profit_target_pct
+    "expiry":    expiry,   # expiry code string
+    "expiry_dt": exp_dt,   # tz-aware datetime — used by check_expiry()
+    "pos_id":    pos_id,   # monotonic int — links open fills to close fills in reports
+}
 ```
 
 2. Register in `backtester/run.py`:
@@ -591,10 +639,10 @@ python -m backtester.run --strategy my_strategy
 ## Testing
 
 ```bash
-# Full test suite: UI tests + strategy tests (187 tests)
+# Full test suite: UI tests + strategy tests
 python -m pytest tests/ backtester/strategies/tests/ -v
 
-# Strategy tests only
+# Strategy tests only (42 tests)
 python -m pytest backtester/strategies/tests/ -v
 
 # UI tests only

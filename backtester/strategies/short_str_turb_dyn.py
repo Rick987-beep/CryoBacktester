@@ -45,8 +45,8 @@ from backtester.indicators import IndicatorDep
 from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
 from backtester.strategy_base import (
     OpenPosition, Trade, close_position,
-    check_expiry, check_take_profit_strangle,
-    stop_loss_pct, max_hold_hours,
+    check_expiry,
+    stop_loss_pct, profit_target_pct, max_hold_hours,
 )
 from market_hours import to_nyc, to_utc
 
@@ -94,7 +94,7 @@ class ShortStrTurbDyn:
     """
 
     name = "short_str_turb_dyn"
-    DATE_RANGE = ("2025-05-12", "2026-05-13")
+    DATE_RANGE = ("2026-01-01", "2026-05-29")
     DESCRIPTION = (
         "Sells a strangle, naked call, or naked put on a Deribit expiry N calendar "
         "days ahead (dte=1/2/3), with legs chosen by target delta. "
@@ -114,17 +114,15 @@ class ShortStrTurbDyn:
     ]
 
     PARAM_GRID = {
-        # entry_time: NYC wall-clock (HH:MM); translated to UTC in _maybe_open (DST-aware)
-        # Slot2 params: entry_hour=19 UTC = 15:00 NYC (EDT, UTC-4)
         "leg_type":             ["strangle"],
         "dte":                  [1],
-        "delta":                [0.15],
-        "entry_time":           ["15:00"],   # NYC (US Eastern) — 19:00 UTC in EDT
-        "stop_loss_pct":        [3,3.5,4,4.5,5,5.5],
+        "delta":                [0.05],
+        "entry_time":           ["14:00"],   # NYC (US Eastern, EDT) — 18:00 UTC
+        "stop_loss_pct":        [4.5],
         "take_profit_pct":      [0.0],
         "max_hold_hours":       [0],
         "skip_weekends":        [1],
-        "min_otm_pct":          [2.4],
+        "min_otm_pct":          [2.2],
         "turbulence_threshold": [60],
         "dyn_target_premium":   [800],
         "max_quantity":         [25],
@@ -193,8 +191,10 @@ class ShortStrTurbDyn:
         self._pos_counter = 0
 
         self._exit_conditions = [
-            stop_loss_pct(self._sl_pct),
+            stop_loss_pct(self._sl_pct, price_mode="mark"),
         ]
+        if self._tp_pct > 0:
+            self._exit_conditions.append(profit_target_pct(self._tp_pct, price_mode="executable"))
         if self._max_hold_hours > 0:
             self._exit_conditions.append(max_hold_hours(self._max_hold_hours))
 
@@ -206,8 +206,6 @@ class ShortStrTurbDyn:
         to_close = []
         for pos in list(self._positions):
             reason = self._check_expiry(state, pos)
-            if reason is None:
-                reason = self._check_take_profit(state, pos)
             if reason is None:
                 for exit_cond in self._exit_conditions:
                     reason = exit_cond(state, pos)
@@ -420,6 +418,11 @@ class ShortStrTurbDyn:
              "price_btc":       call.bid,
              "entry_price":     call.bid,
              "entry_price_usd": call_usd,
+             "entry_spot":      state.spot,
+             "entry_bid":       call.bid,
+             "entry_ask":       call.ask,
+             "entry_mark":      call.mark,
+             "entry_iv":        call.mark_iv,
              "entry_delta":     call.delta,
              "fee_usd_open":    fee_call},
             {"strike": put.strike,  "is_call": False, "expiry": expiry, "side": "sell",
@@ -427,6 +430,11 @@ class ShortStrTurbDyn:
              "price_btc":       put.bid,
              "entry_price":     put.bid,
              "entry_price_usd": put_usd,
+             "entry_spot":      state.spot,
+             "entry_bid":       put.bid,
+             "entry_ask":       put.ask,
+             "entry_mark":      put.mark,
+             "entry_iv":        put.mark_iv,
              "entry_delta":     put.delta,
              "fee_usd_open":    fee_put},
         ]
@@ -507,6 +515,11 @@ class ShortStrTurbDyn:
              "price_btc":       leg.bid,
              "entry_price":     leg.bid,
              "entry_price_usd": entry_usd,
+             "entry_spot":      state.spot,
+             "entry_bid":       leg.bid,
+             "entry_ask":       leg.ask,
+             "entry_mark":      leg.mark,
+             "entry_iv":        leg.mark_iv,
              "entry_delta":     leg.delta,
              "fee_usd_open":    fee_leg},
         ]
@@ -556,23 +569,6 @@ class ShortStrTurbDyn:
     def _check_expiry(self, state, pos):
         # type: (Any, OpenPosition) -> Optional[str]
         return check_expiry(state, pos)
-
-    def _check_take_profit(self, state, pos):
-        # type: (Any, OpenPosition) -> Optional[str]
-        if self._tp_pct <= 0:
-            return None
-        leg_type = pos.metadata["leg_type"]
-        if leg_type == "strangle":
-            return check_take_profit_strangle(state, pos, self._tp_pct)
-        # Single leg
-        expiry  = pos.metadata["expiry"]
-        is_call = (leg_type == "call")
-        strike  = pos.metadata["call_strike"] if is_call else pos.metadata["put_strike"]
-        q = state.get_option(expiry, strike, is_call)
-        if q is None or q.ask <= 0:
-            return None
-        profit_ratio = (pos.entry_price_usd - q.ask_usd) / max(pos.entry_price_usd, 0.01)
-        return "take_profit" if profit_ratio >= self._tp_pct else None
 
     def _close(self, state, pos, reason):
         # type: (Any, OpenPosition, str) -> Trade
