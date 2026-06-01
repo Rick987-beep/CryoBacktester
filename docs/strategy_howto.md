@@ -1,6 +1,6 @@
 # How to Write a New Strategy
 
-*Last updated: May 2026 — reflects the leg-aware fills API (Phase A–D of the calendar refactor).*
+*Last updated: June 2026 — reflects price_legs / stop_loss_pct(price_mode) / profit_target_pct(price_mode) refactor.*
 
 ---
 
@@ -157,23 +157,32 @@ Every leg dict must carry these fields **at open time**:
     "strike":          float,      # strike price (USD)
     "is_call":         bool,       # True = call, False = put
     "expiry":          str,        # Deribit expiry code
-    "side":            "sell",     # "sell" (short) or "buy" (long)
+    "side":            "sell",     # "sell" (short) or "buy" (long) — drives price_legs() per-leg pricing
     "qty":             float,      # number of contracts (Deribit min 0.1)
     "price_btc":       float,      # fill price at open (BTC per contract)
     "entry_price":     float,      # same as price_btc (alias used by close_position)
-    "entry_price_usd": float,      # price_btc × spot (per contract, not scaled)
+    "entry_price_usd": float,      # price_btc × spot (per contract, not scaled by qty)
+    "entry_spot":      float,      # BTC spot at open — used for USD PnL math at close
+    "entry_bid":       float,      # bid at open (for logs and reporting)
+    "entry_ask":       float,      # ask at open
+    "entry_mark":      float,      # mark at open
+    "entry_iv":        float,      # mark_iv from parquet — already % (e.g. 34.4 = 34.4%)
+    "entry_delta":     float,      # delta at open
     "fee_usd_open":    float,      # opening fee for this leg (USD, unscaled)
-    "entry_delta":     float,      # delta at open (informational)
 }
 ```
+
+> **IV note:** `mark_iv` in the parquet is stored as a percentage (e.g. `34.4` = 34.4%).
+> Do NOT multiply by 100. Do NOT divide by 100 when storing in leg dict.
 
 These fields are added **at close time** (before calling `close_position`):
 
 ```python
 leg["exit_price_btc"] = float   # fill price at close (BTC per contract)
 leg["exit_price_usd"] = float   # exit_price_btc × exit_spot (per contract)
-leg["fee_btc_close"]  = float   # close fee for this leg (BTC per contract)
 ```
+
+> `fee_btc_close` is optional. If omitted, `close_position` uses `fees_close` passed directly.
 
 ### pos_id tracking
 
@@ -210,10 +219,14 @@ def _open_strangle(self, state, expiry, exp_dt, calls, puts):
     legs = [
         {"strike": call.strike, "is_call": True,  "expiry": expiry, "side": "sell",
          "qty": qty, "price_btc": call.bid, "entry_price": call.bid,
-         "entry_price_usd": call_usd, "entry_delta": call.delta, "fee_usd_open": fee_call},
+         "entry_price_usd": call_usd, "entry_spot": state.spot,
+         "entry_bid": call.bid, "entry_ask": call.ask, "entry_mark": call.mark,
+         "entry_iv": call.mark_iv, "entry_delta": call.delta, "fee_usd_open": fee_call},
         {"strike": put.strike,  "is_call": False, "expiry": expiry, "side": "sell",
          "qty": qty, "price_btc": put.bid,  "entry_price": put.bid,
-         "entry_price_usd": put_usd,  "entry_delta": put.delta, "fee_usd_open": fee_put},
+         "entry_price_usd": put_usd, "entry_spot": state.spot,
+         "entry_bid": put.bid, "entry_ask": put.ask, "entry_mark": put.mark,
+         "entry_iv": put.mark_iv, "entry_delta": put.delta, "fee_usd_open": fee_put},
     ]
     pos_id = self._next_pos_id()
     pos = OpenPosition(
@@ -361,13 +374,19 @@ All helpers are in `backtester.strategy_base`. They are **callables** that retur
 ### Composable exit factories
 
 ```python
-from backtester.strategy_base import stop_loss_pct, max_hold_hours, max_hold_days, \
-    time_exit, profit_target_pct, index_move_trigger
+from backtester.strategy_base import (
+    stop_loss_pct, profit_target_pct, max_hold_hours, max_hold_days,
+    time_exit, index_move_trigger, price_legs,
+)
 
 # Compose in configure():
 self._exit_conditions = [
-    stop_loss_pct(self._sl_pct),       # float fraction, e.g. 4.0 = 400%
+    stop_loss_pct(self._sl_pct, price_mode="mark"),   # mark = stable, not manipulable
 ]
+if self._tp_pct > 0:
+    self._exit_conditions.append(
+        profit_target_pct(self._tp_pct, price_mode="executable"),  # executable = real bid/ask
+    )
 if self._max_hold_hours > 0:
     self._exit_conditions.append(max_hold_hours(self._max_hold_hours))
 
@@ -378,9 +397,61 @@ for exit_cond in self._exit_conditions:
         break
 ```
 
-`stop_loss_pct` reads `pos.metadata["direction"]` (`"sell"` or `"buy"`) to decide
-the loss direction. It calls `_reprice_legs()` internally so the result is also
-cached in `pos._last_reprice_usd` for the engine's NAV tracker.
+### `price_mode` — the key design choice
+
+`stop_loss_pct` and `profit_target_pct` both accept a `price_mode` kwarg that
+controls which option price is used to evaluate the condition:
+
+| mode | Price used | When to use |
+|---|---|---|
+| `"mark"` | Exchange model price (`mark_usd`) | **SL checks** — stable, not manipulable by wide bid/ask spreads in thin books |
+| `"executable"` | Ask for sell legs, bid for buy legs | **TP checks** — only fires when a real market price exists at which you can exit |
+| `"bid"` | Always bid regardless of side | Special analytics |
+| `"ask"` | Always ask regardless of side | Special analytics |
+
+**Rule of thumb: SL uses mark, TP uses executable.**
+With a wide spread (bid=0.0005, ask=0.0050, mark=0.0012), executable SL fires
+from the ask spike but mark SL stays calm. TP only fires when the bid/ask confirms
+you can actually exit at that price.
+
+### `price_legs(state, pos, mode)` — low-level pricing
+
+```python
+from backtester.strategy_base import price_legs
+
+# Price all legs at their current mark
+current_mark_usd = price_legs(state, pos, mode="mark")
+
+# Price all legs at executable prices (ask for sell legs, bid for buy)
+current_exec_usd = price_legs(state, pos, mode="executable")
+```
+
+Returns `None` only when a quote row is entirely absent from the snapshot (genuine
+data gap). Never returns `None` for zero-mark options — those are priced at `$0`.
+Also writes the result to `pos._last_reprice_usd` (engine NAV cache).
+
+`_reprice_legs(state, pos)` is a backward-compat alias for
+`price_legs(state, pos, mode="executable")`. The engine still imports it.
+
+### `stop_loss_pct` semantics
+
+```python
+stop_loss_pct(pct, price_mode="mark")
+# pct is a fraction: 1.5 = 150% of premium.
+# SHORT: fires when mark cost to close = (1 + pct) × collected premium
+# LONG:  fires when mark value has fallen pct below entry cost
+# Reads pos.metadata["direction"] ("sell"/"buy") for direction.
+```
+
+### `profit_target_pct` semantics
+
+```python
+profit_target_pct(pct, price_mode="executable")
+# pct is a fraction: 0.30 = 30% of premium.
+# SHORT: fires when executable buyback cost <= (1 - pct) × collected premium
+# LONG:  fires when executable bid value >= (1 + pct) × entry cost
+# Reads pos.metadata["direction"] ("sell"/"buy") for direction.
+```
 
 ### Expiry exit
 
@@ -392,15 +463,15 @@ reason = check_expiry(state, pos)
 # Requires "expiry_dt" (tz-aware datetime) in pos.metadata — set at open.
 ```
 
-### Take-profit for strangles
+### Take-profit helper (strangle-specific, legacy)
 
 ```python
 from backtester.strategy_base import check_take_profit_strangle
 
 reason = check_take_profit_strangle(state, pos, self._tp_pct)
-# Reads call_strike / put_strike from pos.metadata.
-# Returns "take_profit" when combined ask drops to (1 - tp_pct) × entry.
-# tp_pct is a fraction: 0.50 = close when you've made 50% of max profit.
+# Available but not preferred for new strategies.
+# Uses raw ask prices; does not support price_mode.
+# Prefer profit_target_pct(pct, price_mode="executable") instead.
 ```
 
 ---
@@ -589,10 +660,11 @@ STRATEGIES = {
 ```
 
 Only strategies that use the leg-aware API (`close_position` / `partial_close` /
-`add_legs` + explicit open Trade) belong in this registry. Legacy strategies that
-still use `close_trade` or `close_short_strangle` live in
+`add_legs` + explicit open Trade) belong in this registry. Legacy strategies live in
 `backtester/archive/strategies_to_be_fixed/` and must be migrated before
 re-registering.
+
+Currently registered: `short_str_turb_dyn`, `blueprint_howto`.
 
 ---
 
@@ -604,6 +676,7 @@ re-registering.
 |---|---|---|
 | `close_trade` | Does not emit leg-aware fills; no open/close fill linkage | `close_position` |
 | `close_short_strangle` | Same; also doesn't annotate legs | `close_position` with manual leg annotation |
+| `check_take_profit_strangle` | Uses raw ask; no `price_mode` support | `profit_target_pct(pct, price_mode="executable")` |
 | Opening without returning a Trade | Engine never sees open fills; balance column is wrong | Return `Trade(side="open")` from `_open_*` methods |
 
 ### Anti-patterns
@@ -638,15 +711,19 @@ Before committing a new strategy, verify:
       `_last_trade_date`, etc.).
 - [ ] `reset` mirrors `configure` state resets.
 - [ ] Every open returns a `Trade(side="open")` with `metadata["legs"]`.
-- [ ] Legs carry `price_btc`, `entry_price`, `entry_price_usd`, `fee_usd_open`.
+- [ ] Legs carry `price_btc`, `entry_price`, `entry_price_usd`, `entry_spot`,
+      `entry_bid`, `entry_ask`, `entry_mark`, `entry_iv`, `entry_delta`, `fee_usd_open`.
 - [ ] `pos.metadata["pos_id"]` is set; `_pos_counter` resets in `configure`/`reset`.
-- [ ] Before closing: each leg has `exit_price_btc`, `exit_price_usd`, `fee_btc_close`.
+- [ ] Before closing: each leg has `exit_price_btc`, `exit_price_usd`.
 - [ ] Closes use `close_position` (not `close_trade` or `close_short_strangle`).
 - [ ] Close Trades set `trade.metadata["skip_open_fill"] = True`.
+- [ ] SL wired with `stop_loss_pct(pct, price_mode="mark")`.
+- [ ] TP wired with `profit_target_pct(pct, price_mode="executable")` (when used).
 - [ ] Data gap guard on non-expiry closes: check `state.get_option(...)` is not `None`.
 - [ ] Uses `deribit_fee_per_leg` for fees; fee = 0 at expiry.
 - [ ] Imports from `backtester.bt_option_selection`, not `option_selection`.
 - [ ] Imports from `backtester.expiry_utils`, not local copies.
 - [ ] `PARAM_GRID` is wide and unbiased; 0-disables optional parameters.
+- [ ] `mark_iv` stored as-is from parquet (already %, e.g. 34.4 = 34.4%).
 - [ ] Strategy is registered in `backtester/run.py`.
 - [ ] `python -m pytest backtester/strategies/tests/ -v` passes.

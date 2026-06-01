@@ -15,6 +15,7 @@ Read fully before touching any code.
 2. **For any task bigger than a small edit: present a plan first.** Wait for the user to say "CODE" before writing code.
 3. **Bug spotted? Describe it, do NOT fix it.** Report the problem and stop. Wait for "CODE".
 4. **Run tests before and after any code change:** `python -m pytest backtester/strategies/tests/ -v`
+5. **`PARAM_GRID` and `DATE_RANGE` in strategy files are NOT sacred.** Change them freely as part of any analysis or reproduction task — they are working state, not protected config.
 
 ---
 
@@ -83,9 +84,9 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
 python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 ```
 
-Current strategy names: `delta_strangle_tp`, `short_str_turb_dyn`, `long_gamma_whitelist`,
-`daily_put_sell`, `deltaswipswap`, `l_straddle_index_move`, `short_strangle_weekly_cap`,
-`preopen_straddle`, `batman_calendar`, `bt_supertrend_lc`, `ss_turb_dyn_mk2`, `ss_turb_dyn_sl`, `short_generic`
+Current strategy names: `short_str_turb_dyn`, `blueprint_howto`
+
+All other strategies are in `backtester/archive/strategies_to_be_fixed/` — not in the CLI registry.
 
 ---
 
@@ -177,10 +178,96 @@ These indicator files are separate copies from CryoTrader's `indicators/` — th
 
 ---
 
+## Writing a new strategy — quick reference
+
+The canonical pattern lives in `backtester/strategies/blueprint_howto.py` — read it first.
+Full detail is in `docs/strategy_howto.md`.
+
+### Required imports
+```python
+from backtester.bt_option_selection import select_by_delta
+from backtester.expiry_utils import expiry_dt_utc, select_expiry
+from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
+from backtester.strategy_base import (
+    OpenPosition, Trade, check_expiry, close_position,
+    price_legs, profit_target_pct, stop_loss_pct, max_hold_hours,
+)
+```
+
+### configure() — wire up exit conditions
+```python
+def configure(self, params):
+    self._sl_pct  = float(params["stop_loss_pct"])
+    self._tp_pct  = float(params.get("take_profit_pct", 0.0))
+    self._pos     = None
+    self._opened  = False
+    # SL uses mark (stable, not manipulable by wide spreads)
+    # TP uses executable (bid/ask — only fires when real market price available)
+    self._exit_conds = [stop_loss_pct(self._sl_pct, price_mode="mark")]
+    if self._tp_pct > 0:
+        self._exit_conds.append(profit_target_pct(self._tp_pct, price_mode="executable"))
+```
+
+### Required leg fields (at open)
+```python
+leg = {
+    "strike":          float,   # USD
+    "is_call":         bool,
+    "expiry":          str,     # e.g. "28MAY26"
+    "side":            "sell",  # or "buy" — drives price_legs() per-leg pricing
+    "qty":             float,
+    "price_btc":       float,   # fill price (bid for short, ask for long)
+    "entry_price":     float,   # same as price_btc (alias)
+    "entry_price_usd": float,   # price_btc × spot × qty
+    "entry_spot":      float,   # spot at entry (for close_position PnL math)
+    "entry_bid":       float,   # for logs / reporting
+    "entry_ask":       float,
+    "entry_mark":      float,
+    "entry_iv":        float,   # mark_iv from parquet (already %, e.g. 34.4 = 34.4%)
+    "entry_delta":     float,
+    "fee_usd_open":    float,   # deribit_fee_per_leg(spot, entry_price_usd)
+}
+```
+
+### Required leg fields (added at close, before calling close_position)
+```python
+leg["exit_price_btc"] = float   # fill price at close
+leg["exit_price_usd"] = float   # exit_price_btc × exit_spot × qty
+```
+
+### pos.metadata — mandatory keys
+```python
+metadata = {
+    "direction": "sell",   # or "buy" — drives stop_loss_pct/profit_target_pct
+    "expiry":    expiry,   # expiry code string
+    "expiry_dt": exp_dt,   # tz-aware datetime — used by check_expiry()
+    "pos_id":    pos_id,   # monotonic int — links open fills to close fills
+}
+```
+
+### IV note
+`mark_iv` in parquet is stored as a **percentage** (e.g. `34.4` = 34.4%).
+Do NOT multiply by 100. Do NOT divide by 100 when storing in leg dict.
+
+### price_legs modes
+- `"mark"` — exchange model price; stable; use for SL
+- `"executable"` — ask for sell legs, bid for buy legs; use for TP
+- `"bid"` / `"ask"` — always that side regardless of leg direction
+
+### Register in run.py
+```python
+from backtester.strategies.my_strategy import MyStrategy
+STRATEGIES["my_strategy"] = MyStrategy
+```
+
+---
+
 ## Key documents
 
 | File | Content |
 |------|---------|
-| `backtester/README.md` | Detailed backtester workflow and research pipeline |
+| `README.md` | Full backtester workflow, research pipeline, all sections |
+| `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
+| `backtester/strategies/blueprint_howto.py` | Canonical working strategy implementation |
 | `backtester/config.toml` | Scoring weights, grid params, simulation config |
 | `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` | Tardis data format notes |

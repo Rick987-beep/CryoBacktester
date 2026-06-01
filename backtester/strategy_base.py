@@ -14,9 +14,15 @@ Defines the contract between strategies and the backtest engine:
     → Optional[str]:
       stop_loss_pct, profit_target_pct, max_hold_hours, max_hold_days,
       time_exit, index_move_trigger
-  • _reprice_legs() — marks all legs of an open position to market price.
-    Writes the result to pos._last_reprice_usd so the engine’s NAV tracker
+  • price_legs(state, pos, mode) — prices all legs of an open position.
+    mode controls which price to use:
+      "mark"        — exchange model price (stable; use for SL checks)
+      "executable"  — bid for buy legs, ask for sell legs (use for TP checks)
+      "bid"         — always bid regardless of leg side
+      "ask"         — always ask regardless of leg side
+    Writes the result to pos._last_reprice_usd so the engine's NAV tracker
     can reuse it without a second call (avoids double reprice per tick).
+  • _reprice_legs() — backward-compat alias for price_legs(mode="executable").
   • close_trade() — builds a Trade from an OpenPosition being closed.
 
 Security note: no user-supplied strings are evaluated; all strategy
@@ -240,14 +246,23 @@ def time_exit(hour, minute=0):
     return check
 
 
-def stop_loss_pct(pct):
-    # type: (float) -> ExitCondition
-    """Close when unrealized loss exceeds pct (as fraction, e.g. 0.5 = 50%).
+def stop_loss_pct(pct, price_mode="mark"):
+    # type: (float, str) -> ExitCondition
+    """Close when unrealized loss exceeds pct (as fraction, e.g. 1.5 = 150% of premium).
 
-    Handles both long and short premium via 'direction' in metadata.
+    price_mode controls which price is used to evaluate the loss:
+      "mark"        — exchange model price (default; stable, not manipulable by wide spreads)
+      "executable"  — bid for buy legs, ask for sell legs
+      "bid" / "ask" — always that side regardless of leg direction
+
+    The default is "mark" because SL decisions should be based on the exchange's
+    fair-value estimate, not on bid/ask which can be wide in thin early-morning books.
+
+    Handles both long and short premium via leg 'side' field (per-leg) or
+    pos.metadata['direction'] (position-level fallback).
     """
     def check(state, pos):
-        current_usd = _reprice_legs(state, pos)
+        current_usd = price_legs(state, pos, mode=price_mode)
         if current_usd is None:
             return None
         _ep = pos.entry_price_usd
@@ -264,11 +279,21 @@ def stop_loss_pct(pct):
     return check
 
 
-def profit_target_pct(pct):
-    # type: (float) -> ExitCondition
-    """Close when unrealized profit reaches pct (as fraction)."""
+def profit_target_pct(pct, price_mode="executable"):
+    # type: (float, str) -> ExitCondition
+    """Close when unrealized profit reaches pct (as fraction, e.g. 0.30 = 30% of premium).
+
+    price_mode controls which price is used to evaluate the profit:
+      "executable"  — bid for buy legs, ask for sell legs (default; use executable prices
+                      so TP only fires when you can actually get that price)
+      "mark"        — exchange model price
+      "bid" / "ask" — always that side regardless of leg direction
+
+    The default is "executable" because TP should fire only when there is a real
+    market price at which you can exit profitably, not just a model estimate.
+    """
     def check(state, pos):
-        current_usd = _reprice_legs(state, pos)
+        current_usd = price_legs(state, pos, mode=price_mode)
         if current_usd is None:
             return None
         if pos.metadata.get("direction") == "sell":
@@ -287,62 +312,115 @@ def profit_target_pct(pct):
 # Helpers
 # ------------------------------------------------------------------
 
-def _reprice_legs(state, pos):
-    # type: (Any, OpenPosition) -> Optional[float]
-    """Reprice all legs at current market. Returns total USD value.
+def price_legs(state, pos, mode="executable"):
+    # type: (Any, OpenPosition, str) -> Optional[float]
+    """Price all legs of pos at current market. Returns total USD value.
 
-    For long positions: uses bid (what you'd get selling).
-    For short positions: uses ask (what it'd cost to buy back), floored at
-    mark to prevent wide-spread false SL triggers in thin early-morning books.
+    mode — which price to use per leg:
+      "mark"        — quote.mark_usd (exchange model; stable)
+      "executable"  — ask for sell legs, bid for buy legs (what you'd pay/receive)
+      "bid"         — always bid regardless of leg side
+      "ask"         — always ask regardless of leg side
 
-    Zero-price fallback (applied only when bid/ask == 0):
-      If mark_usd > cfg.repricing.min_mark_usd, estimate the missing price as
-      mark × (1 ± slip_pct_zero_price).  Below the threshold the option is
-      too deep OTM for any estimate to be meaningful — tick is skipped (None).
+    Returns None only when a quote row is entirely missing from the snapshot
+    (genuine data gap — row absent from parquet). Never returns None for
+    zero-mark or zero-bid/ask options: those are priced at $0 (worthless).
+
+    Zero-price handling:
+      "mark":       mark == 0.0  → $0 (exchange says worthless)
+      "executable"/"ask" (sell): mark == 0  → $0; ask == 0 but mark > 0 → use mark
+                                             (or mark × (1+slip) if large enough)
+      "executable"/"bid" (buy):  mark == 0  → $0; bid == 0 but mark > 0 → use mark
+                                             (or mark × (1-slip) if large enough)
+
+    Writes total and per-leg values to pos._last_reprice_usd / pos._last_reprice_legs
+    so the engine's NAV tracker can reuse them without a second call.
     """
     total = 0.0
     direction = pos.metadata.get("direction", "buy")
     _min_mark_usd = _cfg.repricing.min_mark_usd
     _slip = _cfg.repricing.slip_pct_zero_price
     per_leg = []
+
     for leg in pos.legs:
-        quote = state.get_option(
-            leg["expiry"], leg["strike"], leg["is_call"]
-        )
+        quote = state.get_option(leg["expiry"], leg["strike"], leg["is_call"])
         if quote is None:
-            return None
+            return None  # Row missing entirely — genuine data gap, skip tick
+
         _leg_qty = float(leg.get("qty", 1.0))
         _leg_side = leg.get("side")
-        _use_ask = (_leg_side == "sell") if _leg_side is not None else (direction == "sell")
-        if _use_ask:
-            if quote.ask == 0.0:
-                # Zero-price fallback: use mark × (1 + slip) if mark is meaningful
-                if quote.mark_usd > _min_mark_usd:
-                    effective_ask = quote.mark * (1.0 + _slip)
-                else:
-                    return None  # Too illiquid to estimate — skip tick
+        # Per-leg side takes priority; fall back to position-level direction.
+        _is_sell = (_leg_side == "sell") if _leg_side is not None else (direction == "sell")
+
+        if mode == "mark":
+            # ── Mark mode: always use the exchange model price ────────────
+            if quote.mark == 0.0:
+                leg_val = 0.0
             else:
-                # Floor: max(ask, mark) — inlined to avoid builtins.max overhead
-                _a = quote.ask
-                _m = quote.mark
-                effective_ask = _a if _a > _m else _m
-            leg_val = effective_ask * quote.spot * _leg_qty
-            total += leg_val
-            per_leg.append(leg_val)
+                leg_val = quote.mark * quote.spot * _leg_qty
+
+        elif mode == "bid":
+            # ── Bid mode: always use bid regardless of side ───────────────
+            if quote.mark == 0.0:
+                leg_val = 0.0
+            elif quote.bid == 0.0:
+                leg_val = (quote.mark * (1.0 - _slip) if quote.mark_usd > _min_mark_usd
+                           else quote.mark) * quote.spot * _leg_qty
+            else:
+                leg_val = quote.bid * quote.spot * _leg_qty
+
+        elif mode == "ask":
+            # ── Ask mode: always use ask regardless of side ───────────────
+            if quote.mark == 0.0:
+                leg_val = 0.0
+            elif quote.ask == 0.0:
+                leg_val = (quote.mark * (1.0 + _slip) if quote.mark_usd > _min_mark_usd
+                           else quote.mark) * quote.spot * _leg_qty
+            else:
+                leg_val = quote.ask * quote.spot * _leg_qty
+
         else:
-            if quote.bid == 0.0:
-                # Zero-price fallback: use mark × (1 - slip) if mark is meaningful
-                if quote.mark_usd > _min_mark_usd:
-                    leg_val = quote.mark * (1.0 - _slip) * quote.spot * _leg_qty
+            # ── Executable mode: ask for sell legs, bid for buy legs ──────
+            if _is_sell:
+                if quote.mark == 0.0:
+                    # Exchange says worthless — $0 to close a short leg
+                    effective_price = 0.0
+                elif quote.ask == 0.0:
+                    # Ask missing but mark is real: estimate close cost
+                    effective_price = (quote.mark * (1.0 + _slip) if quote.mark_usd > _min_mark_usd
+                                       else quote.mark)
                 else:
-                    return None  # Too illiquid to estimate — skip tick
+                    # Floor at mark: prevents wide-spread ask from understating cost
+                    effective_price = quote.ask if quote.ask > quote.mark else quote.mark
+                leg_val = effective_price * quote.spot * _leg_qty
             else:
-                leg_val = quote.bid_usd * _leg_qty
-            total += leg_val
-            per_leg.append(leg_val)
+                if quote.mark == 0.0:
+                    # Exchange says worthless — $0 proceeds from selling a long leg
+                    leg_val = 0.0
+                elif quote.bid == 0.0:
+                    # Bid missing but mark is real: estimate proceeds
+                    effective_price = (quote.mark * (1.0 - _slip) if quote.mark_usd > _min_mark_usd
+                                       else quote.mark)
+                    leg_val = effective_price * quote.spot * _leg_qty
+                else:
+                    leg_val = quote.bid_usd * _leg_qty
+
+        total += leg_val
+        per_leg.append(leg_val)
+
     pos._last_reprice_usd = total
     pos._last_reprice_legs = per_leg
     return total
+
+
+def _reprice_legs(state, pos):
+    # type: (Any, OpenPosition) -> Optional[float]
+    """Backward-compat alias for price_legs(mode="executable").
+
+    The engine imports and calls this function directly for NAV tracking.
+    New code should call price_legs() with an explicit mode.
+    """
+    return price_legs(state, pos, mode="executable")
 
 
 def close_trade(state, pos, reason, current_usd=None, fees_close=0.0):
