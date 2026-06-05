@@ -49,13 +49,17 @@ def _daily_close_series(daily: list, capital: float) -> list[float]:
 
 
 def _drawdown_series(daily: list, capital: float) -> list[float]:
-    """Underwater drawdown % (negative) at each daily close."""
-    closes = _daily_close_series(daily, capital)
+    """Underwater drawdown % (negative) at each day using intraday high/low.
+
+    Advances the running peak via the intraday high (row[3]) and computes
+    the trough from the intraday low (row[4]), matching equity_metrics() exactly.
+    """
     peak = capital
     dd = []
-    for close in closes:
-        peak = max(peak, close)
-        dd.append(-100.0 * (peak - close) / peak if peak > 0 else 0.0)
+    for row in daily:
+        peak = max(peak, float(row[3]))   # advance via intraday high
+        lo = float(row[4])                # trough = intraday low
+        dd.append(-100.0 * (peak - lo) / peak if peak > 0 else 0.0)
     return dd
 
 
@@ -78,6 +82,8 @@ def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
         return fig
 
     dates, y = _daily_to_arrays(daily, capital, y_mode)
+    hi_vals = [float(row[3]) for row in daily]
+    lo_vals = [float(row[4]) for row in daily]
     dd = _drawdown_series(daily, capital)
 
     fig = make_subplots(
@@ -87,7 +93,32 @@ def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
         vertical_spacing=0.04,
     )
 
-    # Equity trace
+    # Intraday hi/lo band — upper invisible boundary
+    fig.add_trace(
+        go.Scatter(
+            x=dates, y=hi_vals,
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=1, col=1,
+    )
+    # Lower boundary fills down to upper trace, creating the shaded intraday band
+    fig.add_trace(
+        go.Scatter(
+            x=dates, y=lo_vals,
+            mode="lines",
+            fill="tonexty",
+            fillcolor="rgba(37,99,235,0.12)",
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=1, col=1,
+    )
+
+    # Equity close trace
     fig.add_trace(
         go.Scatter(
             x=dates, y=y,
@@ -99,12 +130,12 @@ def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
         row=1, col=1,
     )
 
-    # Max-DD annotation
+    # Max-DD annotation — points to intraday low so arrow is visually correct
     if dd:
         max_dd_idx = min(range(len(dd)), key=lambda i: dd[i])
         fig.add_annotation(
             x=dates[max_dd_idx],
-            y=y[max_dd_idx],
+            y=lo_vals[max_dd_idx],
             text=f"Max DD {dd[max_dd_idx]:.1f}%",
             showarrow=True,
             arrowhead=2,

@@ -73,14 +73,17 @@ _progress_interval = _cfg.simulation.progress_interval
 
 def _iter_open_positions(strategy):
     # type: (Any) -> List[Any]
-    """Return a strategy's current open positions without requiring strategy edits."""
-    pos_list = getattr(strategy, "_positions", None)
-    if isinstance(pos_list, list):
-        return pos_list
-    single = getattr(strategy, "_position", None)
-    if single is None:
-        return []
-    return [single]
+    """Return a strategy's current open positions.
+
+    Reads ``strategy._positions`` (the canonical List[OpenPosition] that all
+    strategies must maintain).  Returns an empty list when the attribute is
+    absent or not a list — makes the engine safe against mis-configured
+    strategies rather than silently carrying a stale cache value.
+    """
+    positions = getattr(strategy, "_positions", None)
+    if isinstance(positions, list):
+        return positions
+    return []
 
 
 def _open_unrealized_pnl(strategy, state, pos_cache):

@@ -76,12 +76,25 @@ min_mark_usd            = 15.0
 slip_pct_zero_price     = 0.25
 
 # ── Fee Model ─────────────────────────────────────────────────────────────────
+# Two tiers are defined below. Only [fees] is active — the other is commented out.
+# To switch back to standard retail fees: swap which block is commented.
+#
+# VIP1 tier  (ACTIVE)
+# BTC Option: 0.025% of underlying index, capped at 10.42% of option premium
+# BTC Perpetual taker: 0.035%  |  maker: -0.01% rebate
 [fees]
 
-model           = "deribit"   # fee model identifier
-index_rate      = 0.0003      # 0.03% of index price (base fee per leg)
-price_cap_frac  = 0.125       # capped at 12.5% of the option leg price
-perp_taker_rate = 0.0005      # 0.05% taker fee per BTC-PERPETUAL trade
+model           = "deribit_vip1"  # fee model identifier
+index_rate      = 0.00025         # 0.025% of index price per option leg
+price_cap_frac  = 0.1042          # capped at 10.42% of the option leg price
+perp_taker_rate = 0.00035         # 0.035% taker fee per BTC-PERPETUAL trade
+
+# ── Standard retail tier (commented out — uncomment to revert) ──
+# [fees]
+# model           = "deribit"   # fee model identifier
+# index_rate      = 0.0003      # 0.03% (3 bps) of index price per option leg
+# price_cap_frac  = 0.125       # capped at 12.5% of the option leg price
+# perp_taker_rate = 0.0005      # 0.05% taker fee per BTC-PERPETUAL trade
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 [scoring]

@@ -311,7 +311,21 @@ def _pair_first_entry_then_next_exit(
 # ---------------------------------------------------------------------------
 
 def _build_turbulence(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
-    return _turbulence(df_raw, **params)
+    result = _turbulence(df_raw, **params)
+    # ── Lookahead-bias fix ────────────────────────────────────────────────────
+    # turbulence() indexes output by the *open* timestamp of each 1H bucket.
+    # The bucket labelled T contains 15m bars whose last sub-bar closes at T+1h,
+    # so at time T the bucket is entirely in the future.
+    #
+    # Shifting by 1 aligns the index so that:
+    #   self._turbulence.loc[T]  →  value computed from bars [T-1h … T-:45]
+    # i.e. the last fully-closed hourly group at the moment the strategy runs.
+    #
+    # This matches the live system: at 18:00 UTC fetch_klines() returns bars
+    # up to and including the 17:45 bar (close = 18:00), so the live turbulence
+    # at 18:00 is always the 17:00-bucket value — not the 18:00-bucket.
+    # ─────────────────────────────────────────────────────────────────────────
+    return result.shift(1)
 
 
 def _build_supertrend(df_raw: pd.DataFrame, **params) -> pd.DataFrame:

@@ -143,7 +143,7 @@ class BlueprintHowto:
     def __init__(self):
         # Internal state — always reset in configure() too (grid re-runs the
         # same instance, so __init__ state leaking across combos is a common bug).
-        self._pos        = None           # type: Optional[OpenPosition]
+        self._positions  = []             # type: List[OpenPosition]  # canonical; read by engine NAV tracker
         self._opened     = False          # True once we've opened this combo's trade
         self._direction  = "short"
         self._delta      = 0.10
@@ -177,8 +177,8 @@ class BlueprintHowto:
         ).date()
 
         # Reset position state for this combo run.
-        self._pos    = None
-        self._opened = False
+        self._positions = []
+        self._opened    = False
 
         # ── Exit condition factories ─────────────────────────────────────────
         #
@@ -240,18 +240,19 @@ class BlueprintHowto:
         # Process exits first so that a position that triggers SL/TP on the
         # same tick it could theoretically re-enter doesn't do so.
 
-        if self._pos is not None:
-            reason = self._check_exit(state, self._pos)
+        if self._positions:
+            pos = self._positions[0]
+            reason = self._check_exit(state, pos)
             if reason is not None:
-                trades.append(self._do_close(state, self._pos, reason))
-                self._pos = None
+                trades.append(self._do_close(state, pos, reason))
+                self._positions = []
 
         # ── CHECK ENTRY ─────────────────────────────────────────────────────
         #
         # Only open once per combo (self._opened guards against re-entry after
         # a close).  Only on the configured date and hour.
 
-        if self._pos is None and not self._opened:
+        if not self._positions and not self._opened:
             if (state.dt.date() == self._entry_date
                     and state.dt.hour >= self._entry_hour):
                 open_trade = self._do_open(state)
@@ -268,9 +269,9 @@ class BlueprintHowto:
         Called once at the end of the replay (no more ticks).
         Force-close any still-open position so it appears in results.
         """
-        if self._pos is not None:
-            trade = self._do_close(state, self._pos, "end_of_data")
-            self._pos = None
+        if self._positions:
+            trade = self._do_close(state, self._positions[0], "end_of_data")
+            self._positions = []
             return [trade]
         return []
 
@@ -279,8 +280,8 @@ class BlueprintHowto:
     def reset(self):
         # type: () -> None
         """Reset state between grid combos.  Called by the engine automatically."""
-        self._pos    = None
-        self._opened = False
+        self._positions = []
+        self._opened    = False
 
     def describe_params(self):
         # type: () -> Dict[str, Any]
@@ -447,8 +448,8 @@ class BlueprintHowto:
             },
         )
 
-        self._pos    = pos
-        self._opened = True
+        self._positions = [pos]
+        self._opened    = True
 
         # ── Human-readable open log ───────────────────────────────────────
         self._log_open(state, pos, call_q, put_q)
