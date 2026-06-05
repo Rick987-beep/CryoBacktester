@@ -26,6 +26,9 @@ from backtester.walk_forward import run_walk_forward
 from backtester.experiment import load_experiment
 from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
 from backtester.strategies.blueprint_howto import BlueprintHowto
+from backtester.strategies.long_gamma_move import LongGammaMove
+from backtester.strategies.pagoda import Pagoda
+from backtester.strategies.covered_call_put import CoveredCallPut
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -36,8 +39,11 @@ from backtester.config import cfg as _cfg
 # and are not run from the CLI/UI until they are migrated.
 
 STRATEGIES = {
-    "short_str_turb_dyn": ShortStrTurbDyn,
-    "blueprint_howto":    BlueprintHowto,
+    "short_str_turb_dyn":  ShortStrTurbDyn,
+    "blueprint_howto":     BlueprintHowto,
+    "long_gamma_move":     LongGammaMove,
+    "pagoda":              Pagoda,
+    "covered_call_put":    CoveredCallPut,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet
@@ -143,7 +149,7 @@ def run_backtest(
 
 def main():
     parser = argparse.ArgumentParser(description="Backtester V2")
-    parser.add_argument("--strategy", default="straddle",
+    parser.add_argument("--strategy", default="short_str_turb_dyn",
                         choices=list(STRATEGIES.keys()))
     parser.add_argument("--options", default=DEFAULT_OPTIONS)
     parser.add_argument("--spot", default=DEFAULT_SPOT)

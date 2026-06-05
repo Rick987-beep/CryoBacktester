@@ -34,7 +34,14 @@ It implements a structural protocol (see §3) and signals positions by returning
 **Strategy responsibilities:**
 - Decide when to open a position (entry logic, gates, filters).
 - Select the right option legs from the snapshot chain.
-- Track open positions in `self._positions`.
+- Track open positions in `self._positions` — a plain `List[OpenPosition]`.
+  **This is mandatory.** The engine reads `strategy._positions` on every tick to
+  mark open positions to market for NAV and intraday drawdown tracking.  Strategies
+  that store positions under any other name (e.g. `_pos`, `_call_pos`) will have a
+  flat equity curve between trades.
+  Append on open, remove on close.  For strategies with named slots (e.g. a call
+  slot and a put slot), expose a `@property _positions` that returns the live slots
+  as a list — no manual bookkeeping needed.
 - Decide when to close (exit conditions, expiry, TP, SL).
 - Annotate each leg with exit prices before calling `close_position`.
 - Return `Trade` objects for every open and every close event.
@@ -124,6 +131,21 @@ class MyStrategy:
 initialisation there — `self._positions = []`, counters, watched state, etc.
 `reset()` should mirror it (the engine calls `reset()` instead of `configure()`
 between runs without re-parsing params, so keep them in sync).
+
+> **NAV tracking contract:** the engine locates open positions via
+> `strategy._positions` (a `List[OpenPosition]`).  Initialise it as `[]` in
+> both `configure` and `reset`.  For multi-slot strategies where each slot has
+> its own named pointer (e.g. `self._call_pos`, `self._put_pos`), add a property:
+>
+> ```python
+> @property
+> def _positions(self):
+>     return [p for p in (self._call_pos, self._put_pos) if p is not None]
+> ```
+>
+> **Never** name the position `self._pos`, `self._position`, or anything else —
+> the engine only looks for `_positions` and will silently skip NAV marking if
+> the attribute is absent or not a list.
 
 ---
 
@@ -709,6 +731,8 @@ Before committing a new strategy, verify:
       `on_end`, `reset`, `describe_params`).
 - [ ] `configure` resets ALL instance state (`_positions`, `_pos_counter`,
       `_last_trade_date`, etc.).
+- [ ] `self._positions` is a `List[OpenPosition]` (not `_pos` or `_position`).
+      Multi-slot strategies: expose `@property _positions` returning live slots.
 - [ ] `reset` mirrors `configure` state resets.
 - [ ] Every open returns a `Trade(side="open")` with `metadata["legs"]`.
 - [ ] Legs carry `price_btc`, `entry_price`, `entry_price_usd`, `entry_spot`,
