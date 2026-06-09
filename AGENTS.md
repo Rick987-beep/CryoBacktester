@@ -271,3 +271,15 @@ STRATEGIES["my_strategy"] = MyStrategy
 | `backtester/strategies/blueprint_howto.py` | Canonical working strategy implementation |
 | `backtester/config.toml` | Scoring weights, grid params, simulation config |
 | `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` | Tardis data format notes |
+
+---
+
+## Cursor Cloud specific instructions
+
+- **Python:** 3.12 venv at `.venv/`. First-time VM bootstrap needs `sudo apt install python3.12-venv` (not in the update script).
+- **Install:** `pip install -r requirements.txt pytest` from repo root with venv activated.
+- **Tests (no parquet data required):** `python -m pytest backtester/strategies/tests/ tests/test_engine_fills_recon.py -v`
+- **Full suite:** `python -m pytest tests/ backtester/strategies/tests/ -v` — two UI tests may fail on a clean checkout (`long_gamma_move` import in `run.py`, plotly trace count).
+- **CLI / Research UI:** `python -m backtester.run` and `python -m backtester.ui.app` currently import missing strategy modules (`long_gamma_move`, etc.) listed in `run.py` but not present under `backtester/strategies/`. Engine and strategy unit tests work without parquet data.
+- **Parquet data:** `backtester/data/` is gitignored (~924 MB). Sync from VPS (`backtester/ingest/sync_vps.py`) or Tardis bulk download before running real backtests.
+- **Research UI:** `python -m backtester.ui.app` → http://localhost:5006 (needs working `run.py` strategy registry).
