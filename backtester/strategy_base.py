@@ -13,7 +13,9 @@ Defines the contract between strategies and the backtest engine:
   • Exit condition factories — composable callables (MarketState, OpenPosition)
     → Optional[str]:
       stop_loss_pct, profit_target_pct, max_hold_hours, max_hold_days,
-      time_exit, index_move_trigger
+      time_exit, index_move_trigger, strike_proximity_stop,
+      short_premium_stop_near_expiry, position_quotes_available,
+      position_unrealized_pnl, equity_drawdown_stop, exit_expiry_window
   • price_legs(state, pos, mode) — prices all legs of an open position.
     mode controls which price to use:
       "mark"        — exchange model price (stable; use for SL checks)
@@ -29,7 +31,7 @@ Security note: no user-supplied strings are evaluated; all strategy
 parameters are plain Python scalars validated by the strategy’s configure().
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backtester.config import cfg as _cfg
@@ -246,14 +248,74 @@ def time_exit(hour, minute=0):
     return check
 
 
-def stop_loss_pct(pct, price_mode="mark"):
-    # type: (float, str) -> ExitCondition
+def _in_proximity_window(state, pos, hours_before_expiry):
+    # type: (Any, OpenPosition, float) -> bool
+    """True when state.dt is in [expiry_dt - hours, expiry_dt)."""
+    if hours_before_expiry <= 0:
+        return False
+    expiry_dt = pos.metadata.get("expiry_dt")
+    if expiry_dt is None:
+        return False
+    window_start = expiry_dt - timedelta(hours=hours_before_expiry)
+    return window_start <= state.dt < expiry_dt
+
+
+def _strike_breach(spot, pos, buffer_usd):
+    # type: (float, OpenPosition, float) -> bool
+    """True if spot has crossed a short leg's strike ± buffer_usd."""
+    leg_type = pos.metadata.get("leg_type", "strangle")
+    if leg_type in ("strangle", "call"):
+        call_strike = pos.metadata.get("call_strike")
+        if call_strike is not None and spot > float(call_strike) + buffer_usd:
+            return True
+    if leg_type in ("strangle", "put"):
+        put_strike = pos.metadata.get("put_strike")
+        if put_strike is not None and spot < float(put_strike) - buffer_usd:
+            return True
+    return False
+
+
+def exit_expiry_window(condition, only_final_hours=0.0, except_final_hours=0.0):
+    # type: (ExitCondition, float, float) -> ExitCondition
+    """Wrap an exit condition with optional expiry-relative time gates.
+
+    Gates are measured against ``pos.metadata['expiry_dt']`` (Deribit 08:00 UTC).
+
+    only_final_hours > 0:
+        Inner condition runs ONLY inside [expiry_dt − N hours, expiry_dt).
+
+    except_final_hours > 0:
+        Inner condition is SKIPPED inside that same interval (useful to turn
+        premium SL off near expiry while a separate proximity rule is active).
+
+    Both 0:
+        No gating — inner condition always evaluated.
+
+    If both only_final_hours and except_final_hours are > 0, only_final_hours
+    takes precedence (except_final_hours is ignored).
+    """
+    def check(state, pos):
+        if only_final_hours > 0:
+            if not _in_proximity_window(state, pos, only_final_hours):
+                return None
+        elif except_final_hours > 0:
+            if _in_proximity_window(state, pos, except_final_hours):
+                return None
+        return condition(state, pos)
+    return check
+
+
+def stop_loss_pct(pct, price_mode="mark", suppress_hours_before_expiry=0.0):
+    # type: (float, str, float) -> ExitCondition
     """Close when unrealized loss exceeds pct (as fraction, e.g. 1.5 = 150% of premium).
 
     price_mode controls which price is used to evaluate the loss:
       "mark"        — exchange model price (default; stable, not manipulable by wide spreads)
       "executable"  — bid for buy legs, ask for sell legs
       "bid" / "ask" — always that side regardless of leg direction
+
+    suppress_hours_before_expiry — when > 0, premium SL is skipped during the
+    final N hours before pos.metadata['expiry_dt'] (for expiry-day proximity SL).
 
     The default is "mark" because SL decisions should be based on the exchange's
     fair-value estimate, not on bid/ask which can be wide in thin early-morning books.
@@ -262,6 +324,10 @@ def stop_loss_pct(pct, price_mode="mark"):
     pos.metadata['direction'] (position-level fallback).
     """
     def check(state, pos):
+        if suppress_hours_before_expiry > 0 and _in_proximity_window(
+            state, pos, suppress_hours_before_expiry
+        ):
+            return None
         current_usd = price_legs(state, pos, mode=price_mode)
         if current_usd is None:
             return None
@@ -275,6 +341,146 @@ def stop_loss_pct(pct, price_mode="mark"):
             # Long premium: loss = value dropped below entry cost
             if (_ep - current_usd) / _denom >= pct:
                 return "stop_loss"
+        return None
+    return check
+
+
+def strike_proximity_stop(hours_before_expiry, buffer_usd=0.0):
+    # type: (float, float) -> ExitCondition
+    """Close short premium when spot breaches strike ± buffer_usd near expiry.
+
+    Active only in the final ``hours_before_expiry`` before pos.metadata['expiry_dt'].
+    Set hours_before_expiry=0 to disable.
+
+    Strangle: fires if either call or put strike is breached.
+    Single call/put: only the open leg's strike is checked.
+    """
+    def check(state, pos):
+        if hours_before_expiry <= 0:
+            return None
+        if pos.metadata.get("direction", "sell") != "sell":
+            return None
+        if not _in_proximity_window(state, pos, hours_before_expiry):
+            return None
+        if _strike_breach(state.spot, pos, buffer_usd):
+            return "strike_proximity_stop"
+        return None
+    return check
+
+
+def position_quotes_available(state, pos):
+    # type: (Any, OpenPosition) -> bool
+    """Return True when all open legs have option quote rows in this snapshot."""
+    expiry = pos.metadata.get("expiry")
+    if expiry is None:
+        return False
+    leg_type = pos.metadata.get("leg_type", "strangle")
+    if leg_type == "strangle":
+        call_strike = pos.metadata.get("call_strike")
+        put_strike = pos.metadata.get("put_strike")
+        if call_strike is None or put_strike is None:
+            return False
+        if state.get_option(expiry, call_strike, True) is None:
+            return False
+        if state.get_option(expiry, put_strike, False) is None:
+            return False
+        return True
+    is_call = leg_type == "call"
+    strike = pos.metadata.get("call_strike") if is_call else pos.metadata.get("put_strike")
+    if strike is None:
+        return False
+    return state.get_option(expiry, strike, is_call) is not None
+
+
+def short_premium_stop_near_expiry(
+    sl_pct,
+    proximity_hours=0.0,
+    proximity_buffer_usd=0.0,
+    sl_price_mode="mark",
+):
+    # type: (float, float, float, str) -> ExitCondition
+    """Premium stop-loss with optional expiry-day strike-proximity handoff.
+
+    When ``proximity_hours`` > 0 and the tick is inside the final N hours before
+    ``expiry_dt``, premium SL is off and a strike-proximity stop is active instead
+    (returns ``strike_proximity_stop``).  Outside that window, behaves like
+    ``stop_loss_pct(sl_pct, price_mode=sl_price_mode)``.
+
+    Set ``proximity_hours=0`` for premium SL only (no proximity mode).
+    """
+    premium_sl = stop_loss_pct(sl_pct, price_mode=sl_price_mode)
+
+    def check(state, pos):
+        if proximity_hours > 0 and _in_proximity_window(state, pos, proximity_hours):
+            if pos.metadata.get("direction", "sell") != "sell":
+                return None
+            if _strike_breach(state.spot, pos, proximity_buffer_usd):
+                return "strike_proximity_stop"
+            return None
+        return premium_sl(state, pos)
+
+    return check
+
+
+def position_unrealized_pnl(state, pos, price_mode="mark"):
+    # type: (Any, OpenPosition, str) -> Optional[float]
+    """Unrealized PnL (USD) for one open position, net of open fees.
+
+    Uses leg-aware math when legs carry ``side`` and entry prices (same rules as
+    the engine's ``_open_unrealized_pnl``).  Returns ``None`` on quote data gap.
+    """
+    current_usd = price_legs(state, pos, mode=price_mode)
+    if current_usd is None:
+        return None
+    per_leg_vals = pos._last_reprice_legs
+    direction = pos.metadata.get("direction", "buy")
+    can_leg_aware = (
+        per_leg_vals is not None
+        and len(per_leg_vals) == len(pos.legs)
+        and bool(pos.legs)
+        and all(
+            leg.get("side") in ("buy", "sell")
+            and ("price_btc" in leg or "entry_price" in leg)
+            for leg in pos.legs
+        )
+    )
+    if can_leg_aware:
+        pnl = 0.0
+        for leg, cur_val in zip(pos.legs, per_leg_vals):
+            qty = float(leg.get("qty", 1.0))
+            entry_btc = float(leg.get("price_btc", leg.get("entry_price", 0.0)))
+            entry_spot_leg = float(leg.get("entry_spot", pos.entry_spot))
+            entry_usd = entry_btc * entry_spot_leg * qty
+            if leg["side"] == "sell":
+                pnl += entry_usd - cur_val
+            else:
+                pnl += cur_val - entry_usd
+        return pnl - float(pos.fees_open)
+    if direction == "sell":
+        return pos.entry_price_usd - current_usd - float(pos.fees_open)
+    return current_usd - pos.entry_price_usd - float(pos.fees_open)
+
+
+def equity_drawdown_stop(pct, price_mode="mark"):
+    # type: (float, str) -> ExitCondition
+    """Close when position unrealized loss exceeds pct of equity at entry.
+
+    ``pct`` is a fraction of ``pos.metadata['equity_at_entry_usd']`` (set by the
+    strategy at open), e.g. ``0.05`` = 5%.  ``pct <= 0`` disables.
+
+    Uses mark pricing by default (stable SL semantics).  Requires option quotes.
+    """
+    def check(state, pos):
+        if pct <= 0:
+            return None
+        ref = pos.metadata.get("equity_at_entry_usd")
+        if ref is None or float(ref) <= 0:
+            return None
+        pnl = position_unrealized_pnl(state, pos, price_mode=price_mode)
+        if pnl is None or pnl >= 0:
+            return None
+        if (-pnl) / float(ref) >= pct:
+            return "equity_drawdown_stop"
         return None
     return check
 

@@ -22,6 +22,12 @@ from backtester.strategy_base import (
     price_legs,
     stop_loss_pct,
     profit_target_pct,
+    strike_proximity_stop,
+    short_premium_stop_near_expiry,
+    position_quotes_available,
+    position_unrealized_pnl,
+    equity_drawdown_stop,
+    exit_expiry_window,
     _reprice_legs,
 )
 
@@ -734,3 +740,296 @@ class TestSlTpPriceModeAsymmetry:
         # bid=0 but mark=0.0005 → bid falls back to mark (small → use as-is)
         # total = 2 × 0.0005 × 75000 = $75 < $150 → no profit → hold
         assert tp(state, pos) is None
+
+
+# ---------------------------------------------------------------------------
+# strike_proximity_stop / premium SL suppression near expiry
+# ---------------------------------------------------------------------------
+
+EXPIRY_DT = datetime(2026, 5, 28, 8, 0, tzinfo=timezone.utc)
+
+
+def _proximity_pos(leg_type="strangle", call_strike=CALL_STRIKE, put_strike=PUT_STRIKE):
+    legs = _short_strangle_legs(
+        _make_quote(bid=0.0010),
+        _make_quote(bid=0.0010),
+    )
+    pos = _make_pos(legs, entry_price_usd=150.0, direction="sell")
+    pos.metadata.update({
+        "leg_type": leg_type,
+        "expiry": EXPIRY,
+        "call_strike": call_strike,
+        "put_strike": put_strike,
+        "expiry_dt": EXPIRY_DT,
+    })
+    return pos
+
+
+class TestStrikeProximityStop:
+    def test_disabled_when_hours_zero(self):
+        state = _FakeState({}, spot=80000.0, dt=datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc))
+        cond = strike_proximity_stop(0, buffer_usd=0)
+        assert cond(state, _proximity_pos()) is None
+
+    def test_outside_window_does_not_fire(self):
+        # 5h before expiry; window opens at 4h before
+        dt = datetime(2026, 5, 28, 3, 0, tzinfo=timezone.utc)
+        state = _FakeState({}, spot=80000.0, dt=dt)
+        cond = strike_proximity_stop(4, buffer_usd=0)
+        assert cond(state, _proximity_pos()) is None
+
+    def test_inside_window_put_breach_strangle(self):
+        dt = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        state = _FakeState({}, spot=73900.0, dt=dt)
+        cond = strike_proximity_stop(4, buffer_usd=0)
+        assert cond(state, _proximity_pos()) == "strike_proximity_stop"
+
+    def test_inside_window_call_breach_strangle(self):
+        dt = datetime(2026, 5, 28, 7, 0, tzinfo=timezone.utc)
+        state = _FakeState({}, spot=76100.0, dt=dt)
+        cond = strike_proximity_stop(4, buffer_usd=0)
+        assert cond(state, _proximity_pos()) == "strike_proximity_stop"
+
+    def test_buffer_delays_breach(self):
+        dt = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        cond = strike_proximity_stop(4, buffer_usd=100)
+        inside_buffer = _FakeState({}, spot=73950.0, dt=dt)
+        breached = _FakeState({}, spot=73899.0, dt=dt)
+        pos = _proximity_pos(put_strike=74000.0)
+        assert cond(inside_buffer, pos) is None
+        assert cond(breached, pos) == "strike_proximity_stop"
+
+    def test_single_call_ignores_put_strike(self):
+        dt = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        state = _FakeState({}, spot=73900.0, dt=dt)
+        cond = strike_proximity_stop(4, buffer_usd=0)
+        pos = _proximity_pos(leg_type="call")
+        assert cond(state, pos) is None
+
+    def test_single_put_ignores_call_strike(self):
+        dt = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        state = _FakeState({}, spot=76100.0, dt=dt)
+        cond = strike_proximity_stop(4, buffer_usd=0)
+        pos = _proximity_pos(leg_type="put")
+        assert cond(state, pos) is None
+
+    def test_premium_sl_suppressed_inside_proximity_window(self):
+        call_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        put_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): call_q,
+            (EXPIRY, PUT_STRIKE, False): put_q,
+        }
+        in_window = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        out_window = datetime(2026, 5, 28, 2, 0, tzinfo=timezone.utc)
+        pos = _proximity_pos()
+        sl = stop_loss_pct(1.5, price_mode="mark", suppress_hours_before_expiry=4)
+
+        assert sl(_FakeState(quotes, spot=SPOT, dt=in_window), pos) is None
+        assert sl(_FakeState(quotes, spot=SPOT, dt=out_window), pos) == "stop_loss"
+
+    def test_tp_still_active_inside_proximity_window(self):
+        call_q = _make_quote(bid=0.0002, ask=0.0002, mark=0.0002, spot=SPOT)
+        put_q = _make_quote(bid=0.0002, ask=0.0002, mark=0.0002, spot=SPOT)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): call_q,
+            (EXPIRY, PUT_STRIKE, False): put_q,
+        }
+        dt = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        state = _FakeState(quotes, spot=SPOT, dt=dt)
+        pos = _proximity_pos()
+        tp = profit_target_pct(0.50, price_mode="executable")
+        assert tp(state, pos) == "profit_target"
+
+
+class TestPositionQuotesAvailable:
+    def test_strangle_requires_both_legs(self):
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(),
+            (EXPIRY, PUT_STRIKE, False): None,
+        }
+        state = _FakeState(quotes, spot=SPOT)
+        pos = _proximity_pos()
+        assert position_quotes_available(state, pos) is False
+
+    def test_strangle_both_present(self):
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(),
+            (EXPIRY, PUT_STRIKE, False): _make_quote(),
+        }
+        state = _FakeState(quotes, spot=SPOT)
+        assert position_quotes_available(state, _proximity_pos()) is True
+
+    def test_single_put_leg(self):
+        quotes = {(EXPIRY, PUT_STRIKE, False): _make_quote()}
+        state = _FakeState(quotes, spot=SPOT)
+        pos = _proximity_pos(leg_type="put")
+        assert position_quotes_available(state, pos) is True
+
+
+class TestShortPremiumStopNearExpiry:
+    def test_outside_window_premium_sl(self):
+        out_window = datetime(2026, 5, 28, 2, 0, tzinfo=timezone.utc)
+        call_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        put_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): call_q,
+            (EXPIRY, PUT_STRIKE, False): put_q,
+        }
+        state = _FakeState(quotes, spot=SPOT, dt=out_window)
+        pos = _proximity_pos()
+        cond = short_premium_stop_near_expiry(1.5, proximity_hours=4, proximity_buffer_usd=0)
+        assert cond(state, pos) == "stop_loss"
+
+    def test_inside_window_proximity_not_premium_sl(self):
+        in_window = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        call_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        put_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): call_q,
+            (EXPIRY, PUT_STRIKE, False): put_q,
+        }
+        state = _FakeState(quotes, spot=SPOT, dt=in_window)
+        pos = _proximity_pos()
+        cond = short_premium_stop_near_expiry(1.5, proximity_hours=4, proximity_buffer_usd=0)
+        assert cond(state, pos) is None
+
+    def test_inside_window_strike_breach(self):
+        in_window = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        state = _FakeState({}, spot=73900.0, dt=in_window)
+        cond = short_premium_stop_near_expiry(4.5, proximity_hours=4, proximity_buffer_usd=0)
+        assert cond(state, _proximity_pos()) == "strike_proximity_stop"
+
+    def test_proximity_hours_zero_is_premium_sl_only(self):
+        state = _FakeState({}, spot=73900.0, dt=datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc))
+        cond = short_premium_stop_near_expiry(4.5, proximity_hours=0, proximity_buffer_usd=0)
+        assert cond(state, _proximity_pos()) is None
+
+
+# ---------------------------------------------------------------------------
+# position_unrealized_pnl / equity_drawdown_stop
+# ---------------------------------------------------------------------------
+
+def _equity_stop_pos(entry_bid=0.001, mark=0.0011, equity_at_entry=100_000.0):
+    call_q = _make_quote(bid=entry_bid, mark=mark, spot=SPOT)
+    put_q = _make_quote(bid=entry_bid, mark=mark, spot=SPOT)
+    legs = _short_strangle_legs(call_q, put_q)
+    pos = _make_pos(legs, entry_price_usd=call_q.bid_usd + put_q.bid_usd, direction="sell")
+    pos.metadata["equity_at_entry_usd"] = equity_at_entry
+    pos.metadata.update({
+        "expiry": EXPIRY,
+        "call_strike": CALL_STRIKE,
+        "put_strike": PUT_STRIKE,
+        "leg_type": "strangle",
+    })
+    return pos
+
+
+class TestPositionUnrealizedPnl:
+    def test_short_strangle_loss(self):
+        pos = _equity_stop_pos(entry_bid=0.001, mark=0.041)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(bid=0.001, mark=0.041, spot=SPOT),
+            (EXPIRY, PUT_STRIKE, False): _make_quote(bid=0.001, mark=0.041, spot=SPOT),
+        }
+        state = _FakeState(quotes, spot=SPOT)
+        pnl = position_unrealized_pnl(state, pos, price_mode="mark")
+        assert pnl == pytest.approx(-6000.0)
+
+
+class TestEquityDrawdownStop:
+    def test_disabled_when_pct_zero(self):
+        pos = _equity_stop_pos(mark=0.041)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(mark=0.041, spot=SPOT),
+            (EXPIRY, PUT_STRIKE, False): _make_quote(mark=0.041, spot=SPOT),
+        }
+        cond = equity_drawdown_stop(0.0, price_mode="mark")
+        assert cond(_FakeState(quotes, spot=SPOT), pos) is None
+
+    def test_fires_at_threshold(self):
+        pos = _equity_stop_pos(mark=0.041, equity_at_entry=100_000.0)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(bid=0.001, mark=0.041, spot=SPOT),
+            (EXPIRY, PUT_STRIKE, False): _make_quote(bid=0.001, mark=0.041, spot=SPOT),
+        }
+        cond = equity_drawdown_stop(0.06, price_mode="mark")
+        assert cond(_FakeState(quotes, spot=SPOT), pos) == "equity_drawdown_stop"
+
+    def test_holds_below_threshold(self):
+        pos = _equity_stop_pos(mark=0.041, equity_at_entry=100_000.0)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(bid=0.001, mark=0.041, spot=SPOT),
+            (EXPIRY, PUT_STRIKE, False): _make_quote(bid=0.001, mark=0.041, spot=SPOT),
+        }
+        cond = equity_drawdown_stop(0.07, price_mode="mark")
+        assert cond(_FakeState(quotes, spot=SPOT), pos) is None
+
+    def test_no_fire_without_equity_at_entry(self):
+        pos = _equity_stop_pos(mark=0.041)
+        del pos.metadata["equity_at_entry_usd"]
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): _make_quote(mark=0.041, spot=SPOT),
+            (EXPIRY, PUT_STRIKE, False): _make_quote(mark=0.041, spot=SPOT),
+        }
+        cond = equity_drawdown_stop(0.05, price_mode="mark")
+        assert cond(_FakeState(quotes, spot=SPOT), pos) is None
+
+    def test_suppressed_on_quote_gap(self):
+        pos = _equity_stop_pos(mark=0.041)
+        cond = equity_drawdown_stop(0.05, price_mode="mark")
+        assert cond(_FakeState({}, spot=SPOT), pos) is None
+
+
+class TestExitExpiryWindow:
+    """Tests for exit_expiry_window — independent expiry-relative gating."""
+
+    def test_no_gate_passes_through(self):
+        call_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        put_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): call_q,
+            (EXPIRY, PUT_STRIKE, False): put_q,
+        }
+        inner = stop_loss_pct(1.5, price_mode="mark")
+        cond = exit_expiry_window(inner, only_final_hours=0, except_final_hours=0)
+        in_window = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        out_window = datetime(2026, 5, 28, 2, 0, tzinfo=timezone.utc)
+        pos = _proximity_pos()
+        assert cond(_FakeState(quotes, spot=SPOT, dt=in_window), pos) == "stop_loss"
+        assert cond(_FakeState(quotes, spot=SPOT, dt=out_window), pos) == "stop_loss"
+
+    def test_except_final_suppresses_inside_window(self):
+        call_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        put_q = _make_quote(bid=0.0005, ask=0.0050, mark=0.0100, spot=SPOT)
+        quotes = {
+            (EXPIRY, CALL_STRIKE, True): call_q,
+            (EXPIRY, PUT_STRIKE, False): put_q,
+        }
+        inner = stop_loss_pct(1.5, price_mode="mark")
+        cond = exit_expiry_window(inner, except_final_hours=4)
+        in_window = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        out_window = datetime(2026, 5, 28, 2, 0, tzinfo=timezone.utc)
+        pos = _proximity_pos()
+        assert cond(_FakeState(quotes, spot=SPOT, dt=in_window), pos) is None
+        assert cond(_FakeState(quotes, spot=SPOT, dt=out_window), pos) == "stop_loss"
+
+    def test_only_final_runs_inside_window_only(self):
+        dt = datetime(2026, 5, 28, 6, 0, tzinfo=timezone.utc)
+        out_dt = datetime(2026, 5, 28, 2, 0, tzinfo=timezone.utc)
+        inner = strike_proximity_stop(4, buffer_usd=0)
+        cond = exit_expiry_window(inner, only_final_hours=4)
+        pos = _proximity_pos()
+        breached = _FakeState({}, spot=73900.0, dt=dt)
+        safe_outside = _FakeState({}, spot=73900.0, dt=out_dt)
+        assert cond(breached, pos) == "strike_proximity_stop"
+        assert cond(safe_outside, pos) is None
+
+    def test_only_final_takes_precedence_over_except(self):
+        """When both gates are set, only_final_hours wins (except is ignored)."""
+        dt = datetime(2026, 5, 28, 2, 0, tzinfo=timezone.utc)
+        inner = strike_proximity_stop(4, buffer_usd=0)
+        cond = exit_expiry_window(inner, only_final_hours=4, except_final_hours=4)
+        pos = _proximity_pos()
+        # Outside final window → suppressed even though except would allow it
+        assert cond(_FakeState({}, spot=73900.0, dt=dt), pos) is None

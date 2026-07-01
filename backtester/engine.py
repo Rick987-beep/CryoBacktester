@@ -200,9 +200,18 @@ def run_single(strategy_cls, params, replay):
 
     trades = []
     last_state = None
+    realized_pnl = 0.0
+    pos_pnl_cache = {}  # type: Dict[int, float]
+    account_size = float(_cfg.simulation.account_size_usd)
     for state in replay:
+        state.equity_usd = account_size + realized_pnl
+        open_pnl = _open_unrealized_pnl(strategy, state, pos_pnl_cache)
+        state.nav_usd = state.equity_usd + open_pnl
         result = strategy.on_market_state(state)
-        trades.extend(result)
+        for trade in result:
+            trades.append(trade)
+            if getattr(trade, "side", "close") == "close":
+                realized_pnl += float(trade.pnl)
         last_state = state
 
     if last_state is not None:
@@ -573,6 +582,9 @@ def run_grid_full(
         n_states += 1
         day_key = state.dt.strftime("%Y-%m-%d")
         for i, strategy in enumerate(instances):
+            state.equity_usd = account_size + realized_pnl[i]
+            open_pnl = _open_unrealized_pnl(strategy, state, pos_pnl_cache[i])
+            state.nav_usd = state.equity_usd + open_pnl
             for trade in strategy.on_market_state(state):
                 _append_fills(i, trade)
                 if getattr(trade, 'side', 'close') == 'close':
