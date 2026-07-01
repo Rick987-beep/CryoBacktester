@@ -100,6 +100,35 @@ def select_expiry(state, dte):
     return None
 
 
+def select_expiry_range(state, min_dte, max_dte=None):
+    # type: (Any, int, Optional[int]) -> Optional[str]
+    """Return the nearest expiry code with DTE in [min_dte, max_dte].
+
+    Picks the qualifying expiry with the smallest DTE (soonest that satisfies
+    the minimum). Returns None if no qualifying expiry exists in the snapshot.
+
+    Used by calendar spread strategies:
+      short leg: select_expiry_range(state, 7, 15)
+      long  leg: select_expiry_range(state, 30)
+    """
+    today = state.dt.date()
+    best_expiry = None
+    best_dte = None
+    for exp in state.expiries():
+        exp_date = parse_expiry_date(exp)
+        if exp_date is None:
+            continue
+        dte = (exp_date.date() - today).days
+        if dte < min_dte:
+            continue
+        if max_dte is not None and dte > max_dte:
+            continue
+        if best_dte is None or dte < best_dte:
+            best_expiry = exp
+            best_dte = dte
+    return best_expiry
+
+
 def select_expiry_for_week(state, target_weeks):
     # type: (Any, int) -> Optional[str]
     """Return the expiry whose DTE falls in [target_weeks*7, target_weeks*7+6].

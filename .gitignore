@@ -10,11 +10,10 @@ indicators/data/
 backtester/planning/
 backtester/reports/
 
-# Strategy experiments — keep the reference implementation only
-backtester/strategies/*.py
-!backtester/strategies/__init__.py
-!backtester/strategies/blueprint_howto.py
-backtester/strategies/tests/test_pagoda.py
+# git-crypt symmetric key — never commit (see docs/git-crypt.md)
+*.git-crypt-key
+.git-crypt-key
+.cryo-backtester-git-crypt.key
 
 # Runtime logs (UI worker, etc.)
 logs/

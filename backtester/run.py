@@ -25,10 +25,15 @@ from backtester.reporting_v2 import generate_html
 from backtester.walk_forward import run_walk_forward
 from backtester.experiment import load_experiment
 from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
+from backtester.strategies.tudysho import TuDySho
+from backtester.strategies.tudysho_v1 import TuDyShoV1
+from backtester.strategies.tudysho_v2 import TuDyShoV2
 from backtester.strategies.blueprint_howto import BlueprintHowto
 from backtester.strategies.long_gamma_move import LongGammaMove
 from backtester.strategies.pagoda import Pagoda
 from backtester.strategies.covered_call_put import CoveredCallPut
+from backtester.strategies.cal_spread_atm import CalSpreadAtm
+from backtester.strategies.theta_engine_v1 import ThetaEnginev1
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -40,10 +45,15 @@ from backtester.config import cfg as _cfg
 
 STRATEGIES = {
     "short_str_turb_dyn":  ShortStrTurbDyn,
+    "tudysho":             TuDySho,
+    "tudysho_v1":          TuDyShoV1,
+    "tudysho_v2":          TuDyShoV2,
     "blueprint_howto":     BlueprintHowto,
     "long_gamma_move":     LongGammaMove,
     "pagoda":              Pagoda,
     "covered_call_put":    CoveredCallPut,
+    "cal_spread_atm":      CalSpreadAtm,
+    "theta_engine_v1":     ThetaEnginev1,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet
@@ -138,7 +148,8 @@ def run_backtest(
     from backtester.ui.services.store_service import StoreService
     _store = StoreService(str(_ui_state_dir), str(reports_dir))
     bundle_path = _store.write_bundle(
-        result, strategy=strategy_key, runtime_s=grid_time, source=source
+        result, strategy=strategy_key, runtime_s=grid_time, source=source,
+        strategy_cls=strategy_cls,
     )
     _store.register_bundle(bundle_path)
 
@@ -286,6 +297,7 @@ def main():
                 runtime_s=grid_time,
                 source="cli",
                 wfo_result=wfo_result,
+                strategy_cls=strategy_cls,
             )
             _store.register_bundle(_bundle_path)
             print(f"  Bundle: {_bundle_path}")

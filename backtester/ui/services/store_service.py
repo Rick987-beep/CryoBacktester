@@ -6,6 +6,7 @@ A "run bundle" is a directory under bundles_root containing:
   nav_daily.parquet   — engine's nav_daily_df
   final_nav.parquet   — engine's final_nav_df
   fills.parquet       — engine's df_fills (optional)
+  strategy/<name>.py  — byte copy of strategy module at run time (optional)
   meta.json           — strategy, param_grid, keys, date_range, repro fields
 
 SQLite (state_dir/ui_state.db) stores a lightweight index of runs for fast
@@ -179,8 +180,12 @@ class StoreService:
     # ── Bundle writing ───────────────────────────────────────────────────────
 
     def write_bundle(self, grid_result, strategy: str, runtime_s: float,
-                     source: str = "cli", wfo_result=None) -> Path:
+                     source: str = "cli", wfo_result=None,
+                     strategy_cls=None) -> Path:
         """Persist *grid_result* as a run bundle directory.
+
+        When *strategy_cls* is provided, a byte copy of its module source is
+        written to ``strategy/<module>.py`` inside the bundle.
 
         Returns the path to the newly created bundle dir.
         """
@@ -220,6 +225,12 @@ class StoreService:
                 meta["wfo_result"] = _serialize_wfo_result(wfo_result)
             except Exception as exc:
                 log.warning("Could not serialize wfo_result: %s", exc)
+        if strategy_cls is not None:
+            manifest = _repro.snapshot_strategy_source(strategy_cls, bundle_dir)
+            if manifest is not None:
+                meta["strategy_source"] = manifest
+            else:
+                log.warning("Could not snapshot strategy source for %s", strategy)
         (bundle_dir / "meta.json").write_text(json.dumps(meta, indent=2))
 
         log.info("Bundle written: %s", bundle_dir)

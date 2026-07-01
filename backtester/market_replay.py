@@ -100,6 +100,8 @@ class MarketState:
     timestamp: int              # Microseconds (5-min aligned)
     dt: datetime                # UTC datetime
     spot: float                 # BTC/USD (close of latest 1-min bar)
+    equity_usd: Optional[float] = None  # Realized equity (USD); set by engine each tick
+    nav_usd: Optional[float] = None     # Mark-to-market NAV = equity_usd + open_pnl
 
     # Internal: references to the replay's NumPy arrays for this tick's slice.
     # _start/_length define the row range in the global arrays.

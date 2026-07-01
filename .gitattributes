@@ -1,0 +1,14 @@
+# git-crypt: strategy source is encrypted in the public repo.
+# blueprint_howto stays plaintext (public reference implementation).
+# See docs/git-crypt.md for unlock instructions.
+
+backtester/strategies/*.py filter=git-crypt diff=git-crypt
+backtester/strategies/blueprint_howto.py !filter !diff
+backtester/strategies/__init__.py !filter !diff
+
+# Strategy-specific tests (may reveal logic) — encrypt; keep generic tests public.
+backtester/strategies/tests/test_*.py filter=git-crypt diff=git-crypt
+backtester/strategies/tests/test_strategy_base.py !filter !diff
+backtester/strategies/tests/test_backtester_indicators.py !filter !diff
+backtester/strategies/tests/conftest.py !filter !diff
+backtester/strategies/tests/__init__.py !filter !diff
