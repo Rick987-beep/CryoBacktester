@@ -155,7 +155,8 @@ All option prices are **BTC-denominated** (e.g. `0.0068 BTC`). USD value = `pric
 ```bash
 python -m backtester.ingest.bulkdownloadTardis.bulk_fetch
 ```
-See `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` for format details.
+See `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` for format details.  
+For raw archive before subscription expiry, see `backtester/ingest/bulkdownloadTardis/TARDIS_ARCHIVE_PLAN.md`.
 
 **Sync from VPS live recorder** (done from the CryoTrader repo):
 The live tick recorder runs as `ct-recorder` on the VPS and writes daily parquets.

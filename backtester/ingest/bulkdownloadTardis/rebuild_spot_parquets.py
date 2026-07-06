@@ -84,10 +84,6 @@ except ImportError as e:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-TARDIS_API_KEY = (
-    "TD.q33pbrvPKEfhj685.ORfIaVN4HSAK2oL.6ixdTTmLjwMvHwK"
-    ".FMpRFNSuBUGmk-e.JBuPq1ZEjt4dgG1.tDIK"
-)
 TARDIS_BASE = "https://datasets.tardis.dev/v1/deribit/derivative_ticker"
 SYMBOL = "BTC-PERPETUAL"
 
@@ -155,6 +151,13 @@ def _find_option_dates(data_dir: str) -> List[date]:
 
 # ── Tardis download ───────────────────────────────────────────────────────────
 
+def _tardis_api_key() -> str:
+    key = os.environ.get("TARDIS_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("TARDIS_API_KEY environment variable is not set")
+    return key
+
+
 def _download_day(d: date) -> Optional[pd.DataFrame]:
     """Download derivative_ticker/BTC-PERPETUAL for date d.
 
@@ -170,7 +173,7 @@ def _download_day(d: date) -> Optional[pd.DataFrame]:
     try:
         resp = requests.get(
             url,
-            headers={"Authorization": f"Bearer {TARDIS_API_KEY}"},
+            headers={"Authorization": f"Bearer {_tardis_api_key()}"},
             allow_redirects=True,
             timeout=120,
         )

@@ -2,6 +2,8 @@
 
 This document is a complete, accurate manual for downloading and processing a full year of historic Deribit BTC options data from tardis.dev and producing the compact snapshot parquets consumed by the backtester. It reflects what the code actually does, verified in production (April 2026).
 
+For **raw download-only archive** (no parquet extraction) to Hetzner Storage Box before subscription expiry, see [`TARDIS_ARCHIVE_PLAN.md`](TARDIS_ARCHIVE_PLAN.md).
+
 ---
 
 ## What You Are Building
