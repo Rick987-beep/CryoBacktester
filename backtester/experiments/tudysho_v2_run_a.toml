@@ -1,0 +1,36 @@
+# tudysho_v2_run_a.toml
+# ── Reproduce backtest run A (combo da6e149d3bba) ─────────────────
+#
+# Reference bundle: backtester/reports/tudysho_20260630_150351.bundle
+# Run 134, date range 2025-06-27 → 2026-06-27, account $100k.
+#
+#   python -m backtester.run --experiment tudysho_v2_run_a --mode sensitivity
+
+strategy = "tudysho_v2"
+
+[sensitivity]
+steps = 1
+
+[sensitivity.best]
+leg_type              = "strangle"
+dte                   = 1
+delta                 = 0.1
+entry_time            = "16:00"
+stop_loss_pct         = 6.0
+take_profit_pct       = 0.0
+max_hold_hours        = 0
+trade_friday          = 0
+trade_saturday        = 0
+trade_sunday          = 0
+min_otm_pct           = 2.8
+turbulence_threshold  = 60
+nav_premium_pct       = 0.8
+max_qty_per_100k_nav  = 20
+leg_min_price         = 0
+proximity_stop_hours  = 8
+proximity_buffer_usd  = 1000
+
+[wfo]
+is_days   = 60
+oos_days  = 20
+step_days = 20

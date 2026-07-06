@@ -271,3 +271,5 @@ STRATEGIES["my_strategy"] = MyStrategy
 | `backtester/strategies/blueprint_howto.py` | Canonical working strategy implementation |
 | `backtester/config.toml` | Scoring weights, grid params, simulation config |
 | `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` | Tardis data format notes |
+| `backtester/ingest/bulkdownloadTardis/TARDIS_ARCHIVE_PLAN.md` | Raw options_chain archive to Storage Box (download-only, pre-expiry) |
+| `backtester/ingest/bulkdownloadTardis/BULK_DOWNLOAD_PLAN.md` | Bulk extract pipeline (gz → parquets) |

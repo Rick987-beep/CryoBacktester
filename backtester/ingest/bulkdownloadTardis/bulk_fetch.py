@@ -43,11 +43,8 @@ import argparse
 import os
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date
 from typing import List, Optional
-
-# ── Inline download logic (no dependency on existing backtester pipeline) ─────
-# Reproduced here so the bulk/ folder is self-contained on the Hetzner server.
 
 try:
     import requests
@@ -63,174 +60,43 @@ except ImportError:
 
 from stream_extract import stream_extract
 from clean import clean_parquets
+try:
+    from .tardis_common import (
+        DEFAULT_EXCHANGE,
+        archive_filename,
+        date_range_reverse,
+        download_options_chain,
+        remote_size,
+    )
+except ImportError:
+    from tardis_common import (
+        DEFAULT_EXCHANGE,
+        archive_filename,
+        date_range_reverse,
+        download_options_chain,
+        remote_size,
+    )
 
-DATASETS_BASE = "https://datasets.tardis.dev/v1"
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-_RETRY_DELAYS = [10, 30, 60, 120, 300]
 
-
-# ── Download ──────────────────────────────────────────────────────────────────
-
-def _download(date_str, api_key=None, data_dir=DATA_DIR, max_retries=20):
-    # type: (str, Optional[str], str, int) -> str
-    """Download OPTIONS.csv.gz for one date. Returns path to gz file.
-
-    Retries with exponential backoff on any connection error. tardis.dev does
-    NOT support HTTP Range — every retry starts from byte 0. Run in tmux to
-    survive terminal disconnects.
-    """
+def _download(date_str, api_key=None, data_dir=DATA_DIR, exchange=DEFAULT_EXCHANGE, max_retries=20):
+    # type: (str, Optional[str], str, str, int) -> str
     os.makedirs(data_dir, exist_ok=True)
-
-    year, month, day = date_str.split("-")
-    url = f"{DATASETS_BASE}/deribit/options_chain/{year}/{month}/{day}/OPTIONS.csv.gz"
-    gz_path = os.path.join(data_dir, f"options_chain_{date_str}.csv.gz")
-
-    print(f"[download] {date_str}", flush=True)
-
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    last_exc = None  # type: Optional[Exception]
-
-    for attempt in range(max_retries + 1):
-        if attempt > 0:
-            delay = _RETRY_DELAYS[min(attempt - 1, len(_RETRY_DELAYS) - 1)]
-            print(
-                f"  Retry {attempt}/{max_retries} in {delay}s"
-                f"  (last error: {last_exc})",
-                file=sys.stderr, flush=True,
-            )
-            time.sleep(delay)
-
-        resp = None
-        try:
-            resp = requests.get(url, headers=headers, stream=True, timeout=(30, 120))
-            # Abort immediately on 4xx — retrying won't help (bad key, wrong date, etc.)
-            if resp.status_code == 401:
-                raise RuntimeError(
-                    f"[download] {date_str}: HTTP 401 Unauthorized — check TARDIS_API_KEY"
-                )
-            if resp.status_code == 403:
-                raise RuntimeError(
-                    f"[download] {date_str}: HTTP 403 Forbidden — date not available on this plan"
-                )
-            if 400 <= resp.status_code < 500:
-                raise RuntimeError(
-                    f"[download] {date_str}: HTTP {resp.status_code} — not retrying"
-                )
-            resp.raise_for_status()
-
-            total = int(resp.headers.get("content-length", 0))
-            print(
-                f"  Size: {total / 1024**3:.2f} GB" if total else "  Size: unknown",
-                flush=True,
-            )
-
-            written = 0
-            t0 = time.time()
-            t_last_log = t0
-            with open(gz_path, "wb") as fout:
-                for chunk in resp.iter_content(chunk_size=512 * 1024):
-                    if not chunk:
-                        continue
-                    fout.write(chunk)
-                    written += len(chunk)
-                    now = time.time()
-                    if now - t_last_log >= 10:
-                        elapsed = now - t0
-                        speed = written / elapsed / 1024**2 if elapsed > 0 else 0
-                        if total:
-                            eta = (total - written) / (written / elapsed) if written > 0 else 0
-                            print(
-                                f"  {written/1024**3:.2f}/{total/1024**3:.2f} GB"
-                                f"  ({written/total*100:.0f}%)"
-                                f"  {speed:.1f} MB/s"
-                                f"  ETA {eta/60:.0f}m",
-                                flush=True,
-                            )
-                        else:
-                            print(
-                                f"  {written/1024**3:.2f} GB  {speed:.1f} MB/s",
-                                flush=True,
-                            )
-                        t_last_log = now
-
-            final_size = os.path.getsize(gz_path)
-            if total > 0 and final_size < total:
-                raise IOError(
-                    f"Truncated: got {final_size:,} of {total:,} bytes"
-                )
-
-            elapsed = time.time() - t0
-            speed = written / elapsed / 1024**2 if elapsed > 0 else 0
-            print(
-                f"\n  Downloaded: {final_size / 1024**3:.2f} GB"
-                f"  in {elapsed:.0f}s  ({speed:.1f} MB/s avg)",
-                flush=True,
-            )
-            return gz_path
-
-        except RuntimeError:
-            # Hard failures (4xx) — propagate immediately without retry
-            raise
-        except Exception as exc:
-            last_exc = exc
-            # Wipe partial file so next attempt writes a clean file.
-            # tardis.dev has no server-side resume — a partial gz is unusable.
-            if gz_path and os.path.exists(gz_path):
-                os.unlink(gz_path)
-            print(f"\n  Attempt {attempt + 1} failed: {exc}", file=sys.stderr, flush=True)
-            if attempt == max_retries:
-                raise RuntimeError(
-                    f"[download] {date_str}: failed after {max_retries + 1} attempts"
-                ) from exc
-        finally:
-            if resp is not None:
-                resp.close()
-
-    raise RuntimeError(f"[download] {date_str}: exhausted retries")
+    gz_path = os.path.join(data_dir, archive_filename(date_str))
+    download_options_chain(
+        exchange,
+        date_str,
+        gz_path,
+        api_key=api_key,
+        max_retries=max_retries,
+    )
+    return gz_path
 
 
-# ── Remote size check ────────────────────────────────────────────────────────
-
-def _validate_gz_size(date_str, api_key=None):
-    # type: (str, Optional[str]) -> Optional[int]
-    """Return expected byte size from Tardis HEAD request, or None if unavailable."""
-    year, month, day = date_str.split("-")
-    url = f"{DATASETS_BASE}/deribit/options_chain/{year}/{month}/{day}/OPTIONS.csv.gz"
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    try:
-        resp = requests.head(url, headers=headers, timeout=15)
-        if resp.status_code == 200:
-            length = int(resp.headers.get("content-length", 0))
-            return length if length > 0 else None
-    except Exception:
-        pass
-    return None
-
-
-# ── Date range ────────────────────────────────────────────────────────────────
-
-def _date_range_reverse(from_date, to_date):
-    # type: (str, str) -> List[date]
-    """Return dates from to_date down to from_date inclusive (newest-first)."""
-    start = date.fromisoformat(from_date)
-    end   = date.fromisoformat(to_date)
-    if start > end:
-        raise ValueError(f"--from {from_date} is after --to {to_date}")
-    days = []
-    current = end
-    while current >= start:
-        days.append(current)
-        current -= timedelta(days=1)
-    return days
-
-
-# ── Per-day pipeline ──────────────────────────────────────────────────────────
+def _validate_gz_size(date_str, api_key=None, exchange=DEFAULT_EXCHANGE):
+    # type: (str, Optional[str], str) -> Optional[int]
+    return remote_size(exchange, date_str, api_key=api_key)
 
 def _process_day(
     date_str,           # type: str
@@ -239,6 +105,7 @@ def _process_day(
     max_dte,            # type: int
     keep_raw,           # type: bool
     day_retries,        # type: int
+    exchange=DEFAULT_EXCHANGE,  # type: str
     force=False,        # type: bool
 ):
     # type: (...) -> str
@@ -249,7 +116,7 @@ def _process_day(
     """
     opts_path = os.path.join(data_dir, f"options_{date_str}.parquet")
     spot_path = os.path.join(data_dir, f"spot_{date_str}.parquet")
-    gz_path   = os.path.join(data_dir, f"options_chain_{date_str}.csv.gz")
+    gz_path   = os.path.join(data_dir, archive_filename(date_str))
 
     # Skip if both outputs already exist (unless --force)
     if not force and os.path.exists(opts_path) and os.path.exists(spot_path):
@@ -270,7 +137,7 @@ def _process_day(
             # Validate size via HEAD request; re-download if the file is partial.
             if os.path.exists(gz_path):
                 gz_size = os.path.getsize(gz_path)
-                expected = _validate_gz_size(date_str, api_key=api_key)
+                expected = _validate_gz_size(date_str, api_key=api_key, exchange=exchange)
                 if expected is None or gz_size == expected:
                     print(
                         f"[download] {date_str}  reusing gz"
@@ -287,9 +154,9 @@ def _process_day(
                         flush=True,
                     )
                     os.unlink(gz_path)
-                    _download(date_str, api_key=api_key, data_dir=data_dir)
+                    _download(date_str, api_key=api_key, data_dir=data_dir, exchange=exchange)
             else:
-                _download(date_str, api_key=api_key, data_dir=data_dir)
+                _download(date_str, api_key=api_key, data_dir=data_dir, exchange=exchange)
 
             # 2. stream_extract: .csv.gz → two parquets
             stream_extract(date_str, gz_path=gz_path, max_dte=max_dte, data_dir=data_dir)
@@ -357,6 +224,7 @@ def bulk_fetch(
     keep_raw=False,     # type: bool
     data_dir=DATA_DIR,  # type: str
     day_retries=3,      # type: int
+    exchange=DEFAULT_EXCHANGE,  # type: str
     dry_run=False,      # type: bool
     force=False,        # type: bool
 ):
@@ -379,12 +247,12 @@ def bulk_fetch(
         api_key = os.environ.get("TARDIS_API_KEY")
 
     os.makedirs(data_dir, exist_ok=True)
-    dates = _date_range_reverse(from_date, to_date)
+    dates = date_range_reverse(from_date, to_date)
 
     print(
         f"\n{'='*60}\n"
         f"Worker {worker}  |  {len(dates)} days  |  {to_date} → {from_date}\n"
-        f"data_dir={data_dir}  max_dte={max_dte}  keep_raw={keep_raw}\n"
+        f"exchange={exchange}  data_dir={data_dir}  max_dte={max_dte}  keep_raw={keep_raw}\n"
         f"{'='*60}\n",
         flush=True,
     )
@@ -422,6 +290,7 @@ def bulk_fetch(
             max_dte=max_dte,
             keep_raw=keep_raw,
             day_retries=day_retries,
+            exchange=exchange,
             force=force,
         )
         counts[status] = counts.get(status, 0) + 1
@@ -453,10 +322,12 @@ def main():
                         help="End date YYYY-MM-DD (newest, inclusive, processed first)")
     parser.add_argument("--worker", default="?",
                         help="Worker label A/B/C/D (for log output)")
+    parser.add_argument("--exchange", default=DEFAULT_EXCHANGE,
+                        help="Tardis exchange id (default: deribit)")
     parser.add_argument("--api-key", default=None,
                         help="Tardis.dev API key (or set TARDIS_API_KEY env var)")
     parser.add_argument("--max-dte", type=int, default=700,
-                        help="Max calendar DTE to include (default 28)")
+                        help="Max calendar DTE to include (default 700)")
     parser.add_argument("--keep-raw", action="store_true",
                         help="Keep OPTIONS.csv.gz after extraction")
     parser.add_argument("--data-dir", default=DATA_DIR,
@@ -479,6 +350,7 @@ def main():
         data_dir=args.data_dir,
         day_retries=args.day_retries,
         dry_run=args.dry_run,
+        exchange=args.exchange,
         force=args.force,
     )
 
