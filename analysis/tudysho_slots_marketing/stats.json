@@ -1,0 +1,54 @@
+{
+  "strategy": "tudysho",
+  "size_scale": 0.5,
+  "merge_method": "union_no_overlap",
+  "position_overlaps_excl_end_of_data": 0,
+  "date_from": "2025-06-27",
+  "date_to": "2026-06-27",
+  "account_size_usd": 100000.0,
+  "n_trades": 224,
+  "total_pnl_usd": 66697.09,
+  "total_return_pct": 66.7,
+  "cagr_pct": 66.5,
+  "max_dd_pct": 5.8,
+  "max_dd_pct_close_only": 2.1,
+  "max_dd_pct_intraday_scaled": 5.77,
+  "max_dd_date": "2026-01-30",
+  "isolated_slot_max_dd_pct": {
+    "A": 6.21,
+    "B": 1.63,
+    "C": 2.3
+  },
+  "sharpe": 11.14,
+  "sharpe_close_only": 13.85,
+  "sortino": 29.1,
+  "sortino_close_only": 31.15,
+  "calmar": 11.52,
+  "profit_factor": 25.94,
+  "win_rate_pct": 99.1,
+  "positive_months_pct": 100.0,
+  "consec_wins_max": 171,
+  "consec_losses_max": 1,
+  "avg_pnl_usd": 297.75,
+  "median_pnl_usd": 287.85,
+  "trades_by_slot": {
+    "A": 143,
+    "C": 51,
+    "B": 30
+  },
+  "slots": {
+    "A": {
+      "combo_hash": "5cd986cf48cd",
+      "label": "Mon\u2013Thu daytime"
+    },
+    "B": {
+      "combo_hash": "e2f4ac2b3e69",
+      "label": "Monday early"
+    },
+    "C": {
+      "combo_hash": "829e7226cc48",
+      "label": "Friday \u2192 Saturday"
+    }
+  },
+  "metrics_basis": "EOD MTM nav_close + intraday hi/lo for DD; trade-level profit factor"
+}

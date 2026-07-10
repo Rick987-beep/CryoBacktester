@@ -1,0 +1,21 @@
+{
+  "delta": 0.1,
+  "dte": 1,
+  "entry_time": "13:00",
+  "equity_drawdown_stop_pct": 0,
+  "equity_sl_except_final_hours": 0,
+  "equity_sl_only_final_hours": 0,
+  "leg_min_price": 0,
+  "leg_type": "strangle",
+  "max_qty_per_1btc_equity": 12,
+  "min_otm_pct": 2.6,
+  "nav_premium_pct": 0.8,
+  "premium_sl_except_final_hours": 0,
+  "proximity_buffer_usd": 1000,
+  "proximity_stop_hours": 4,
+  "stop_loss_pct": 0.0,
+  "trade_friday": 0,
+  "trade_saturday": 0,
+  "trade_sunday": 0,
+  "turbulence_threshold": 60
+}

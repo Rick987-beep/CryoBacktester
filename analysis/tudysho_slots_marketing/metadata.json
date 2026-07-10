@@ -1,0 +1,25 @@
+{
+  "package": "tudysho_slots_marketing",
+  "created_at": "2026-07-08T08:41:29Z",
+  "size_scale": 0.5,
+  "merge_method": "union_no_overlap",
+  "handover_package": "handover/tudysho_cryotrader",
+  "slot_sources": {
+    "A": {
+      "combo_hash": "5cd986cf48cd",
+      "label": "Mon\u2013Thu daytime",
+      "trades_file": "handover/tudysho_cryotrader/backtests/trades_slot_a_mon_thu.csv"
+    },
+    "B": {
+      "combo_hash": "e2f4ac2b3e69",
+      "label": "Monday early",
+      "trades_file": "handover/tudysho_cryotrader/backtests/trades_slot_b_mon_early.csv"
+    },
+    "C": {
+      "combo_hash": "829e7226cc48",
+      "label": "Friday \u2192 Saturday",
+      "trades_file": "handover/tudysho_cryotrader/backtests/trades_slot_c_fri_sat.csv"
+    }
+  },
+  "methodology": "METHODOLOGY.md"
+}

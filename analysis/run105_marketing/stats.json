@@ -1,0 +1,17 @@
+{
+  "combo_idx": 71,
+  "combo_hash": "a1276d6ce476",
+  "date_from": "2025-06-21",
+  "date_to": "2026-06-22",
+  "n_trades": 161,
+  "total_return_pct": 59.1,
+  "max_dd_pct": 10.6,
+  "sharpe": 4.27,
+  "sortino": 5.23,
+  "calmar": 5.55,
+  "profit_factor": 2.68,
+  "win_rate_pct": 96.9,
+  "positive_months_pct": 92.0,
+  "consec_wins_max": 13,
+  "consec_losses_max": 3
+}

@@ -3,9 +3,33 @@ views/grid_view.py — Results Grid tab.
 
 Displays a Tabulator of all combo stats for a loaded GridResult.
 Multi-select rows → updates state.selected_combo_keys.
+
+Table layout
+------------
+The grid uses Tabulator ``fit_columns`` so the table always fills the main
+pane width instead of growing past the viewport (Panel's default
+``fit_data_table`` sizes columns to data and expands the table horizontally).
+
+Columns are split into three zones with approximate width budget 5:47.5:47.5:
+
+  1. Rank & score — frozen left, fixed pixel widths (~5% total)
+  2. Strategy parameters — scrollable middle (~47.5% ``widthGrow`` budget)
+  3. Performance metrics — frozen right (~47.5%, capped with ``maxWidth``)
+
+Within each grow zone, ``widthGrow`` is split evenly across columns so the
+zone totals stay balanced even when parameter and performance column counts
+differ. Parameter headers use multi-line ``snake_case`` breaks plus hover
+tooltips for the full field name. A horizontal scrollbar on the table holder
+is enabled as a fallback when min-widths cannot all be satisfied at once.
+
+Column chooser
+--------------
+Three checkbox sections mirror the table zones.  Each ``CheckBoxGroup`` carries
+a shadow-DOM stylesheet that lays out checkboxes in a responsive CSS grid
+(``auto-fill`` / ``minmax(140px, 1fr)``) so long parameter lists wrap inside
+the pane instead of overflowing horizontally.
 """
 import hashlib
-import json
 import re as _re
 
 import pandas as pd
@@ -22,6 +46,22 @@ _FIXED_DISPLAY_COLS = [
     "max_dd_pct", "win_rate", "avg_pnl", "omega", "consistency",
 ]
 
+_RANK_SCORE_COLS = ("rank", "score")
+
+# Width budget for grow zones (rank/score use fixed pixels; must sum to 100).
+_ZONE_RANK_PCT = 5          # documentation reference; rank/score are fixed-width
+_ZONE_PARAM_PCT = 47.5
+_ZONE_PERF_PCT = 47.5
+
+# Fixed pixel widths for the rank/score strip (checkbox col is separate).
+_RANK_COL_WIDTH = 40
+_SCORE_COL_WIDTH = 56
+
+# Performance column sizing — maxWidth stops money formatters from ballooning.
+_PERF_MIN_COL_WIDTH = 56
+_PERF_MAX_COL_WIDTH = 76
+_PARAM_MIN_COL_WIDTH = 48
+
 _COL_FORMATTERS = {
     "score":          {"type": "progress", "min": 0, "max": 1, "color": "#1a9641"},
     "total_pnl":      {"type": "money", "symbol": "$", "precision": 0},
@@ -34,17 +74,79 @@ _COL_FORMATTERS = {
     "consistency":    {"type": "number", "precision": 2},
 }
 
-# Colour tints injected into the Tabulator's shadow DOM.
-# :nth-child(n of .class) selects the nth element matching the class among
-# siblings — supported in Chrome 111+, Safari 9+, Firefox 113+.
-_GROUPS_CSS = """
-.tabulator-headers > div:nth-child(1 of .tabulator-col-group) {
-    background-color: #eff6ff !important;
-    border-bottom: 2px solid #93c5fd !important;
+# Keep the table inside the viewport; show a scrollbar only when min-widths
+# cannot all be satisfied at once.
+_TABLE_LAYOUT_CSS = """
+.tabulator {
+    width: 100% !important;
+    max-width: 100% !important;
 }
-.tabulator-headers > div:nth-child(2 of .tabulator-col-group) {
-    background-color: #f0fdf4 !important;
-    border-bottom: 2px solid #86efac !important;
+.tabulator-tableholder {
+    overflow-x: auto !important;
+}
+"""
+
+# Multi-line column headers (Tabulator defaults to single-line + ellipsis).
+# pre-line honours embedded newlines from _header_display_title; anywhere
+# breaks long tokens that have no underscore when space is very tight.
+_HEADER_WRAP_CSS = """
+.tabulator .tabulator-header {
+    min-height: 52px !important;
+}
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
+    white-space: pre-line !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+    font-size: 11px;
+}
+"""
+
+# Column chooser: Bokeh CheckBoxGroup renders in a shadow root with
+# flex-wrap:nowrap on .bk-input-group.bk-inline — parent Column CSS cannot
+# override it.  Pass this stylesheet on each CheckBoxGroup widget instead.
+_COL_CHOOSER_WRAP_CSS = """
+:host {
+    width: 100%;
+    max-width: 100%;
+    display: block;
+}
+.bk-input-group.bk-inline {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 4px 10px;
+    width: 100%;
+    white-space: normal !important;
+    align-items: start;
+}
+.bk-input-group.bk-inline > label {
+    margin-left: 0 !important;
+    display: inline-flex;
+    align-items: flex-start;
+    min-width: 0;
+}
+.bk-input-group.bk-inline > label > span {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+    font-size: 12px;
+}
+"""
+
+# Labels for the three chooser sections (plain DOM, not shadow-root).
+_COL_CHOOSER_SECTION_CSS = """
+.cryo-col-chooser-section {
+    margin-bottom: 6px;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+.cryo-col-chooser-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4b5563;
+    margin: 4px 4px 2px 4px;
 }
 """
 
@@ -52,6 +154,144 @@ _GROUPS_CSS = """
 def _param_hash(param_names: list) -> str:
     """Return a stable 12-char hex hash of the sorted param names."""
     return hashlib.sha256("|".join(sorted(param_names)).encode()).hexdigest()[:12]
+
+
+def _split_grid_columns(columns: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """Partition display column names into rank/score, params, and performance.
+
+    Args:
+        columns: Ordered list of DataFrame column names (may include ``_key_hash``).
+
+    Returns:
+        (rank_cols, param_cols, perf_cols) preserving relative order within each zone.
+    """
+    rank_cols: list[str] = []
+    param_cols: list[str] = []
+    perf_cols: list[str] = []
+    perf_set = {c for c in _FIXED_DISPLAY_COLS if c not in _RANK_SCORE_COLS}
+
+    for col in columns:
+        if col == "_key_hash":
+            continue
+        if col in _RANK_SCORE_COLS:
+            rank_cols.append(col)
+        elif col in perf_set:
+            perf_cols.append(col)
+        else:
+            param_cols.append(col)
+
+    return rank_cols, param_cols, perf_cols
+
+
+def _header_display_title(field: str) -> str:
+    """Return a multi-line column title, breaking snake_case at underscores.
+
+    ``entry_time`` becomes ``entry`` + newline + ``time`` (rendered via
+    ``pre-line`` CSS).  Short names without underscores are unchanged.
+    """
+    if "_" not in field:
+        return field
+    return field.replace("_", "\n")
+
+
+def _header_tooltips(columns: list[str]) -> dict[str, str]:
+    """Full field names for Tabulator header hover tooltips."""
+    return {col: col for col in columns if col != "_key_hash"}
+
+
+def _column_layout_config(
+    rank_cols: list[str],
+    param_cols: list[str],
+    perf_cols: list[str],
+) -> dict:
+    """Build Tabulator ``configuration`` overrides for the three-zone layout.
+
+    Uses flat column definitions (no Tabulator column groups) so Panel can
+    merge per-field ``width`` / ``widthGrow`` / ``frozen`` settings reliably.
+
+    Rank/score use fixed pixel widths.  Parameter and performance zones each
+    receive ``_ZONE_PARAM_PCT`` / ``_ZONE_PERF_PCT`` of the grow budget,
+    divided evenly across columns in that zone.
+
+    Returns:
+        Dict suitable for ``pn.widgets.Tabulator(..., configuration=cfg)``.
+    """
+    n_param = max(len(param_cols), 1)
+    n_perf = max(len(perf_cols), 1)
+
+    col_defs: list[dict] = []
+
+    for col in rank_cols:
+        width = _RANK_COL_WIDTH if col == "rank" else _SCORE_COL_WIDTH
+        col_defs.append({
+            "field": col,
+            "title": col,
+            "frozen": True,
+            "width": width,
+            "minWidth": width,
+            "widthGrow": 0,
+            "widthShrink": 0,
+        })
+
+    for col in param_cols:
+        col_defs.append({
+            "field": col,
+            "title": _header_display_title(col),
+            "widthGrow": _ZONE_PARAM_PCT / n_param,
+            "minWidth": _PARAM_MIN_COL_WIDTH,
+            "widthShrink": 4,
+        })
+
+    for col in perf_cols:
+        col_defs.append({
+            "field": col,
+            "title": _header_display_title(col),
+            "frozen": True,
+            "widthGrow": _ZONE_PERF_PCT / n_perf,
+            "minWidth": _PERF_MIN_COL_WIDTH,
+            "maxWidth": _PERF_MAX_COL_WIDTH,
+            "widthShrink": 1,
+        })
+
+    return {"columns": col_defs}
+
+
+def _frozen_columns_map(
+    rank_cols: list[str],
+    perf_cols: list[str],
+) -> dict[str, str]:
+    """Map column names to freeze side for Panel's ``frozen_columns`` param."""
+    frozen: dict[str, str] = {col: "left" for col in rank_cols}
+    frozen.update({col: "right" for col in perf_cols})
+    return frozen
+
+
+def _header_zone_css(param_cols: list[str], perf_cols: list[str]) -> str:
+    """Generate per-field header background tints for the three zones."""
+    rank_sel = ", ".join(
+        f'.tabulator-col[tabulator-field="{c}"]' for c in _RANK_SCORE_COLS
+    )
+    param_rules = "\n".join(
+        f'.tabulator-col[tabulator-field="{c}"] '
+        f'{{ background-color: #eff6ff !important; '
+        f'border-bottom: 2px solid #93c5fd !important; }}'
+        for c in param_cols
+    )
+    perf_rules = "\n".join(
+        f'.tabulator-col[tabulator-field="{c}"] '
+        f'{{ background-color: #f0fdf4 !important; '
+        f'border-bottom: 2px solid #86efac !important; }}'
+        for c in perf_cols
+    )
+    rank_rules = ""
+    if rank_sel:
+        rank_rules = f"""
+{rank_sel} {{
+    background-color: #f8fafc !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+}}
+"""
+    return rank_rules + param_rules + perf_rules
 
 
 def _grid_dataframe(result) -> tuple[pd.DataFrame, dict[str, tuple]]:
@@ -222,13 +462,40 @@ def _filter_dataframe(df: pd.DataFrame, filters: list[dict]) -> pd.DataFrame:
     return df[mask].copy()
 
 
+def _make_column_chooser() -> pn.widgets.CheckBoxGroup:
+    """Inline CheckBoxGroup with grid-wrapping labels (shadow-DOM stylesheet)."""
+    return pn.widgets.CheckBoxGroup(
+        name="",
+        options=[],
+        value=[],
+        inline=True,
+        sizing_mode="stretch_width",
+        margin=(0, 4),
+        stylesheets=[_COL_CHOOSER_WRAP_CSS],
+    )
+
+
+def _make_chooser_section(label: str, chooser: pn.widgets.CheckBoxGroup) -> pn.Column:
+    """Wrap a CheckBoxGroup with a zone label inside the column chooser panel."""
+    return pn.Column(
+        pn.pane.HTML(
+            f'<div class="cryo-col-chooser-label">{label}</div>',
+            margin=(0, 0),
+            sizing_mode="stretch_width",
+        ),
+        chooser,
+        css_classes=["cryo-col-chooser-section"],
+        sizing_mode="stretch_width",
+    )
+
+
 def build_grid_view(state, cache, store=None) -> pn.Column:
     """Build the Results Grid tab component.
 
     Returns a Panel Column that re-renders when state.active_run_id changes.
     """
     # Mutable container so the callback can close over it
-    _ctx: dict = {"tabulator": None, "hash_to_key": {}, "df_full": None}
+    _ctx: dict = {"tabulator": None, "hash_to_key": {}, "df_full": None, "ordered_cols": []}
 
     # --- selection indicator (plain text label) ---
     _sel_label = pn.pane.HTML("", styles={"font-size": "13px", "color": "#6b7280"}, margin=(8, 8))
@@ -262,21 +529,21 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         margin=(0, 4),
     )
 
-    # --- Column chooser (Phase 5) ---
-    # CheckBoxGroup: all columns always visible as checkboxes (checked = visible).
-    # MultiChoice was replaced because deselected items disappeared from its dropdown.
-    _col_chooser = pn.widgets.CheckBoxGroup(
-        name="",
-        options=[],
-        value=[],
-        inline=True,
-        sizing_mode="stretch_width",
-        margin=(2, 4),
-    )
+    # --- Column chooser: three zones matching the table layout ---
+    # CheckBoxGroup keeps deselected columns visible (unlike MultiChoice).
+    _col_chooser_rank = _make_column_chooser()
+    _col_chooser_params = _make_column_chooser()
+    _col_chooser_perf = _make_column_chooser()
+    _col_choosers = (_col_chooser_rank, _col_chooser_params, _col_chooser_perf)
+
     _col_chooser_panel = pn.Column(
-        _col_chooser,
+        _make_chooser_section("Rank & score", _col_chooser_rank),
+        _make_chooser_section("Parameters", _col_chooser_params),
+        _make_chooser_section("Performance", _col_chooser_perf),
         visible=False,
         sizing_mode="stretch_width",
+        css_classes=["cryo-col-chooser"],
+        stylesheets=[_COL_CHOOSER_SECTION_CSS],
     )
     _cols_toggle = pn.widgets.Toggle(
         name="⚙ Columns", value=False, button_type="light",
@@ -285,8 +552,28 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
     _cols_toggle.param.watch(
         lambda e: setattr(_col_chooser_panel, "visible", e.new), "value"
     )
-    # Track current watcher so it can be cleared on run change
-    _col_watcher: dict = {"watch": None}
+    # (chooser, watcher_id) pairs — cleared when the active run changes
+    _col_watchers: list[tuple[pn.widgets.CheckBoxGroup, object]] = []
+
+    def _merged_chooser_selection() -> list[str]:
+        return (
+            list(_col_chooser_rank.value)
+            + list(_col_chooser_params.value)
+            + list(_col_chooser_perf.value)
+        )
+
+    def _clear_col_choosers():
+        for chooser in _col_choosers:
+            chooser.options = []
+            chooser.value = []
+
+    def _set_col_choosers(rank_opts, param_opts, perf_opts, visible: list[str]):
+        _col_chooser_rank.options = rank_opts
+        _col_chooser_params.options = param_opts
+        _col_chooser_perf.options = perf_opts
+        _col_chooser_rank.value = [c for c in visible if c in rank_opts]
+        _col_chooser_params.value = [c for c in visible if c in param_opts]
+        _col_chooser_perf.value = [c for c in visible if c in perf_opts]
 
     # --- Smart filter expression input ---
     _filter_input = pn.widgets.TextInput(
@@ -356,8 +643,8 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
         if df.empty:
             _ctx["tabulator"] = None
-            _col_chooser.options = []
-            _col_chooser.value = []
+            _ctx["ordered_cols"] = []
+            _clear_col_choosers()
             return pn.pane.Markdown("_No combos to display._")
 
         # Param column names (not in fixed list, not hidden)
@@ -366,18 +653,10 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         ordered_cols = ["rank", "score"] + param_cols + [
             c for c in _FIXED_DISPLAY_COLS[2:] if c in df.columns
         ]
-        # Ensure all ordered cols actually exist
         ordered_cols = [c for c in ordered_cols if c in df.columns]
+        _ctx["ordered_cols"] = ordered_cols
 
-        # Column groups — params = blue tint, performance metrics = green tint.
-        # rank and score stay ungrouped (they synthesise both worlds).
-        _tab_param_cols = [c for c in param_cols if c in ordered_cols]
-        _tab_perf_cols  = [c for c in _FIXED_DISPLAY_COLS[2:] if c in ordered_cols]
-        _tab_groups = {}
-        if _tab_param_cols:
-            _tab_groups["Parameters"] = _tab_param_cols
-        if _tab_perf_cols:
-            _tab_groups["Performance"] = _tab_perf_cols
+        rank_cols, param_cols_zoned, perf_cols = _split_grid_columns(ordered_cols)
 
         # Load column preset from store (Phase 5)
         hidden_user: list[str] = []
@@ -392,17 +671,15 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
         visible_cols = [c for c in ordered_cols if c not in hidden_user]
 
-        # Clear previous column chooser watcher
-        if _col_watcher["watch"] is not None:
+        # Clear previous column chooser watchers
+        for chooser, watcher in _col_watchers:
             try:
-                _col_chooser.param.unwatch(_col_watcher["watch"])
+                chooser.param.unwatch(watcher)
             except Exception:
                 pass
-            _col_watcher["watch"] = None
+        _col_watchers.clear()
 
-        # Update chooser options + value (suppress watcher during update)
-        _col_chooser.options = ordered_cols
-        _col_chooser.value = visible_cols
+        _set_col_choosers(rank_cols, param_cols_zoned, perf_cols, visible_cols)
 
         # Panel Tabulator does not accept a `columns` arg — subset the
         # DataFrame directly to control which columns appear and in what order.
@@ -410,17 +687,24 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         _ctx["df_full"] = df_display  # kept for Python-side filter operations
 
         tab_hidden = ["_key_hash"] + hidden_user
+        layout_cfg = _column_layout_config(rank_cols, param_cols_zoned, perf_cols)
+        zone_css = _header_zone_css(param_cols_zoned, perf_cols)
+
         tab = pn.widgets.Tabulator(
             df_display,
             hidden_columns=tab_hidden,
-            groups=_tab_groups,
+            configuration=layout_cfg,
+            frozen_columns=_frozen_columns_map(rank_cols, perf_cols),
+            formatters=_COL_FORMATTERS,
+            header_tooltips=_header_tooltips(ordered_cols),
+            layout="fit_columns",
             pagination="remote",
             page_size=200,
             selectable="checkbox",
             header_filters=True,
             sizing_mode="stretch_width",
             show_index=False,
-            stylesheets=[_GROUPS_CSS],
+            stylesheets=[_TABLE_LAYOUT_CSS, _HEADER_WRAP_CSS, zone_css],
         )
         tab.editable = False
         tab.editors = {col: None for col in df_display.columns}
@@ -451,19 +735,21 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         # Re-apply current filter expression to the freshly built tabulator
         _apply_current_filter(tab)
 
-        # Wire column chooser to this tabulator (Phase 5)
+        # Wire column choosers to this tabulator (Phase 5)
         def _on_col_change(event):
-            selected = event.new
-            new_hidden = ["_key_hash"] + [c for c in ordered_cols if c not in selected]
+            selected = _merged_chooser_selection()
+            ordered = _ctx["ordered_cols"]
+            new_hidden = ["_key_hash"] + [c for c in ordered if c not in selected]
             tab.hidden_columns = new_hidden
             if store and strategy:
                 store.save_column_preset(
                     strategy, ph,
-                    [c for c in ordered_cols if c not in selected],
+                    [c for c in ordered if c not in selected],
                 )
 
-        watcher = _col_chooser.param.watch(_on_col_change, "value")
-        _col_watcher["watch"] = watcher
+        for chooser in _col_choosers:
+            watcher = chooser.param.watch(_on_col_change, "value")
+            _col_watchers.append((chooser, watcher))
 
         return tab
 
