@@ -1,0 +1,74 @@
+{
+  "strategy_name_live": "tudysho",
+  "implementation_target": "CryoTrader \u2014 fork CryoTrader/strategies/short_str_turb_dyn.py; one strategy module, slot-based param routing.",
+  "entry_time_semantics": "NYC wall-clock (America/New_York, DST-aware). See TIMEZONE.md.",
+  "system_time_semantics": "CryoTrader loop, logs, and Deribit timestamps run in UTC. entry_time is NOT UTC.",
+  "position_rules": {
+    "max_concurrent_positions": 1,
+    "per_slot_max_entries_per_nyc_day": 1,
+    "monday_two_trades": "Monday: slot_b (01:00 NYC, dte=0) expires Mon 08:00 UTC, then slot_a (16:00 NYC, dte=1) may open same NYC Monday \u2014 sequential, not overlapping. See POSITION_RULES.md."
+  },
+  "position_rules_doc": "POSITION_RULES.md",
+  "slots": {
+    "slot_a_mon_thu": {
+      "combo_hash": "5cd986cf48cd",
+      "param_file": "params/slot_a_mon_thu.json",
+      "label": "Mon\u2013Thu daytime (next-day expiry)",
+      "reserved": false,
+      "live_calendar": {
+        "weekdays": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "entry_time_nyc": "16:00",
+        "dte": 1,
+        "expiry_note": "Entry Mon\u2192Tue 08:00 UTC expiry; Tue\u2192Wed; \u2026 Thu\u2192Fri"
+      }
+    },
+    "slot_b_mon_early": {
+      "combo_hash": "e2f4ac2b3e69",
+      "param_file": "params/slot_b_mon_early.json",
+      "label": "Monday early hours (same-day expiry)",
+      "reserved": false,
+      "live_calendar": {
+        "weekdays": [
+          0
+        ],
+        "entry_time_nyc": "1:00",
+        "dte": 0,
+        "expiry_note": "Monday entry \u2192 Monday 08:00 UTC expiry (dte=0)"
+      }
+    },
+    "slot_c_fri_sat": {
+      "combo_hash": "829e7226cc48",
+      "param_file": "params/slot_c_fri_sat.json",
+      "label": "Friday daytime (Saturday morning expiry)",
+      "reserved": false,
+      "live_calendar": {
+        "weekdays": [
+          4
+        ],
+        "entry_time_nyc": "12:00",
+        "dte": 1,
+        "expiry_note": "Friday entry \u2192 Saturday 08:00 UTC expiry"
+      }
+    },
+    "slot_d_saturday": {
+      "combo_hash": null,
+      "param_file": "params/slot_d_saturday.json",
+      "label": "Saturday (reserved)",
+      "reserved": true
+    }
+  },
+  "ignore_grid_params": [
+    "trade_monday",
+    "trade_tuesday",
+    "trade_wednesday",
+    "trade_thursday",
+    "trade_friday",
+    "trade_saturday",
+    "trade_sunday"
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "run_id": 146,
+  "combo_hash": "8587b0c849b7",
+  "combo_idx": 445,
+  "ui_url": "http://localhost:5007/?tab=Combo+Detail&run=146&combo=8587b0c849b7",
+  "bundle_path": "/Users/ulrikdeichsel/CryoBacktester/backtester/reports/tudysho_20260702_095428.bundle",
+  "backtest_html": "/Users/ulrikdeichsel/CryoBacktester/backtester/reports/tudysho_20260702_095428.html",
+  "strategy": "tudysho",
+  "created_at": "2026-07-02T09:54:28Z",
+  "git_sha": "dba9a54619e4",
+  "git_dirty": true,
+  "runtime_s": 665.0477538108826,
+  "n_combos_in_run": 1024,
+  "param_grid": {
+    "delta": [
+      0.1,
+      0.075
+    ],
+    "dte": [
+      1
+    ],
+    "entry_time": [
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00"
+    ],
+    "equity_drawdown_stop_pct": [
+      0
+    ],
+    "equity_sl_except_final_hours": [
+      0
+    ],
+    "equity_sl_only_final_hours": [
+      0
+    ],
+    "leg_min_price": [
+      0
+    ],
+    "leg_type": [
+      "strangle"
+    ],
+    "max_qty_per_1btc_equity": [
+      12
+    ],
+    "min_otm_pct": [
+      2.6,
+      2.8
+    ],
+    "nav_premium_pct": [
+      0.8
+    ],
+    "premium_sl_except_final_hours": [
+      0
+    ],
+    "proximity_buffer_usd": [
+      0,
+      250,
+      500,
+      1000
+    ],
+    "proximity_stop_hours": [
+      0,
+      2,
+      4,
+      8
+    ],
+    "stop_loss_pct": [
+      0.0
+    ],
+    "trade_friday": [
+      0,
+      1
+    ],
+    "trade_saturday": [
+      0
+    ],
+    "trade_sunday": [
+      0
+    ],
+    "turbulence_threshold": [
+      50,
+      60
+    ]
+  },
+  "date_range": [
+    "2025-06-26",
+    "2026-06-27"
+  ],
+  "account_size_usd": 100000.0
+}

@@ -1,0 +1,25 @@
+{
+  "combo_hash": "829e7226cc48",
+  "delta": 0.1,
+  "dte": 1,
+  "entry_time": "12:00",
+  "entry_time_nyc": "12:00",
+  "equity_drawdown_stop_pct": 0,
+  "equity_sl_except_final_hours": 0,
+  "equity_sl_only_final_hours": 0,
+  "expiry_note": "Friday entry \u2192 Saturday 08:00 UTC expiry",
+  "leg_min_price": 0,
+  "leg_type": "strangle",
+  "max_qty_per_1btc_equity": 12,
+  "min_otm_pct": 2.4,
+  "nav_premium_pct": 0.8,
+  "premium_sl_except_final_hours": 4,
+  "proximity_buffer_usd": 0,
+  "proximity_stop_hours": 4,
+  "slot_id": "slot_c_fri_sat",
+  "stop_loss_pct": 4.0,
+  "turbulence_threshold": 99,
+  "weekdays": [
+    4
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "slot_id": "slot_b_mon_early",
+  "label": "Monday early hours (same-day expiry)",
+  "combo_hash": "e2f4ac2b3e69",
+  "combo_idx": 38,
+  "ui_run_id": 306,
+  "run_bundle": "backtester/reports/tudysho_20260706_140834.bundle",
+  "date_range": [
+    "2025-06-27",
+    "2026-06-27"
+  ],
+  "capital_usd": 100000.0,
+  "params_full_grid": {
+    "delta": 0.1,
+    "dte": 0,
+    "entry_time": "1:00",
+    "equity_drawdown_stop_pct": 0,
+    "equity_sl_except_final_hours": 0,
+    "equity_sl_only_final_hours": 0,
+    "leg_min_price": 0,
+    "leg_type": "strangle",
+    "max_qty_per_1btc_equity": 12,
+    "min_otm_pct": 1.0,
+    "nav_premium_pct": 0.8,
+    "premium_sl_except_final_hours": 4,
+    "proximity_buffer_usd": 500,
+    "proximity_stop_hours": 4,
+    "stop_loss_pct": 4.0,
+    "trade_friday": 0,
+    "trade_monday": 1,
+    "trade_saturday": 0,
+    "trade_sunday": 0,
+    "trade_thursday": 0,
+    "trade_tuesday": 0,
+    "trade_wednesday": 0,
+    "turbulence_threshold": 99
+  },
+  "params_for_live": {
+    "delta": 0.1,
+    "dte": 0,
+    "entry_time": "1:00",
+    "equity_drawdown_stop_pct": 0,
+    "equity_sl_except_final_hours": 0,
+    "equity_sl_only_final_hours": 0,
+    "leg_min_price": 0,
+    "leg_type": "strangle",
+    "max_qty_per_1btc_equity": 12,
+    "min_otm_pct": 1.0,
+    "nav_premium_pct": 0.8,
+    "premium_sl_except_final_hours": 4,
+    "proximity_buffer_usd": 500,
+    "proximity_stop_hours": 4,
+    "stop_loss_pct": 4.0,
+    "turbulence_threshold": 99,
+    "slot_id": "slot_b_mon_early",
+    "combo_hash": "e2f4ac2b3e69",
+    "weekdays": [
+      0
+    ],
+    "entry_time_nyc": "1:00",
+    "expiry_note": "Monday entry \u2192 Monday 08:00 UTC expiry (dte=0)"
+  },
+  "n_trades": 30,
+  "total_pnl_usd": 13600.021484375,
+  "total_return_pct": 13.6000234375,
+  "sharpe": 5.219640776951999,
+  "max_dd_pct": 3.129313733286946,
+  "win_rate_pct": 100.0,
+  "profit_factor": 99.9,
+  "exit_reasons": {
+    "expiry": 30,
+    "end_of_data": 0,
+    "strike_proximity_stop": 0
+  },
+  "trades_by_entry_weekday": {
+    "Monday": 30
+  },
+  "backtest_caveat": "Monday-only grid (trade_monday=1), entry 01:00 NYC, dte=0. Does not include Sunday-night entries; see TIMEZONE.md."
+}

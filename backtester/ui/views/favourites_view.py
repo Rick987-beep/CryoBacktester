@@ -11,6 +11,7 @@ Shows a Tabulator of starred combos. Row actions (on selected row):
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import pandas as pd
 import panel as pn
@@ -21,20 +22,103 @@ from backtester.ui.services.store_service import key_from_json
 log = get_ui_logger(__name__)
 
 _DISPLAY_COLS = [
-    "name", "strategy", "params_str", "score", "total_pnl", "sharpe",
-    "note", "added_at",
+    "combo_id", "added_at", "score", "total_pnl", "sharpe", "strategy", "note",
 ]
 
+_SORT_COL = "added_at_sort"
+
 _COL_TITLES = {
-    "name":       "Name",
-    "strategy":   "Strategy",
-    "params_str": "Params",
+    "combo_id":   "ID",
+    "added_at":   "Added",
     "score":      "Score",
     "total_pnl":  "Total PnL",
     "sharpe":     "Sharpe",
+    "strategy":   "Strategy",
     "note":       "Note",
-    "added_at":   "Added",
 }
+
+_ID_COL_WIDTH = 106          # +10% vs original 96
+_ADDED_COL_WIDTH = 138       # dd-mm-yyyy hh:mm
+_SCORE_COL_WIDTH = 70        # +25% vs 56
+_TOTAL_PNL_COL_WIDTH = 90    # +25% vs 72
+_TOTAL_PNL_MAX_WIDTH = 110   # +25% vs 88
+_SHARPE_COL_WIDTH = 80       # +25% vs 64
+_SHARPE_MAX_WIDTH = 95       # +25% vs 76
+_PARAMS_TEXTAREA_ROWS = 25
+
+_PARAMS_TEXTAREA_CSS = """
+:host textarea.bk-input {
+    overflow-y: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    cursor: text;
+}
+"""
+
+_TABLE_LAYOUT_CSS = """
+.tabulator {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+.tabulator-tableholder {
+    overflow-x: auto !important;
+}
+"""
+
+
+def _format_added_at(iso: str) -> str:
+    """Format stored UTC ISO timestamp as ``dd-mm-yyyy hh:mm``."""
+    if not iso:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.strftime("%d-%m-%Y %H:%M")
+    except Exception:
+        return iso[:16].replace("T", " ")
+
+
+def _params_lines_from_fav(fav) -> str:
+    """Format favourite params as one ``k=v`` line per parameter."""
+    if fav is None:
+        return ""
+    try:
+        key = key_from_json(fav.combo_key_json)
+        return "\n".join(f"{k}={v}" for k, v in key)
+    except Exception:
+        raw = (fav.params_str or "").strip()
+        if not raw:
+            return ""
+        return "\n".join(part.strip() for part in raw.split("  ") if part.strip())
+
+
+def _favourites_column_config() -> dict:
+    """Tabulator column sizing — metrics fixed, Strategy/Note grow to fill pane."""
+    no_sort = {"headerSort": False}
+    return {
+        "initialSort": [{"column": _SORT_COL, "dir": "desc"}],
+        "columns": [
+            {"field": "ID", "width": _ID_COL_WIDTH, "widthGrow": 0, "widthShrink": 0, **no_sort},
+            {"field": "Added", "width": _ADDED_COL_WIDTH, "widthGrow": 0, "widthShrink": 0, **no_sort},
+            {"field": "Score", "width": _SCORE_COL_WIDTH, "widthGrow": 0, "maxWidth": _SCORE_COL_WIDTH, **no_sort},
+            {"field": "Total PnL", "width": _TOTAL_PNL_COL_WIDTH, "widthGrow": 0,
+             "maxWidth": _TOTAL_PNL_MAX_WIDTH, **no_sort},
+            {"field": "Sharpe", "width": _SHARPE_COL_WIDTH, "widthGrow": 0,
+             "maxWidth": _SHARPE_MAX_WIDTH, **no_sort},
+            {"field": "Strategy", "minWidth": 80, "widthGrow": 1, **no_sort},
+            {"field": "Note", "minWidth": 80, "widthGrow": 2, **no_sort},
+            {"field": _SORT_COL, "visible": False, "sorter": "string"},
+        ],
+    }
+
+
+def _fav_by_combo_id(favs: list, combo_id: str):
+    """Look up a favourite by combo_hash (stable across table re-sorts)."""
+    for fav in favs:
+        if fav.combo_hash == combo_id:
+            return fav
+    return None
 
 
 def build_favourites_view(state, store, cache) -> pn.Column:
@@ -48,6 +132,26 @@ def build_favourites_view(state, store, cache) -> pn.Column:
 
     tab_holder = pn.Column(sizing_mode="stretch_width")
     selected_fav: dict = {"row": None, "fav": None}  # mutable ref
+
+    params_input = pn.widgets.TextAreaInput(
+        name="Parameters",
+        value="",
+        rows=_PARAMS_TEXTAREA_ROWS,
+        sizing_mode="stretch_width",
+        margin=(4, 4),
+        stylesheets=[_PARAMS_TEXTAREA_CSS],
+    )
+    _params_snapshot: dict = {"text": ""}
+
+    def _set_params_text(text: str) -> None:
+        _params_snapshot["text"] = text
+        params_input.value = text
+
+    def _revert_params_edit(event) -> None:
+        if event.new != _params_snapshot["text"]:
+            params_input.value = _params_snapshot["text"]
+
+    params_input.param.watch(_revert_params_edit, "value")
 
     # ── Action buttons ──────────────────────────────────────────────────────
     open_btn = pn.widgets.Button(
@@ -90,18 +194,19 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         favs = store.list_favourites()
         _fav_rows["data"] = favs
         if not favs:
-            return pd.DataFrame(columns=_DISPLAY_COLS + ["_fav_id"])
+            return pd.DataFrame(columns=_DISPLAY_COLS + [_SORT_COL, "_fav_id"])
         rows = []
         for fav in favs:
+            raw_added = fav.added_at or ""
             rows.append({
-                "name":       fav.name or "",
-                "strategy":   fav.strategy or "",
-                "params_str": fav.params_str or "",
+                "combo_id":   fav.combo_hash or "",
+                "added_at":   _format_added_at(raw_added),
                 "score":      round(fav.score, 4) if fav.score is not None else None,
                 "total_pnl":  round(fav.total_pnl, 2) if fav.total_pnl is not None else None,
                 "sharpe":     round(fav.sharpe, 3) if fav.sharpe is not None else None,
+                "strategy":   fav.strategy or "",
                 "note":       fav.note or "",
-                "added_at":   (fav.added_at or "")[:16].replace("T", " "),
+                _SORT_COL:    raw_added,
                 "_fav_id":    fav.id,
             })
         return pd.DataFrame(rows)
@@ -113,14 +218,16 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         _set_action_buttons_enabled(False)
         action_feedback.object = ""
         note_input.value = ""
+        _set_params_text("")
         save_note_btn.disabled = True
 
         if df.empty or len(df) == 0:
             tab_holder[:] = [empty_msg]
             return
 
-        display_df = df[_DISPLAY_COLS].copy()
-        display_df.columns = [_COL_TITLES.get(c, c) for c in _DISPLAY_COLS]
+        tab_cols = _DISPLAY_COLS + [_SORT_COL]
+        display_df = df[tab_cols].copy()
+        display_df.columns = [_COL_TITLES.get(c, c) for c in tab_cols]
 
         tab = pn.widgets.Tabulator(
             display_df,
@@ -128,6 +235,10 @@ def build_favourites_view(state, store, cache) -> pn.Column:
             show_index=False,
             sizing_mode="stretch_width",
             height=400,
+            layout="fit_columns",
+            hidden_columns=[_SORT_COL],
+            configuration=_favourites_column_config(),
+            stylesheets=[_TABLE_LAYOUT_CSS],
             formatters={
                 "Score": {"type": "progress", "min": 0, "max": 1, "color": "#1a9641"},
                 "Total PnL": {"type": "money", "symbol": "$", "precision": 0},
@@ -136,8 +247,6 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         )
         tab.editable = False
         tab.editors = {col: None for col in display_df.columns}
-        # Store mapping: display row index → FavRow
-        _row_idx_map = {i: fav for i, fav in enumerate(_fav_rows["data"])}
 
         def _on_tab_selection(event):
             idxs = event.new
@@ -146,14 +255,19 @@ def build_favourites_view(state, store, cache) -> pn.Column:
                 selected_fav["fav"] = None
                 _set_action_buttons_enabled(False)
                 note_input.value = ""
+                _set_params_text("")
                 save_note_btn.disabled = True
                 return
             idx = idxs[0]
-            fav = _row_idx_map.get(idx)
+            combo_id = ""
+            if idx < len(tab.value):
+                combo_id = str(tab.value.iloc[idx].get("ID", ""))
+            fav = _fav_by_combo_id(_fav_rows["data"], combo_id)
             selected_fav["row"] = idx
             selected_fav["fav"] = fav
             _set_action_buttons_enabled(True)
             note_input.value = fav.note if fav else ""
+            _set_params_text(_params_lines_from_fav(fav))
             save_note_btn.disabled = False
 
         tab.param.watch(_on_tab_selection, "selection")
@@ -264,5 +378,6 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         note_row,
         action_feedback,
         tab_holder,
+        params_input,
         sizing_mode="stretch_width",
     )

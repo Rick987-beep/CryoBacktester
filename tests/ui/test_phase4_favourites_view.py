@@ -69,3 +69,94 @@ def test_favourites_view_shows_rows_after_star(store_with_run):
     )
     favs = store.list_favourites()
     assert any(f.name == "visible row" for f in favs)
+
+
+def test_favourites_display_columns_order():
+    """Table columns: ID, Added, metrics, strategy, note."""
+    from backtester.ui.views.favourites_view import _COL_TITLES, _DISPLAY_COLS
+
+    titles = [_COL_TITLES[c] for c in _DISPLAY_COLS]
+    assert titles == ["ID", "Added", "Score", "Total PnL", "Sharpe", "Strategy", "Note"]
+    assert "params_str" not in _DISPLAY_COLS
+    assert "name" not in _DISPLAY_COLS
+
+
+def test_format_added_at():
+    from backtester.ui.views.favourites_view import _format_added_at
+
+    assert _format_added_at("2026-07-07T10:48:03Z") == "07-07-2026 10:48"
+    assert _format_added_at("") == ""
+
+
+def test_favourites_column_widths_increased():
+    """Metric, ID, and Added columns are wide enough for their content."""
+    from backtester.ui.views.favourites_view import (
+        _ADDED_COL_WIDTH,
+        _ID_COL_WIDTH,
+        _SCORE_COL_WIDTH,
+        _SHARPE_COL_WIDTH,
+        _TOTAL_PNL_COL_WIDTH,
+    )
+
+    assert _ID_COL_WIDTH >= 105
+    assert _ADDED_COL_WIDTH >= 130
+    assert _SCORE_COL_WIDTH >= 70
+    assert _TOTAL_PNL_COL_WIDTH >= 90
+    assert _SHARPE_COL_WIDTH >= 80
+
+
+def test_favourites_initial_sort_newest_first():
+    """Tabulator config sorts by hidden ISO added_at column descending."""
+    from backtester.ui.views.favourites_view import (
+        _SORT_COL,
+        _favourites_column_config,
+    )
+
+    cfg = _favourites_column_config()
+    assert cfg["initialSort"] == [{"column": _SORT_COL, "dir": "desc"}]
+    sort_col = next(c for c in cfg["columns"] if c["field"] == _SORT_COL)
+    assert sort_col["visible"] is False
+
+
+def test_params_lines_from_fav_one_per_line(store_with_run):
+    """Params panel formats combo_key_json as one k=v line per parameter."""
+    from backtester.ui.views.favourites_view import _params_lines_from_fav
+
+    store, run_id, result = store_with_run
+    key = result.keys[0]
+    store.add_favourite(run_id=run_id, combo_key=key, name="params test")
+    fav = store.list_favourites()[0]
+
+    lines = _params_lines_from_fav(fav).splitlines()
+    assert len(lines) == len(key)
+    assert all("=" in line for line in lines)
+    for (k, v), line in zip(key, lines, strict=True):
+        assert line == f"{k}={v}"
+
+
+def test_favourites_view_has_params_textarea(store_with_run):
+    """View includes a read-only Parameters text area with room for 15+ lines."""
+    import panel as pn
+
+    pn.extension("tabulator", "plotly")
+    from backtester.ui.state import AppState
+    from backtester.ui.services.cache_service import ResultCache
+    from backtester.ui.views.favourites_view import (
+        _PARAMS_TEXTAREA_ROWS,
+        build_favourites_view,
+    )
+
+    store, run_id, result = store_with_run
+    cache = ResultCache(store, max_unpinned=5)
+    state = AppState()
+    view = build_favourites_view(state, store, cache)
+
+    textareas = [
+        obj for obj in view.objects
+        if isinstance(obj, pn.widgets.TextAreaInput)
+    ]
+    assert len(textareas) == 1
+    assert textareas[0].name == "Parameters"
+    assert textareas[0].disabled is False
+    assert textareas[0].rows >= _PARAMS_TEXTAREA_ROWS
+    assert any("overflow-y" in s for s in textareas[0].stylesheets)
