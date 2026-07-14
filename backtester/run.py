@@ -28,6 +28,7 @@ from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
 from backtester.strategies.tudysho import TuDySho
 from backtester.strategies.tudysho_v1 import TuDyShoV1
 from backtester.strategies.tudysho_v2 import TuDyShoV2
+from backtester.strategies.cadysho import Cadysho
 from backtester.strategies.blueprint_howto import BlueprintHowto
 from backtester.strategies.long_gamma_move import LongGammaMove
 from backtester.strategies.pagoda import Pagoda
@@ -48,6 +49,7 @@ STRATEGIES = {
     "tudysho":             TuDySho,
     "tudysho_v1":          TuDyShoV1,
     "tudysho_v2":          TuDyShoV2,
+    "cadysho":             Cadysho,
     "blueprint_howto":     BlueprintHowto,
     "long_gamma_move":     LongGammaMove,
     "pagoda":              Pagoda,

@@ -25,6 +25,7 @@ _CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.
 class DataConfig:
     options_parquet: str
     spot_parquet: str
+    macro_calendar_dir: str
     tardis_data_dir: str
     snapshots_dir: str
     reports_dir: str
@@ -128,6 +129,7 @@ def load_config(path=_CONFIG_PATH):
         data=DataConfig(
             options_parquet=_abs(d["options_parquet"]),
             spot_parquet=_abs(d["spot_parquet"]),
+            macro_calendar_dir=_abs(d.get("macro_calendar_dir", "data/macro/economic_events/us_scheduled")),
             tardis_data_dir=_abs(d["tardis_data_dir"]),
             snapshots_dir=_abs(d["snapshots_dir"]),
             reports_dir=_abs(d["reports_dir"]),

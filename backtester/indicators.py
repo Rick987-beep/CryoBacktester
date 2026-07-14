@@ -416,6 +416,35 @@ def _build_vol_burst_pullback(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return out
 
 
+def _build_calm_nights(
+    df_raw: pd.DataFrame,
+    *,
+    start: datetime,
+    end: datetime,
+    **params: Any,
+) -> pd.DataFrame:
+    """Daily slot-A calm-nights table indexed by entry_date (YYYY-MM-DD)."""
+    from pathlib import Path
+
+    from backtester.calm_nights.daily_features import build_daily_table
+    from backtester.config import cfg
+
+    options_dir = Path(params.get("options_dir", cfg.data.options_parquet))
+    return build_daily_table(
+        df_raw,
+        start.date(),
+        end.date(),
+        options_dir=options_dir,
+        predictor_variant=str(params.get("predictor_window", "london_us")),
+        decision_time_nyc=str(params.get("decision_time", "12:00")),
+        rolling_days=int(params.get("rolling_days", 60)),
+        quiet_tertile=float(params.get("quiet_tertile", 0.33)),
+        exclude_weekends=bool(params.get("exclude_weekends", True)),
+        macro_tier_filter=int(params.get("macro_tier_filter", 1)),
+        macro_calendar_dir=params.get("macro_calendar_dir", cfg.data.macro_calendar_dir),
+    )
+
+
 # Registry: indicator name → builder function
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
@@ -424,6 +453,7 @@ _BUILDERS: Dict[str, Callable[..., Any]] = {
     "spot_mom_4h": _build_spot_momentum,
     "spot_mom_1h": _build_spot_momentum,
     "vol_burst_pullback": _build_vol_burst_pullback,
+    "calm_nights": _build_calm_nights,
 }
 
 
@@ -481,7 +511,10 @@ def build_indicators(
             "build_indicators: computing '%s' from %d raw bars",
             dep.name, len(df_raw),
         )
-        result[dep.name] = builder(df_raw, **dep.params)
+        if dep.name == "calm_nights":
+            result[dep.name] = builder(df_raw, start=start, end=end, **dep.params)
+        else:
+            result[dep.name] = builder(df_raw, **dep.params)
         logger.info(
             "build_indicators: '%s' ready — %d output bars",
             dep.name, len(result[dep.name]),

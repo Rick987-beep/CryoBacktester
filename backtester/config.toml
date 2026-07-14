@@ -14,6 +14,7 @@
 # Old 2-week snapshots are kept as test_options_*.parquet / test_spot_*.parquet and ignored.
 options_parquet     = "data"
 spot_parquet        = "data"
+macro_calendar_dir  = "data/macro/economic_events/us_scheduled"
 
 # Raw tick data input and snapshot output directories (used by snapshot_builder).
 tardis_data_dir     = "ingest/tardis/data"
