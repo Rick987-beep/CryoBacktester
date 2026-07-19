@@ -7,7 +7,7 @@ import panel as pn
 
 def test_stats_card_contains_key_metrics(tiny_grid_result):
     """Stats card HTML for the best combo contains Sharpe, Total PnL, Max DD."""
-    from backtester.ui.views.detail_view import _stats_card_html
+    from backtester.ui.views.detail_view import _stats_card_html, _N_METRIC_ROWS
     result = tiny_grid_result
     key = result.best_key
     stats = result.all_stats[key]
@@ -18,7 +18,10 @@ def test_stats_card_contains_key_metrics(tiny_grid_result):
     assert "Sharpe" in html
     assert "Total PnL" in html
     assert "Max DD" in html
-    assert "Rank #1" in html
+    assert "Parameters" in html
+    assert "Performance Metrics" in html
+    assert "Params" not in html.replace("Parameters", "")
+    assert html.count("<tr>") == _N_METRIC_ROWS + 1  # header + 13 body rows
 
 
 def test_trades_table_filtered_to_combo(tiny_grid_result):

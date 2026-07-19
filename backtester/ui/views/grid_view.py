@@ -683,7 +683,7 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     # --- placeholder while no run loaded ---
     _placeholder = pn.pane.Markdown(
-        "_No run loaded — select a run from the sidebar._",
+        "_No run loaded — select a run from the Runs page._",
         sizing_mode="stretch_width",
     )
 

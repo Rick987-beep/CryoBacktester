@@ -45,8 +45,8 @@ def test_empty_hidden_list(sqlite_store):
 
 
 def test_user_pref_set_get(sqlite_store):
-    sqlite_store.set_pref("dark_mode", "1")
-    assert sqlite_store.get_pref("dark_mode") == "1"
+    sqlite_store.set_pref("grid_density", "compact")
+    assert sqlite_store.get_pref("grid_density") == "compact"
 
 
 def test_user_pref_default(sqlite_store):
@@ -54,6 +54,6 @@ def test_user_pref_default(sqlite_store):
 
 
 def test_user_pref_upsert(sqlite_store):
-    sqlite_store.set_pref("theme", "dark")
-    sqlite_store.set_pref("theme", "light")
-    assert sqlite_store.get_pref("theme") == "light"
+    sqlite_store.set_pref("ui_locale", "en")
+    sqlite_store.set_pref("ui_locale", "de")
+    assert sqlite_store.get_pref("ui_locale") == "de"

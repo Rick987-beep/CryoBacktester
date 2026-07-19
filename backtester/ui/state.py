@@ -19,22 +19,22 @@ class AppState(param.Parameterized):
                                      doc="List of param-tuple keys currently selected in the grid")
 
     active_tab = param.String(default="Results Grid",
-                              doc="Name of the currently visible main-pane tab")
+                              doc="Name of the currently visible main page")
 
-    # Phase 2: the combo key the user is inspecting in Combo Detail
+    # The combo key the user is inspecting in Combo Detail
     active_combo_key = param.Parameter(default=None, allow_None=True,
-                                       doc="Param-tuple key of the combo shown in the Detail tab")
+                                       doc="Param-tuple key of the combo shown in the Detail page")
 
     # URL-serialisable hash of active_combo_key (12-char hex); kept in sync automatically.
     active_combo_hash = param.String(default="",
                                      doc="key_hash of active_combo_key — synced to URL ?combo=")
 
-    # Phase 3: active run handle (None when no run in progress)
+    # Active run handle (None when no run in progress)
     active_run_handle = param.Parameter(default=None, allow_None=True,
                                         doc="RunHandle while a backtest is running; None otherwise")
 
-    # Phase 4: signal from Favourites "Re-run" button
-    # When set to {"strategy": str, "param_grid": dict}, the sidebar picks it up
+    # Signal from Favourites "Re-run" button
+    # When set to {"strategy": str, "param_grid": dict}, New Run picks it up
     # and prefills its controls, then resets this to None.
     rerun_request = param.Parameter(default=None, allow_None=True,
-                                    doc="Dict {strategy, param_grid} to prefill the sidebar")
+                                    doc="Dict {strategy, param_grid} to prefill New Run")

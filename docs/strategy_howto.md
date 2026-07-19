@@ -665,6 +665,9 @@ PARAM_GRID = {
   `take_profit_pct` (fraction, 0 = disabled), `max_hold_hours` (int, 0 = disabled),
   `skip_weekends` (int 0/1), `dte` (int), `delta` (float 0–1).
 - Keep combos manageable for a discovery run (< ~500 combos is comfortable).
+- Optional `PARAM_HELP = {"param_name": "short description", ...}` — shown in the
+  Research UI New Run help column. Omit entirely or leave keys out; missing help
+  displays as "—".
 
 ---
 

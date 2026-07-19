@@ -57,12 +57,14 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     from backtester.ui.services.cache_service import ResultCache
     from backtester.ui.services.run_service import RunService
     from backtester.ui.state import AppState
-    from backtester.ui.views.sidebar import build_sidebar
+    from backtester.ui.views.chrome import (
+        NAV_PAGES, build_detail_bar, build_nav, normalize_tab_name,
+    )
+    from backtester.ui.views.runs_view import build_runs_view
+    from backtester.ui.views.new_run_view import build_new_run_view
     from backtester.ui.views.grid_view import build_grid_view
     from backtester.ui.views.detail_view import build_detail_view
-    from backtester.ui.views.overlay_view import build_overlay_view
     from backtester.ui.views.favourites_view import build_favourites_view
-    from backtester.ui.views.compare_view import build_compare_view
 
     pn.extension("tabulator", "plotly", sizing_mode="stretch_width")
 
@@ -73,71 +75,61 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     cache = ResultCache(store, max_unpinned=5)
     run_service = RunService(store, cache)
     state = AppState()
+    state.active_tab = normalize_tab_name(state.active_tab)
 
-    # ── Dark mode preference (Phase 5) ────────────────────────────────────────
-    dark_mode = store.get_pref("dark_mode", "0") == "1"
-    theme = "dark" if dark_mode else "default"
+    try:
+        store.scan_bundles()
+    except Exception as exc:
+        log.warning("scan_bundles at startup failed: %s", exc)
 
-    template = pn.template.FastListTemplate(
-        title="CryoBacktester Research",
-        header_background="#1a1a2e",
-        sidebar_width=300,
-        theme=theme,
+    # No-sidebar light shell — brand + nav live in the blue header
+    template = pn.template.VanillaTemplate(
+        title="CryoBacktester",
+        theme="default",
     )
 
-    # Dark mode toggle at top of sidebar (Phase 5)
-    _dark_btn = pn.widgets.Button(
-        name="☀ Light mode" if dark_mode else "🌙 Dark mode",
-        button_type="default",
-        sizing_mode="stretch_width",
-        margin=(4, 4),
-    )
-    _dark_msg = pn.pane.HTML(
-        "", sizing_mode="stretch_width",
-        styles={"font-size": "11px", "color": "#6b7280"},
-    )
+    nav = build_nav(state)
+    template.header.append(nav)
 
-    def _on_dark_click(event):
-        current = store.get_pref("dark_mode", "0")
-        new_val = "0" if current == "1" else "1"
-        store.set_pref("dark_mode", new_val)
-        _dark_btn.name = "☀ Light mode" if new_val == "1" else "🌙 Dark mode"
-        _dark_msg.object = (
-            "Saved. <a href='javascript:window.location.reload()' "
-            "style='color:#2563eb;text-decoration:underline'>Reload to apply</a>"
-        )
+    detail_bar = build_detail_bar(state, store, run_service=run_service, cache=cache)
 
-    _dark_btn.on_click(_on_dark_click)
-
-    template.sidebar.append(pn.Column(
-        _dark_btn, _dark_msg,
-        pn.pane.HTML("<hr style='margin:4px 0;border-color:#ccc'>"),
-        sizing_mode="stretch_width",
-    ))
-
-    # --- Sidebar ---
-    sidebar = build_sidebar(state, store, cache, run_service=run_service)
-    template.sidebar.append(sidebar)
-
-    # --- Main tabs ---
-    grid_view       = build_grid_view(state, cache, store=store)
-    detail_view     = build_detail_view(state, cache, store=store)
-    overlay_view    = build_overlay_view(state, cache)
+    new_run_view = build_new_run_view(state, store, cache, run_service)
+    runs_view = build_runs_view(state, store, cache)
+    grid_view = build_grid_view(state, cache, store=store)
+    detail_view = build_detail_view(state, cache, store=store)
     favourites_view = build_favourites_view(state, store, cache)
-    compare_view    = build_compare_view(state, store, cache)
 
-    _TAB_NAMES = ["Results Grid", "Combo Detail", "Equity Overlay", "Favourites", "Compare"]
+    pages = {
+        "New Run": new_run_view,
+        "Runs": runs_view,
+        "Results Grid": grid_view,
+        "Combo Detail": detail_view,
+        "Favourites": favourites_view,
+    }
 
-    tabs = pn.Tabs(
-        ("Results Grid",   grid_view),
-        ("Combo Detail",   detail_view),
-        ("Equity Overlay", overlay_view),
-        ("Favourites",     favourites_view),
-        ("Compare",        compare_view),
-        dynamic=True,
+    # Single visible page; swap contents when active_tab changes
+    page_holder = pn.Column(pages[state.active_tab], sizing_mode="stretch_width")
+
+    def _show_page(event=None):
+        name = normalize_tab_name(state.active_tab)
+        if name != state.active_tab:
+            state.active_tab = name
+            return
+        page_holder[:] = [pages[name]]
+
+    state.param.watch(_show_page, "active_tab")
+
+    main = pn.Column(
+        detail_bar,
+        page_holder,
         sizing_mode="stretch_width",
     )
-    template.main.append(tabs)
+    template.main.append(main)
+
+    # Expose for tests (not used by Panel itself)
+    template._cryo_nav_pages = list(NAV_PAGES)
+    template._cryo_state = state
+    template._cryo_store = store
 
     # Keep active_combo_hash in sync with active_combo_key (URL-safe string)
     def _sync_combo_hash(event):
@@ -146,34 +138,20 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
 
     state.param.watch(_sync_combo_hash, "active_combo_key")
 
-    # --- URL state sync (§7.7) ---
-    # Sync active_tab ↔ tabs.active index
-    def _tabs_to_state(event):
-        idx = event.new
-        if 0 <= idx < len(_TAB_NAMES):
-            state.active_tab = _TAB_NAMES[idx]
-
-    tabs.param.watch(_tabs_to_state, "active")
-
-    def _state_tab_to_tabs(event):
-        name = event.new
-        if name in _TAB_NAMES:
-            tabs.active = _TAB_NAMES.index(name)
-
-    state.param.watch(_state_tab_to_tabs, "active_tab")
-
-    # Wire pn.state.location when the server is ready (best-effort)
+    # --- URL state sync ---
     def _wire_location():
         try:
             loc = pn.state.location
             if loc is None:
                 return
-            # Two-way bind: URL ?run=<int> ↔ state.active_run_id
-            #               URL ?tab=<str> ↔ state.active_tab
-            #               URL ?combo=<hash_str> ↔ state.active_combo_hash (read-only useful)
-            loc.sync(state, {"active_run_id": "run",
-                             "active_tab": "tab",
-                             "active_combo_hash": "combo"})
+
+            loc.sync(state, {
+                "active_run_id": "run",
+                "active_tab": "tab",
+                "active_combo_hash": "combo",
+            })
+            # Coerce legacy tab names that may arrive via ?tab=
+            state.active_tab = normalize_tab_name(state.active_tab)
         except Exception as exc:
             log.debug("URL state sync not available: %s", exc)
 
@@ -204,8 +182,6 @@ def main():
 
     log.info("Starting CryoBacktester Research UI on http://localhost:%d", args.port)
 
-    # Pass a factory function so build_app is re-evaluated per session.
-    # This ensures user preferences (e.g. dark mode) are read fresh on each reload.
     pn.serve(
         lambda: build_app(state_dir=_state_dir, bundles_root=_bundles_root),
         port=args.port,

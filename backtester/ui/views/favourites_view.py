@@ -3,10 +3,12 @@ views/favourites_view.py — Favourites tab.
 
 Shows a Tabulator of starred combos. Row actions (on selected row):
   Open    — load that run and focus the combo in Results Grid
-  Re-run  — prefill sidebar with {k: [v]} param_grid for the combo's strategy
+  Re-run  — prefill New Run with {k: [v]} param_grid for the combo's strategy
   Unstar  — remove from favourites
   Edit Note — inline text editor for the note field
   Copy TOML — copy params as experiment-style TOML snippet
+
+Also embeds the Compare section (former Compare tab) below the favourites table.
 """
 from __future__ import annotations
 
@@ -313,8 +315,10 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         combo_key = key_from_json(fav.combo_key_json)
         param_grid = {k: [v] for k, v in combo_key}
         state.rerun_request = {"strategy": fav.strategy, "param_grid": param_grid}
-        state.active_tab = "Results Grid"
-        action_feedback.object = "<span style='color:#2563eb'>Sidebar prefilled.</span>"
+        state.active_tab = "New Run"
+        action_feedback.object = (
+            "<span style='color:#2563eb'>New Run prefilled — review and Run.</span>"
+        )
 
     rerun_btn.on_click(_on_rerun)
 
@@ -372,6 +376,9 @@ def build_favourites_view(state, store, cache) -> pn.Column:
     )
     note_row = pn.Row(note_input, save_note_btn, sizing_mode="stretch_width")
 
+    from backtester.ui.views.compare_view import build_compare_view
+    compare_section = build_compare_view(state, store, cache)
+
     return pn.Column(
         title,
         action_row,
@@ -379,5 +386,9 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         action_feedback,
         tab_holder,
         params_input,
+        pn.pane.HTML(
+            "<hr style='margin:24px 0 8px 0;border:none;border-top:1px solid #e5e7eb'>"
+        ),
+        compare_section,
         sizing_mode="stretch_width",
     )

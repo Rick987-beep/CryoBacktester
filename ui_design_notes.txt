@@ -1,0 +1,38 @@
+The basic layout needs to change. At the moment we have three elemens (top bar with "Cryobacktester Research"), 
+left side with runs and parameters, right side with grid, combo detail and other content.
+
+A) Basic structure:
+
+Let's change that to a simple design with a top bar for navigation,
+one "detail bar" underneath and one big area/window underneath; three vertical areas, two lines, and one large area
+
+Top bar should offer navigation to:
+1) "New Run" (start a new run with new params)
+2) "Runs" : list of historic runs to inspect, select, delete runs
+3) "Results Grid" current results grid view, list of combos
+4) "Combo Detail" : everything that has to do with one combo
+5) "Favourites" : view of favourite combos as it is now
+Let'S remove the bright/dark mode and the switch. let's just always use bright mode.
+
+Detail bar:
+Displays information about state and mode: which run is active, which combo is selected
+
+Content window: we mostly reuse the screens that we have, but give some more room
+
+B) new or changed screens:
+1) New Run: entry window with lots of space for parameter input; parameter input is basically a table with three columns:
+parameter name, entry field, explanation/help/description . 
+there should be room for 30 parameters or more.
+Once  a new run is started, the progress bar and the status messages it shows should be bigger
+
+2) Runs: a full screen for run management and navigation in the long list of runs.
+It can be tedious to find a historic run now that we have more than 300 historic runs.
+The list should be sortable by date and strategy name.
+The user should be able to select runs and then delete the selected runs
+
+3) Results grid: this can stay as it is, but some items move out: Combo Detail and favourites are main menu items now
+
+4) Combo Detail: the view as it is now
+
+5) Favourites: the view as it is now
+

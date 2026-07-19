@@ -2,7 +2,7 @@
 tests/ui/test_param_csv_parser.py — Unit tests for parse_param_csv.
 """
 import pytest
-from backtester.ui.views.sidebar import parse_param_csv
+from backtester.ui.services.param_parse import parse_param_csv
 
 
 # ── int parsing ───────────────────────────────────────────────────────────────
