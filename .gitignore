@@ -4,10 +4,9 @@ backtester/data_archive/
 backtester/data_spot_rebuilt/
 backtester/ingest/raw/
 backtester/archive/
-indicators/data/
+backtester/indicators/data/
 
 # Work-in-progress / planning / outputs — not code
-backtester/planning/
 backtester/reports/
 
 # git-crypt symmetric key — never commit (see docs/git-crypt.md)

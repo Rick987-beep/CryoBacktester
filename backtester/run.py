@@ -18,12 +18,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from backtester.market_replay import MarketReplay
-from backtester.engine import run_grid_full
-from backtester.results import GridResult
-from backtester.reporting_v2 import generate_html
-from backtester.walk_forward import run_walk_forward
-from backtester.experiment import load_experiment
+from backtester.core.market_replay import MarketReplay
+from backtester.core.engine import run_grid_full
+from backtester.core.results import GridResult
+from backtester.reporting.html_report import generate_html
+from backtester.research.walk_forward import run_walk_forward
+from backtester.research.experiment import load_experiment
 from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
 from backtester.strategies.tudysho import TuDySho
 from backtester.strategies.stradysho import StraDySho
@@ -39,7 +39,7 @@ from backtester.strategies.theta_engine_v1 import ThetaEnginev1
 from backtester.strategies.theta_engine_v2 import ThetaEngineV2
 from backtester.strategies.theta_engine_v3 import ThetaEngineV3
 from backtester.strategies.theta_engine_v4 import ThetaEngineV4
-from backtester.config import cfg as _cfg
+from backtester.core.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
 #

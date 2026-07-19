@@ -8,8 +8,8 @@ import pytest
 
 from backtester.calm_nights.daily_features import build_daily_table
 from backtester.calm_nights.sessions import slot_a_entry_days
-from backtester.config import cfg
-from market_hours import is_trading_day
+from backtester.core.config import cfg
+from backtester.core.market_hours import is_trading_day
 
 
 def _options_dir() -> Path:

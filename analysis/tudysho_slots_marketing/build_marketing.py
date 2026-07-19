@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backtester.results import equity_metrics
+from backtester.core.results import equity_metrics
 
 from analysis.tudysho_slots_marketing.combine_trades import combine_trades, count_position_overlaps
 from analysis.tudysho_slots_marketing.combined_intraday_dd import (

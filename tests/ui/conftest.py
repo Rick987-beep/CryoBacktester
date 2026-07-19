@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 def _make_tiny_grid_result():
     """Build a synthetic GridResult with 3 combos over 15 trading days."""
-    from backtester.results import GridResult
+    from backtester.core.results import GridResult
 
     # 3 combos: delta=[0.20, 0.25, 0.30], dte=[1]
     param_grid = {"delta": [0.20, 0.25, 0.30], "dte": [1]}

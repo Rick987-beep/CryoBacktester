@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.results import equity_metrics
+from backtester.core.results import equity_metrics
 
 
 def test_equity_metrics_ann_return_matches_cagr_formula():

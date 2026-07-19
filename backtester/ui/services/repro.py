@@ -54,7 +54,7 @@ def git_dirty() -> bool | None:
 
 
 def config_hash() -> str | None:
-    """Return sha256 of backtester/config.toml, or None if unavailable."""
+    """Return sha256 of backtester/core/config.toml, or None if unavailable."""
     try:
         with open(_CONFIG_PATH, "rb") as f:
             digest = hashlib.sha256(f.read()).hexdigest()

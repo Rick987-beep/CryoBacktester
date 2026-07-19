@@ -66,7 +66,7 @@ The engine drives the replay loop and handles all accounting:
 | Emit per-leg fills to `df_fills` | Reads `trade.metadata['legs']` from open/close Trades |
 | Link open fills to close fills | Via `pos.metadata['pos_id']` |
 | Compute metrics (Sharpe, DSR, etc.) | `GridResult` after the replay |
-| Generate the HTML report | `reporting_v2.generate_html()` |
+| Generate the HTML report | `backtester.reporting.generate_html()` |
 
 The engine reads `trade.side` (`"open"` or `"close"`) to decide what to emit.
 For `side="close"` Trades that set `trade.metadata["skip_open_fill"] = True`, the
@@ -152,7 +152,7 @@ between runs without re-parsing params, so keep them in sync).
 ## 4. OpenPosition and the leg model
 
 ```python
-from backtester.strategy_base import OpenPosition
+from backtester.core.strategy_base import OpenPosition
 
 pos = OpenPosition(
     entry_time=state.dt,
@@ -230,8 +230,8 @@ When you open a position, you **must** return an explicit `Trade(side="open")`.
 The engine reads `trade.metadata["legs"]` to emit open fills.
 
 ```python
-from backtester.strategy_base import OpenPosition, Trade
-from backtester.pricing import deribit_fee_per_leg
+from backtester.core.strategy_base import OpenPosition, Trade
+from backtester.core.pricing import deribit_fee_per_leg
 
 def _open_strangle(self, state, expiry, exp_dt, calls, puts):
     # ... select legs, validate quotes ...
@@ -296,8 +296,8 @@ Use `close_position` (the canonical close path). Before calling it, annotate
 each leg with exit prices and fees:
 
 ```python
-from backtester.strategy_base import close_position
-from backtester.pricing import deribit_fee_per_leg
+from backtester.core.strategy_base import close_position
+from backtester.core.pricing import deribit_fee_per_leg
 
 def _close(self, state, pos, reason):
     expiry      = pos.metadata["expiry"]
@@ -365,7 +365,7 @@ For calendar spreads or any strategy that mutates a live position (rolling a leg
 closing one leg of a multi-leg spread):
 
 ```python
-from backtester.strategy_base import partial_close, add_legs
+from backtester.core.strategy_base import partial_close, add_legs
 
 # Close only the short leg (index 0), keep the long leg (index 1)
 leg["exit_price_btc"] = exit_btc      # annotate before calling
@@ -390,13 +390,13 @@ See `cal_premium_collect.py` for a full working example with weekly rolls.
 
 ## 8. Exit condition helpers
 
-All helpers are in `backtester.strategy_base`. They are **callables** that return
+All helpers are in `backtester.core.strategy_base`. They are **callables** that return
 `None` (hold) or a reason string (exit).
 
 ### Composable exit factories
 
 ```python
-from backtester.strategy_base import (
+from backtester.core.strategy_base import (
     stop_loss_pct, profit_target_pct, max_hold_hours, max_hold_days,
     time_exit, index_move_trigger, price_legs,
 )
@@ -439,7 +439,7 @@ you can actually exit at that price.
 ### `price_legs(state, pos, mode)` — low-level pricing
 
 ```python
-from backtester.strategy_base import price_legs
+from backtester.core.strategy_base import price_legs
 
 # Price all legs at their current mark
 current_mark_usd = price_legs(state, pos, mode="mark")
@@ -478,7 +478,7 @@ profit_target_pct(pct, price_mode="executable")
 ### Expiry exit
 
 ```python
-from backtester.strategy_base import check_expiry
+from backtester.core.strategy_base import check_expiry
 
 reason = check_expiry(state, pos)
 # Returns "expiry" when state.dt >= pos.metadata["expiry_dt"], else None.
@@ -488,7 +488,7 @@ reason = check_expiry(state, pos)
 ### Take-profit helper (strangle-specific, legacy)
 
 ```python
-from backtester.strategy_base import check_take_profit_strangle
+from backtester.core.strategy_base import check_take_profit_strangle
 
 reason = check_take_profit_strangle(state, pos, self._tp_pct)
 # Available but not preferred for new strategies.
@@ -500,10 +500,10 @@ reason = check_take_profit_strangle(state, pos, self._tp_pct)
 
 ## 9. Expiry utilities
 
-Import from `backtester.expiry_utils`:
+Import from `backtester.core.expiry_utils`:
 
 ```python
-from backtester.expiry_utils import (
+from backtester.core.expiry_utils import (
     parse_expiry_date,      # "21MAY26" → datetime(2026, 5, 21)
     expiry_dt_utc,          # "21MAY26", tzinfo → datetime at 08:00 UTC
     select_expiry,          # find expiry exactly N days from now
@@ -531,11 +531,11 @@ call in hot loops; they run the regex only on first call per code.
 
 ## 10. Option selection utilities
 
-Import from `backtester.bt_option_selection` (NOT from `option_selection` — that
+Import from `backtester.core.option_selection` (NOT from `option_selection` — that
 module is for the live trading system and has an incompatible interface):
 
 ```python
-from backtester.bt_option_selection import select_by_delta, apply_min_otm
+from backtester.core.option_selection import select_by_delta, apply_min_otm
 ```
 
 **`select_by_delta(chain, target_delta)`** — returns the `OptionQuote` in
@@ -587,7 +587,7 @@ Use `0.0001 BTC` as the minimum-tick fallback only on close (you can never get o
 ## 11. Fees
 
 ```python
-from backtester.pricing import deribit_fee_per_leg
+from backtester.core.pricing import deribit_fee_per_leg
 
 fee_usd = deribit_fee_per_leg(spot, leg_premium_usd)
 # Deribit model: min(0.03% × spot, 12.5% × leg_premium_usd)
@@ -630,7 +630,7 @@ class MyStrategy:
 
 **Rules:**
 - Never fetch live data inside `on_market_state`. Indicators are pre-computed
-  from the on-disk `indicators/data/` cache — do not add any network calls.
+  from the on-disk `backtester/indicators/data/` cache — do not add any network calls.
 - Treat missing rows (KeyError) as fail-open (allow the action, don't crash).
 - Treat NaN values as fail-open (weekend gaps, warmup period).
 - `warmup_days` defaults to 30 in `IndicatorDep` — increase it if your indicator
@@ -638,7 +638,7 @@ class MyStrategy:
 
 **Registered indicators**: `"turbulence"` (composite score 0–100, hourly),
 `"supertrend"` (trend direction, configurable interval). To add a new indicator
-register a builder in `backtester/indicators.py`'s `_BUILDERS` dict.
+register a builder in `backtester/indicators/pipeline.py`'s `_BUILDERS` dict.
 
 ---
 
@@ -712,7 +712,7 @@ Currently registered: `short_str_turb_dyn`, `blueprint_howto`.
   break reproducibility and ruin performance. Indicators must come from
   `set_indicators` or from the snapshot.
 - **Using `option_selection.py` (root-level)** — that module targets live exchange
-  objects. Use `bt_option_selection.py`.
+  objects. Use `backtester.core.option_selection`.
 - **Skipping `entry_price`, `entry_price_usd`, `fee_usd_open` on legs** — these
   fields are required by `close_position`'s leg-aware PnL path. Without them it
   falls back to a legacy formula that is less accurate for mixed-side positions.
@@ -748,8 +748,8 @@ Before committing a new strategy, verify:
 - [ ] TP wired with `profit_target_pct(pct, price_mode="executable")` (when used).
 - [ ] Data gap guard on non-expiry closes: check `state.get_option(...)` is not `None`.
 - [ ] Uses `deribit_fee_per_leg` for fees; fee = 0 at expiry.
-- [ ] Imports from `backtester.bt_option_selection`, not `option_selection`.
-- [ ] Imports from `backtester.expiry_utils`, not local copies.
+- [ ] Imports from `backtester.core.option_selection`, not `option_selection`.
+- [ ] Imports from `backtester.core.expiry_utils`, not local copies.
 - [ ] `PARAM_GRID` is wide and unbiased; 0-disables optional parameters.
 - [ ] `mark_iv` stored as-is from parquet (already %, e.g. 34.4 = 34.4%).
 - [ ] Strategy is registered in `backtester/run.py`.

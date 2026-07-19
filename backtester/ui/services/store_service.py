@@ -198,7 +198,7 @@ class StoreService:
 
         Returns the path to the newly created bundle dir.
         """
-        from backtester.engine import _grid_combos  # noqa: avoid circular at module level
+        from backtester.core.engine import _grid_combos  # noqa: avoid circular at module level
 
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         bundle_dir = self._bundles_root / f"{strategy}_{ts}.bundle"
@@ -368,7 +368,7 @@ class StoreService:
 
         Returns a fresh GridResult.  Recomputes all stats (~1 s on 10k combos).
         """
-        from backtester.results import GridResult
+        from backtester.core.results import GridResult
 
         row = self.get_run(run_id)
         if row is None:

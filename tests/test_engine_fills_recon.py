@@ -81,8 +81,8 @@ class _SingleLegSellStrategy:
         self._tick = 0
 
     def _open(self, state):
-        from backtester.strategy_base import OpenPosition, Trade
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import OpenPosition, Trade
+        from backtester.core.pricing import fee_btc_per_contract
 
         leg = {
             "strike":    90_000.0,
@@ -125,8 +125,8 @@ class _SingleLegSellStrategy:
         return [open_trade]
 
     def _close(self, state):
-        from backtester.strategy_base import close_position
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import close_position
+        from backtester.core.pricing import fee_btc_per_contract
 
         pos = self._position
         leg = pos.legs[0]
@@ -147,7 +147,7 @@ class _SingleLegSellStrategy:
 
 def _run():
     """Execute the synthetic strategy through run_grid_full; return (df, df_fills)."""
-    from backtester.engine import run_grid_full
+    from backtester.core.engine import run_grid_full
 
     T0 = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
     T1 = datetime(2026, 4, 2, 12, 0, tzinfo=timezone.utc)
@@ -206,7 +206,7 @@ class TestFillsReconciliation:
                        − fee_open_btc × spot_open × qty
                        − fee_close_btc × spot_close × qty
         """
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.pricing import fee_btc_per_contract
 
         fee_open_btc  = fee_btc_per_contract(_PRICE_BTC) * _QTY
         fee_close_btc = fee_btc_per_contract(_EXIT_BTC)  * _QTY

@@ -10,7 +10,7 @@ from typing import Any
 
 import pandas as pd
 
-from backtester.config import cfg
+from backtester.core.config import cfg
 
 logger = logging.getLogger(__name__)
 

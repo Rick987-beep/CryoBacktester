@@ -45,7 +45,7 @@ def equity_for_key(grid_result, key) -> dict | None:
         log.warning("equity_service: key not found in grid_result.key_to_idx: %s", key)
         return None
 
-    from backtester.results import equity_metrics
+    from backtester.core.results import equity_metrics
 
     df = grid_result.df
     nav_daily_df = grid_result.nav_daily_df

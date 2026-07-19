@@ -77,8 +77,8 @@ class _CloseFullStrategy:
         return []
 
     def _open(self, state):
-        from backtester.strategy_base import OpenPosition, Trade
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import OpenPosition, Trade
+        from backtester.core.pricing import fee_btc_per_contract
 
         leg = {
             "strike": 80_000.0, "is_call": True, "expiry": "30JUN26",
@@ -105,8 +105,8 @@ class _CloseFullStrategy:
         )]
 
     def _close(self, state):
-        from backtester.strategy_base import close_position
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import close_position
+        from backtester.core.pricing import fee_btc_per_contract
 
         pos = self._position
         leg = pos.legs[0]
@@ -122,7 +122,7 @@ class _CloseFullStrategy:
 
 
 def _run(strat_cls):
-    from backtester.engine import run_grid_full
+    from backtester.core.engine import run_grid_full
     T = [datetime(2026, 4, 1, 12 + i, 0, tzinfo=timezone.utc)
          for i in range(6)]
     spots = [_SPOT_OPEN, _SPOT_OPEN, _SPOT_CLOSE, _SPOT_CLOSE,
@@ -197,8 +197,8 @@ class _CalendarStrategy:
         return []
 
     def _open(self, state):
-        from backtester.strategy_base import OpenPosition, Trade
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import OpenPosition, Trade
+        from backtester.core.pricing import fee_btc_per_contract
 
         long_leg = {
             "strike": 60_000.0, "is_call": False, "expiry": "27APR26",
@@ -234,8 +234,8 @@ class _CalendarStrategy:
         )]
 
     def _partial_close_short(self, state):
-        from backtester.strategy_base import partial_close
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import partial_close
+        from backtester.core.pricing import fee_btc_per_contract
 
         pos = self._position
         short_idx = 1
@@ -247,8 +247,8 @@ class _CalendarStrategy:
         return [trade]
 
     def _close_long(self, state):
-        from backtester.strategy_base import close_position
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import close_position
+        from backtester.core.pricing import fee_btc_per_contract
 
         pos = self._position
         leg = pos.legs[0]
@@ -329,7 +329,7 @@ class TestPartialClose:
                   = (open_btc - exit_btc) * spot
                     - fee_open_alloc - fee_close
         """
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.pricing import fee_btc_per_contract
 
         # Per-leg open fees at the open spot.
         fee_open_long_usd  = fee_btc_per_contract(_LONG_OPEN_BTC)   * _SPOT_OPEN
@@ -393,8 +393,8 @@ class _AddLegsStrategy:
         return []
 
     def _open_first(self, state):
-        from backtester.strategy_base import OpenPosition, Trade
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import OpenPosition, Trade
+        from backtester.core.pricing import fee_btc_per_contract
 
         leg = {
             "strike": 80_000.0, "is_call": True, "expiry": "30JUN26",
@@ -420,8 +420,8 @@ class _AddLegsStrategy:
         )]
 
     def _add_second(self, state):
-        from backtester.strategy_base import add_legs, Trade
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import add_legs, Trade
+        from backtester.core.pricing import fee_btc_per_contract
 
         pos = self._position
         new_leg = {
@@ -445,8 +445,8 @@ class _AddLegsStrategy:
         )]
 
     def _close_all(self, state):
-        from backtester.strategy_base import close_position
-        from backtester.pricing import fee_btc_per_contract
+        from backtester.core.strategy_base import close_position
+        from backtester.core.pricing import fee_btc_per_contract
 
         pos = self._position
         # Mark both legs' exit_price_btc.
@@ -468,7 +468,7 @@ class TestAddLegs:
     def test_pos_extended(self):
         """Sanity: after add_legs, pos.legs has two entries with combined aggregates."""
         # Direct unit test, no engine.
-        from backtester.strategy_base import OpenPosition, add_legs
+        from backtester.core.strategy_base import OpenPosition, add_legs
         leg1 = {"strike": 80_000.0, "is_call": True, "expiry": "30JUN26",
                 "side": "sell", "price_btc": 0.003, "qty": 1.0}
         pos = OpenPosition(
@@ -508,7 +508,7 @@ class TestAddLegs:
 
 class TestPartialCloseValidation:
     def _make_two_leg_pos(self):
-        from backtester.strategy_base import OpenPosition
+        from backtester.core.strategy_base import OpenPosition
         leg1 = {"strike": 80_000.0, "is_call": True, "expiry": "30JUN26",
                 "side": "sell", "price_btc": 0.003, "qty": 1.0,
                 "exit_price_btc": 0.001}
@@ -529,22 +529,22 @@ class TestPartialCloseValidation:
         )
 
     def test_rejects_empty_indices(self):
-        from backtester.strategy_base import partial_close
+        from backtester.core.strategy_base import partial_close
         with pytest.raises(ValueError, match="non-empty"):
             partial_close(self._state(), self._make_two_leg_pos(), [], "test")
 
     def test_rejects_out_of_range(self):
-        from backtester.strategy_base import partial_close
+        from backtester.core.strategy_base import partial_close
         with pytest.raises(ValueError, match="out of range"):
             partial_close(self._state(), self._make_two_leg_pos(), [2], "test")
 
     def test_rejects_all_legs(self):
-        from backtester.strategy_base import partial_close
+        from backtester.core.strategy_base import partial_close
         with pytest.raises(ValueError, match="all legs"):
             partial_close(self._state(), self._make_two_leg_pos(), [0, 1], "test")
 
     def test_mutates_pos_correctly(self):
-        from backtester.strategy_base import partial_close
+        from backtester.core.strategy_base import partial_close
         pos = self._make_two_leg_pos()
         _ = partial_close(self._state(), pos, [1], "test")
         assert len(pos.legs) == 1
@@ -556,7 +556,7 @@ class TestPartialCloseValidation:
         assert pos._last_reprice_usd is None
 
     def test_returned_trade_has_partial_close_flag(self):
-        from backtester.strategy_base import partial_close
+        from backtester.core.strategy_base import partial_close
         pos = self._make_two_leg_pos()
         trade = partial_close(self._state(), pos, [1], "test")
         assert trade.metadata.get("partial_close") is True

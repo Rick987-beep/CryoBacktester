@@ -233,7 +233,7 @@ included in this trade (which for full closes is all legs, identical to today).
 | Consumer | Impact | Action |
 |---|---|---|
 | `results.py` scoring | More trade rows for `cal_premium_collect` (each leg lifecycle is its own trade). Per-trade metrics shift; aggregate PnL unchanged. | Recompute composite scores; no code change. |
-| `reporting_v2.py` | Trade log table shows more rows; equity curve unchanged (NAV-driven). Fills table cleaner — no `$0.00` virtual rows. | None. |
+| `reporting/html_report.py` | Trade log table shows more rows; equity curve unchanged (NAV-driven). Fills table cleaner — no `$0.00` virtual rows. | None. |
 | `detail_view.py` | Same. | None. |
 | `tests/test_engine_fills_recon.py` | Per-trade reconciliation now strictly holds (no partial-close fudge). | Tighten tolerance from `$0.5` → `$0.01`. |
 | `walk_forward.py`, `experiment.py` | Reads aggregate `GridResult`. | None. |

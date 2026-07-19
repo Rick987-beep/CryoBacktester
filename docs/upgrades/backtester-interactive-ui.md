@@ -9,7 +9,7 @@
 
 ## 1. Motivation / Problem
 
-The current workflow (`backtester/run.py` → `reporting_v2.generate_html` → open HTML in browser) is slow and repetitive:
+The current workflow (`backtester/run.py` → `backtester.reporting.generate_html` → open HTML in browser) is slow and repetitive:
 
 - Static HTML: can't sort, filter, pivot the grid result.
 - Only top-N combos get equity curves & detailed metrics (see `GridResult.top_n_eq`); everything else is summary stats.
@@ -111,7 +111,7 @@ This stack is pure pip-installable (`panel`, `plotly`, `bokeh` as Panel's dep) a
 +--------------------------------------------------------------+
 ```
 
-Key constraint: the UI layer **only consumes** `GridResult` and the trade-log DataFrame. It must not reimplement statistics. Any new metric needed goes into `backtester/results.py` first.
+Key constraint: the UI layer **only consumes** `GridResult` and the trade-log DataFrame. It must not reimplement statistics. Any new metric needed goes into `backtester/core/results.py` first.
 
 ---
 
@@ -217,7 +217,7 @@ CREATE TABLE runs (
     label            TEXT,            -- user-editable
     git_sha          TEXT,            -- HEAD sha at run time
     git_dirty        INTEGER,         -- 0/1; was working tree dirty
-    config_hash      TEXT             -- sha256 of backtester/config.toml
+    config_hash      TEXT             -- sha256 of backtester/core/config.toml
 );
 
 CREATE TABLE favourites (
@@ -372,7 +372,7 @@ Every run bundle + SQLite row stores:
 
 - `git_sha` — `git rev-parse HEAD` at run time (best-effort; `null` if not a git checkout).
 - `git_dirty` — whether the working tree was dirty.
-- `config_hash` — sha256 of `backtester/config.toml`.
+- `config_hash` — sha256 of `backtester/core/config.toml`.
 
 Without this, "open a run from 3 weeks ago" silently shows numbers you can't reproduce. The UI surfaces these in the runs list and the stats card (subtle; red warning icon if `git_dirty`).
 
@@ -391,7 +391,7 @@ Each phase is a single PR-sized change. At the end of every phase **both automat
 - **Python**: 3.11+. Type hints where they help readability; don't annotate trivial locals.
 - **Imports**: absolute (`from backtester.ui.services import run_service`), not relative.
 - **Logging**: every service module obtains `log = get_ui_logger(__name__)` (see §7.9).
-- **No stats in UI code.** Any new scalar metric goes in `backtester/results.py` first (cf. §3 rule).
+- **No stats in UI code.** Any new scalar metric goes in `backtester/core/results.py` first (cf. §3 rule).
 - **Test markers**: UI tests live in `tests/ui/`, no special marker. They must stay under 5 s total to keep the default suite (`pytest tests/ -v`) fast. Slow or server-boot tests get `@pytest.mark.slow_ui` and are skipped by default via `pyproject.toml` `addopts`.
 - **Shared pytest fixtures** added in `tests/ui/conftest.py` and reused across phases:
   - `tiny_grid_result` → a real `GridResult` built from a 3-combo × 10-day synthetic trade log. ~20 ms to build; use everywhere instead of mocks.
@@ -550,7 +550,7 @@ Each phase is a single PR-sized change. At the end of every phase **both automat
 
 **Deliverables**
 
-1. **Modify** `backtester/engine.py`: add `progress_cb: Callable[[int, int, str], None] | None = None` kwarg to `run_grid_full`. Call it every `N` intervals (configurable, default 50) with `(current, total, date_iso)`. Never raise from a bad callback — wrap in try/except, log warning.
+1. **Modify** `backtester/core/engine.py`: add `progress_cb: Callable[[int, int, str], None] | None = None` kwarg to `run_grid_full`. Call it every `N` intervals (configurable, default 50) with `(current, total, date_iso)`. Never raise from a bad callback — wrap in try/except, log warning.
 2. **Modify** `backtester/run.py`: factor the run body into `run_backtest(strategy_key, param_grid, date_range, account_size, bundles_root, progress_cb=None) -> Path` that returns the bundle path. CLI `main()` becomes a thin argparse shim around this function.
 3. `backtester/ui/services/run_worker.py`:
    - `__main__` entry point; reads a JSON config from stdin or a `--config` file: `{strategy, param_grid, date_from, date_to, account_size, bundle_path, progress_path}`.
@@ -757,7 +757,7 @@ Acceptance criteria (manual, end of phase 4):
 
 - Multi-user hosting, auth, remote access.
 - Running on the VPS alongside `ct-slot@XX`.
-- Replacing `reporting_v2.generate_html` — static HTML reports stay for WFO and shareable artefacts.
+- Replacing `backtester.reporting.generate_html` — static HTML reports stay for WFO and shareable artefacts.
 - Editing strategy source code from the UI. The param grid editor only edits the grid values, not the strategy class.
 - Writing back to `backtester/experiments/*.toml` from the UI — initially read-only. See §12.
 - Live trading integration. This is a **research** UI.

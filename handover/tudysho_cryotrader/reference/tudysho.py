@@ -52,12 +52,12 @@ import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from backtester.bt_option_selection import select_by_delta
-from backtester.expiry_utils import expiry_dt_utc, select_expiry
-from backtester.config import cfg as _cfg
+from backtester.core.option_selection import select_by_delta
+from backtester.core.expiry_utils import expiry_dt_utc, select_expiry
+from backtester.core.config import cfg as _cfg
 from backtester.indicators import IndicatorDep
-from backtester.pricing import deribit_fee_per_leg
-from backtester.strategy_base import (
+from backtester.core.pricing import deribit_fee_per_leg
+from backtester.core.strategy_base import (
     OpenPosition,
     Trade,
     check_expiry,
@@ -68,7 +68,7 @@ from backtester.strategy_base import (
     equity_drawdown_stop,
     exit_expiry_window,
 )
-from market_hours import to_nyc, to_utc
+from backtester.core.market_hours import to_nyc, to_utc
 
 
 logger = logging.getLogger(__name__)

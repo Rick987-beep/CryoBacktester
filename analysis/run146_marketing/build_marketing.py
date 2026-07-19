@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from backtester.results import equity_metrics
+from backtester.core.results import equity_metrics
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
