@@ -93,6 +93,18 @@ def select_expiry(state, dte):
     skipped by the calling strategy).
     """
     target_date = state.dt.date() + timedelta(days=dte)
+    return select_expiry_on_date(state, target_date)
+
+
+def select_expiry_on_date(state, target_date):
+    # type: (Any, Any) -> Optional[str]
+    """Return the expiry code whose calendar date equals ``target_date``.
+
+    ``target_date`` may be a ``datetime.date`` or ``datetime`` (date component used).
+    Returns None if no matching expiry exists in the snapshot.
+    """
+    if hasattr(target_date, "date"):
+        target_date = target_date.date()
     for exp in state.expiries():
         exp_date = parse_expiry_date(exp)
         if exp_date is not None and exp_date.date() == target_date:
