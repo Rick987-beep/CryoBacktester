@@ -49,6 +49,7 @@ import pandas as pd
 from indicators.hist_data import load_klines
 from indicators.supertrend import supertrend as _supertrend
 from indicators.turbulence import turbulence as _turbulence
+from indicators.trend_regime import compute_trend_regime as _compute_trend_regime
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +333,19 @@ def _build_supertrend(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return _supertrend(df_raw, **params)
 
 
+def _build_trend_regime(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
+    """BTC trend regime (+1/0/−1) with closed-bar ``regime`` column.
+
+    Freezes ``regime_raw`` on a still-forming last daily bar (keeps the
+    calendar-day lookup key).  Strategy must use ``regime`` (shifted),
+    not ``regime_raw``.
+    """
+    asof = params.get("asof")
+    return _compute_trend_regime(
+        df_raw, asof=asof, drop_incomplete=False, freeze_incomplete=True
+    )
+
+
 def _build_long_gamma_regime(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return long_gamma_regime(df_raw, **params)
 
@@ -449,6 +463,7 @@ def _build_calm_nights(
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
     "supertrend": _build_supertrend,
+    "trend_regime": _build_trend_regime,
     "long_gamma_regime": _build_long_gamma_regime,
     "spot_mom_4h": _build_spot_momentum,
     "spot_mom_1h": _build_spot_momentum,

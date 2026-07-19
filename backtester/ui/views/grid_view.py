@@ -199,6 +199,59 @@ def _header_tooltips(columns: list[str]) -> dict[str, str]:
     return {col: col for col in columns if col != "_key_hash"}
 
 
+def _grid_formatters(df: pd.DataFrame, param_cols: list[str]) -> dict:
+    """Build Tabulator formatters for fixed stats + strategy parameter columns.
+
+    Parameter floats (e.g. ``delta``) must use plain ``number`` format — not
+    progress bars.  Callers should pass the full formatter map to Tabulator.
+    """
+    fmts = dict(_COL_FORMATTERS)
+    for col in param_cols:
+        if col in fmts or col not in df.columns:
+            continue
+        if df[col].dtype.kind in "iuf":
+            fmts[col] = {"type": "number", "precision": 2}
+    return fmts
+
+
+def _patch_layout_merge_by_field(
+    tab: pn.widgets.Tabulator,
+    layout_columns: list[dict],
+) -> None:
+    """Apply per-column layout settings by field name.
+
+    Panel's ``_get_configuration`` merges ``configuration['columns']`` by
+    bokeh column *index*.  Row-selection and hidden columns shift indices, so
+    formatters attach to the wrong fields (e.g. ``delta`` shows score's
+    progress bar; ``profit_factor`` shows ``total_pnl``'s money formatter).
+
+    We store layout overrides separately and merge them by ``field`` after
+    Panel builds the base column config from ``formatters``.
+    """
+    layout_by_field = {c["field"]: c for c in layout_columns if c.get("field")}
+    if not layout_by_field:
+        return
+
+    orig_get_configuration = tab._get_configuration
+
+    def _get_configuration(columns):
+        cfg = orig_get_configuration(columns)
+        for col in cfg["columns"]:
+            field = col.get("field")
+            if field and field in layout_by_field:
+                for key, val in layout_by_field[field].items():
+                    if key != "field":
+                        col[key] = val
+        return cfg
+
+    tab._get_configuration = _get_configuration
+    # Drop stored columns so Panel does not repeat the broken index merge.
+    if "columns" in tab._configuration:
+        tab._configuration = {
+            k: v for k, v in tab._configuration.items() if k != "columns"
+        }
+
+
 def _column_layout_config(
     rank_cols: list[str],
     param_cols: list[str],
@@ -688,14 +741,16 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
         tab_hidden = ["_key_hash"] + hidden_user
         layout_cfg = _column_layout_config(rank_cols, param_cols_zoned, perf_cols)
+        layout_columns = layout_cfg.pop("columns", [])
         zone_css = _header_zone_css(param_cols_zoned, perf_cols)
+        col_formatters = _grid_formatters(df_display, param_cols_zoned)
 
         tab = pn.widgets.Tabulator(
             df_display,
             hidden_columns=tab_hidden,
             configuration=layout_cfg,
             frozen_columns=_frozen_columns_map(rank_cols, perf_cols),
-            formatters=_COL_FORMATTERS,
+            formatters=col_formatters,
             header_tooltips=_header_tooltips(ordered_cols),
             layout="fit_columns",
             pagination="remote",
@@ -706,6 +761,7 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
             show_index=False,
             stylesheets=[_TABLE_LAYOUT_CSS, _HEADER_WRAP_CSS, zone_css],
         )
+        _patch_layout_merge_by_field(tab, layout_columns)
         tab.editable = False
         tab.editors = {col: None for col in df_display.columns}
 

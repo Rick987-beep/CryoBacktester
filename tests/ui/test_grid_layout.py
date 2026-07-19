@@ -140,3 +140,73 @@ def test_build_grid_view_imports_and_returns_column(tiny_grid_result):
     col = build_grid_view(state, _Cache())
     assert isinstance(col, pn.Column)
     assert len(col.objects) >= 3
+
+
+def test_grid_formatters_param_delta_is_plain_number():
+    import pandas as pd
+
+    from backtester.ui.views.grid_view import _grid_formatters
+
+    df = pd.DataFrame({"delta": [0.20, 0.25], "mode": ["a", "b"]})
+    fmts = _grid_formatters(df, ["delta", "mode"])
+    assert fmts["delta"] == {"type": "number", "precision": 2}
+    assert "mode" not in fmts
+
+
+def test_patch_layout_merge_by_field_keeps_formatters_aligned():
+    """Layout merge by field must not shift formatters onto wrong columns."""
+    import panel as pn
+
+    from backtester.ui.views.grid_view import (
+        _FIXED_DISPLAY_COLS,
+        _column_layout_config,
+        _frozen_columns_map,
+        _grid_dataframe,
+        _grid_formatters,
+        _header_tooltips,
+        _patch_layout_merge_by_field,
+        _split_grid_columns,
+    )
+    from tests.ui.conftest import _make_tiny_grid_result
+
+    pn.extension("tabulator", sizing_mode="stretch_width")
+
+    result = _make_tiny_grid_result()
+    df, _ = _grid_dataframe(result)
+    param_cols = [
+        c for c in df.columns
+        if c not in _FIXED_DISPLAY_COLS and c != "_key_hash"
+    ]
+    ordered_cols = ["rank", "score"] + param_cols + [
+        c for c in _FIXED_DISPLAY_COLS[2:] if c in df.columns
+    ]
+    rank_cols, param_cols_zoned, perf_cols = _split_grid_columns(ordered_cols)
+    layout_cfg = _column_layout_config(rank_cols, param_cols_zoned, perf_cols)
+    layout_columns = layout_cfg.pop("columns", [])
+    df_display = df[ordered_cols + ["_key_hash"]]
+
+    tab = pn.widgets.Tabulator(
+        df_display,
+        hidden_columns=["_key_hash"],
+        configuration=layout_cfg,
+        frozen_columns=_frozen_columns_map(rank_cols, perf_cols),
+        formatters=_grid_formatters(df_display, param_cols_zoned),
+        header_tooltips=_header_tooltips(ordered_cols),
+        layout="fit_columns",
+        pagination="remote",
+        page_size=200,
+        selectable="checkbox",
+        show_index=False,
+    )
+    _patch_layout_merge_by_field(tab, layout_columns)
+
+    cfg_cols = tab._get_configuration(tab._get_columns())["columns"]
+    by_field = {c["field"]: c for c in cfg_cols if c.get("field")}
+
+    assert by_field["delta"]["formatter"] == "number"
+    assert by_field["delta"]["formatterParams"] == {"precision": 2}
+    assert by_field["score"]["formatter"] == "progress"
+    assert by_field["profit_factor"]["formatter"] == "number"
+    assert by_field["profit_factor"]["formatterParams"] == {"precision": 2}
+    assert by_field["total_pnl"]["formatter"] == "money"
+    assert by_field["sharpe"]["formatter"] == "number"

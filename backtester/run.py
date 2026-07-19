@@ -26,6 +26,7 @@ from backtester.walk_forward import run_walk_forward
 from backtester.experiment import load_experiment
 from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
 from backtester.strategies.tudysho import TuDySho
+from backtester.strategies.stradysho import StraDySho
 from backtester.strategies.tudysho_v1 import TuDyShoV1
 from backtester.strategies.tudysho_v2 import TuDyShoV2
 from backtester.strategies.cadysho import Cadysho
@@ -35,6 +36,9 @@ from backtester.strategies.pagoda import Pagoda
 from backtester.strategies.covered_call_put import CoveredCallPut
 from backtester.strategies.cal_spread_atm import CalSpreadAtm
 from backtester.strategies.theta_engine_v1 import ThetaEnginev1
+from backtester.strategies.theta_engine_v2 import ThetaEngineV2
+from backtester.strategies.theta_engine_v3 import ThetaEngineV3
+from backtester.strategies.theta_engine_v4 import ThetaEngineV4
 from backtester.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -47,6 +51,7 @@ from backtester.config import cfg as _cfg
 STRATEGIES = {
     "short_str_turb_dyn":  ShortStrTurbDyn,
     "tudysho":             TuDySho,
+    "stradysho":           StraDySho,
     "tudysho_v1":          TuDyShoV1,
     "tudysho_v2":          TuDyShoV2,
     "cadysho":             Cadysho,
@@ -56,6 +61,9 @@ STRATEGIES = {
     "covered_call_put":    CoveredCallPut,
     "cal_spread_atm":      CalSpreadAtm,
     "theta_engine_v1":     ThetaEnginev1,
+    "theta_engine_v2":     ThetaEngineV2,
+    "theta_engine_v3":     ThetaEngineV3,
+    "theta_engine_v4":     ThetaEngineV4,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet
