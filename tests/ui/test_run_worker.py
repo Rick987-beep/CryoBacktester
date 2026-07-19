@@ -22,7 +22,7 @@ import pytest
 def test_worker_writes_bundle_and_progress(tmp_path, sqlite_store):
     """Worker completes a tiny run and writes progress + a bundle."""
     try:
-        import backtester.config as _cfg
+        import backtester.core.config as _cfg
         opts = _cfg.cfg.data.options_parquet
         spot = _cfg.cfg.data.spot_parquet
         if not (os.path.exists(opts) and os.path.exists(spot)):
@@ -75,7 +75,7 @@ def test_worker_writes_bundle_and_progress(tmp_path, sqlite_store):
 def test_worker_handles_sigterm(tmp_path):
     """SIGTERM cancels the worker and writes a cancelled status line."""
     try:
-        import backtester.config as _cfg
+        import backtester.core.config as _cfg
         opts = _cfg.cfg.data.options_parquet
         spot = _cfg.cfg.data.spot_parquet
         if not (os.path.exists(opts) and os.path.exists(spot)):

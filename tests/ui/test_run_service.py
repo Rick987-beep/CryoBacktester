@@ -15,7 +15,7 @@ import pytest
 def test_submit_and_tail(tmp_path, sqlite_store):
     """submit() spawns a worker; tail_progress yields lines; await_result registers run."""
     try:
-        import backtester.config as _cfg
+        import backtester.core.config as _cfg
         opts = _cfg.cfg.data.options_parquet
         spot = _cfg.cfg.data.spot_parquet
         if not (os.path.exists(opts) and os.path.exists(spot)):
@@ -56,7 +56,7 @@ def test_submit_and_tail(tmp_path, sqlite_store):
 def test_cancel_stops_worker(tmp_path, sqlite_store):
     """cancel() terminates the worker within 5 s."""
     try:
-        import backtester.config as _cfg
+        import backtester.core.config as _cfg
         opts = _cfg.cfg.data.options_parquet
         spot = _cfg.cfg.data.spot_parquet
         if not (os.path.exists(opts) and os.path.exists(spot)):

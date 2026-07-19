@@ -6,17 +6,17 @@ Files in this folder are **verbatim copies** from the CryoBacktester repo, refre
 |------|----------------|
 | `tudysho.py` | `backtester/strategies/tudysho.py` |
 | `test_tudysho.py` | `backtester/strategies/tests/test_tudysho.py` |
-| `market_hours.py` | `market_hours.py` |
-| `expiry_utils.py` | `backtester/expiry_utils.py` |
+| `backtester/core/market_hours.py` | `backtester/core/market_hours.py` |
+| `expiry_utils.py` | `backtester/core/expiry_utils.py` |
 
 ## Dependencies (not copied — read in repo if porting)
 
 `tudysho.py` imports from:
 
-- `backtester/strategy_base.py` — exit factories, `OpenPosition`, `Trade`, `close_position`
-- `backtester/bt_option_selection.py` — `select_by_delta`
-- `backtester/pricing.py` — `deribit_fee_per_leg`
-- `backtester/indicators.py` / `indicators/turbulence.py` — turbulence composite
+- `backtester/core/strategy_base.py` — exit factories, `OpenPosition`, `Trade`, `close_position`
+- `backtester/core/option_selection.py` — `select_by_delta`
+- `backtester/core/pricing.py` — `deribit_fee_per_leg`
+- `backtester/indicators/pipeline.py` / `backtester/indicators/turbulence.py` — turbulence composite
 
 ## Single-instance vs live multi-slot
 

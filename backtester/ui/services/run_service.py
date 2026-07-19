@@ -69,7 +69,7 @@ class RunService:
         Returns:
             RunHandle for the in-flight run.
         """
-        from backtester.config import cfg as _cfg
+        from backtester.core.config import cfg as _cfg
         from backtester.run import DEFAULT_OPTIONS, DEFAULT_SPOT
 
         if account_size is None:

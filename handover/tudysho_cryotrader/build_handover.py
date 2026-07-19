@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backtester.results import equity_metrics
+from backtester.core.results import equity_metrics
 from backtester.ui.services.store_service import key_hash
 
 OUT = Path(__file__).resolve().parent
@@ -178,8 +178,8 @@ def main() -> None:
     for src in (
         ROOT / "backtester/strategies/tudysho.py",
         ROOT / "backtester/strategies/tests/test_tudysho.py",
-        ROOT / "market_hours.py",
-        ROOT / "backtester/expiry_utils.py",
+        ROOT / "backtester/core/market_hours.py",
+        ROOT / "backtester/core/expiry_utils.py",
     ):
         if src.exists():
             shutil.copy2(src, ref_dir / src.name)

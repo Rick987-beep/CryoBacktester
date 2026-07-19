@@ -2,9 +2,9 @@
 tests/test_backtester_indicators.py
 
 Tests for the indicator pre-computation framework:
-  - indicators/hist_data.py   (kline caching layer)
-  - backtester/indicators.py  (build_indicators + IndicatorDep)
-  - backtester/engine.py      (_inject_indicators integration)
+  - backtester/indicators/hist_data.py   (kline caching layer)
+  - backtester/indicators/pipeline.py  (build_indicators + IndicatorDep)
+  - backtester/core/engine.py      (_inject_indicators integration)
 
 All tests are offline: Binance is mocked via unittest.mock.patch.
 """
@@ -44,14 +44,14 @@ def _dt(year=2025, month=11, day=1):
 
 
 # ---------------------------------------------------------------------------
-# indicators/hist_data.py
+# backtester/indicators/hist_data.py
 # ---------------------------------------------------------------------------
 
 class TestHistData:
 
     def test_cold_fetch_stores_cache(self, tmp_path, monkeypatch):
         """A cold fetch hits Binance and writes a parquet cache."""
-        import indicators.hist_data as hd
+        import backtester.indicators.hist_data as hd
         monkeypatch.setattr(hd, "KLINE_DIR", tmp_path)
 
         n = 200
@@ -62,7 +62,7 @@ class TestHistData:
         mock_resp.json.return_value = fake_bars
         mock_resp.raise_for_status.return_value = None
 
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp):
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp):
             df = hd.load_klines(
                 "BTCUSDT", "15m",
                 start=_dt(2025, 11, 1),
@@ -78,7 +78,7 @@ class TestHistData:
 
     def test_repeat_call_uses_cache(self, tmp_path, monkeypatch):
         """Second call within the cached range does not hit Binance."""
-        import indicators.hist_data as hd
+        import backtester.indicators.hist_data as hd
         monkeypatch.setattr(hd, "KLINE_DIR", tmp_path)
 
         # 5 warmup days + 1 target day = 6 days at 15m = 6*24*4 = 576 bars
@@ -90,12 +90,12 @@ class TestHistData:
         mock_resp.json.return_value = fake_bars
         mock_resp.raise_for_status.return_value = None
 
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp) as mock_get:
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp) as mock_get:
             hd.load_klines("BTCUSDT", "15m", _dt(2025, 11, 1), _dt(2025, 11, 1), warmup_days=5)
             first_call_count = mock_get.call_count
 
         # Second call — Binance should not be hit again (cache covers the range)
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp) as mock_get:
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp) as mock_get:
             df = hd.load_klines("BTCUSDT", "15m", _dt(2025, 11, 1), _dt(2025, 11, 1), warmup_days=5)
             assert mock_get.call_count == 0
 
@@ -103,7 +103,7 @@ class TestHistData:
 
     def test_tail_append(self, tmp_path, monkeypatch):
         """When the cache is stale at the end, only the tail is fetched."""
-        import indicators.hist_data as hd
+        import backtester.indicators.hist_data as hd
         monkeypatch.setattr(hd, "KLINE_DIR", tmp_path)
 
         interval_ms = 15 * 60 * 1000
@@ -116,7 +116,7 @@ class TestHistData:
         mock_resp.json.return_value = initial_bars
         mock_resp.raise_for_status.return_value = None
 
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp):
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp):
             hd.load_klines("BTCUSDT", "15m", _dt(2025, 10, 1), _dt(2025, 10, 2), warmup_days=0)
 
         # Now request a later end date — should fetch tail
@@ -124,7 +124,7 @@ class TestHistData:
         tail_bars = _make_klines(tail_start_ms, 50, interval_ms)
         mock_resp.json.return_value = tail_bars
 
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp) as mock_get:
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp) as mock_get:
             df = hd.load_klines("BTCUSDT", "15m", _dt(2025, 10, 1), _dt(2025, 10, 5), warmup_days=0)
             assert mock_get.call_count >= 1  # tail was fetched
 
@@ -132,7 +132,7 @@ class TestHistData:
 
     def test_corrupt_cache_recovers(self, tmp_path, monkeypatch):
         """A corrupt cache parquet falls back to a fresh fetch."""
-        import indicators.hist_data as hd
+        import backtester.indicators.hist_data as hd
         monkeypatch.setattr(hd, "KLINE_DIR", tmp_path)
 
         # Write garbage to the cache file
@@ -146,14 +146,14 @@ class TestHistData:
         mock_resp.json.return_value = fake_bars
         mock_resp.raise_for_status.return_value = None
 
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp):
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp):
             df = hd.load_klines("BTCUSDT", "15m", _dt(2025, 11, 1), _dt(2025, 11, 1), warmup_days=0)
 
         assert not df.empty
 
     def test_no_duplicate_index(self, tmp_path, monkeypatch):
         """Returned DataFrame has no duplicate timestamps."""
-        import indicators.hist_data as hd
+        import backtester.indicators.hist_data as hd
         monkeypatch.setattr(hd, "KLINE_DIR", tmp_path)
 
         n = 150
@@ -166,14 +166,14 @@ class TestHistData:
         mock_resp.json.return_value = bars
         mock_resp.raise_for_status.return_value = None
 
-        with patch("indicators.hist_data.requests.get", return_value=mock_resp):
+        with patch("backtester.indicators.hist_data.requests.get", return_value=mock_resp):
             df = hd.load_klines("BTCUSDT", "15m", _dt(2025, 11, 1), _dt(2025, 11, 5), warmup_days=0)
 
         assert not df.index.duplicated().any()
 
 
 # ---------------------------------------------------------------------------
-# backtester/indicators.py
+# backtester/indicators/pipeline.py
 # ---------------------------------------------------------------------------
 
 def _make_15m_df(n_bars=500):
@@ -202,7 +202,7 @@ class TestBuildIndicators:
         df_15m = _make_15m_df(600)
 
         # Patch load_klines to return our synthetic data without network
-        with patch("backtester.indicators.load_klines", return_value=df_15m):
+        with patch("backtester.indicators.pipeline.load_klines", return_value=df_15m):
             ind = build_indicators(
                 deps=[IndicatorDep(name="turbulence", symbol="BTCUSDT", interval="15m")],
                 start=_dt(2025, 11, 1),
@@ -219,7 +219,7 @@ class TestBuildIndicators:
         """Requesting an unknown indicator name raises ValueError."""
         from backtester.indicators import IndicatorDep, build_indicators
 
-        with patch("backtester.indicators.load_klines", return_value=_make_15m_df()):
+        with patch("backtester.indicators.pipeline.load_klines", return_value=_make_15m_df()):
             with pytest.raises(ValueError, match="Unknown indicator"):
                 build_indicators(
                     deps=[IndicatorDep(name="does_not_exist", symbol="BTCUSDT", interval="15m")],
@@ -233,7 +233,7 @@ class TestBuildIndicators:
 
         df_15m = _make_15m_df(600)
 
-        with patch("backtester.indicators.load_klines", return_value=df_15m):
+        with patch("backtester.indicators.pipeline.load_klines", return_value=df_15m):
             ind = build_indicators(
                 deps=[IndicatorDep(
                     name="turbulence",
@@ -251,7 +251,7 @@ class TestBuildIndicators:
 
 
 # ---------------------------------------------------------------------------
-# backtester/engine.py — indicator injection
+# backtester/core/engine.py — indicator injection
 # ---------------------------------------------------------------------------
 
 class _FakeReplay:
@@ -317,7 +317,7 @@ class TestEngineInjection:
 
     def test_set_indicators_called_when_deps_declared(self):
         """Engine calls set_indicators on all instances when indicator_deps is set."""
-        from backtester.engine import _inject_indicators
+        from backtester.core.engine import _inject_indicators
 
         replay = _FakeReplay(_dt(2025, 11, 1), _dt(2025, 11, 10))
         instances = [_StrategyWithDeps(), _StrategyWithDeps()]
@@ -333,7 +333,7 @@ class TestEngineInjection:
 
     def test_no_injection_without_deps(self):
         """Engine does not call set_indicators when strategy has no indicator_deps."""
-        from backtester.engine import _inject_indicators
+        from backtester.core.engine import _inject_indicators
 
         replay = _FakeReplay(_dt(2025, 11, 1), _dt(2025, 11, 10))
         instances = [_StrategyNoDeps()]
@@ -346,12 +346,12 @@ class TestEngineInjection:
 
     def test_run_grid_full_injects(self):
         """run_grid_full calls _inject_indicators for strategies with deps."""
-        from backtester.engine import run_grid_full
+        from backtester.core.engine import run_grid_full
 
         replay = _FakeReplay(_dt(2025, 11, 1), _dt(2025, 11, 10))
         fake_ind = {"turbulence": pd.DataFrame()}
 
-        with patch("backtester.engine._inject_indicators") as mock_inject:
+        with patch("backtester.core.engine._inject_indicators") as mock_inject:
             run_grid_full(
                 _StrategyNoDeps,
                 {"dummy": [1]},

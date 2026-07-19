@@ -44,7 +44,7 @@ class _MinimalRunnableStrategy:
 def _make_minimal_replay(n=120):
     """Build a tiny in-memory MarketReplay-like iterator of n states."""
     from datetime import datetime, timezone, timedelta
-    from backtester.strategy_base import MarketState
+    from backtester.core.strategy_base import MarketState
     import numpy as np
 
     # We use a real-ish MarketState structure
@@ -63,14 +63,14 @@ def _make_minimal_replay(n=120):
 
 def test_callback_invoked_with_totals():
     """progress_cb is called at least once; final call has current == total."""
-    from backtester.engine import run_grid_full
+    from backtester.core.engine import run_grid_full
     from unittest.mock import MagicMock
-    from backtester.market_replay import MarketReplay
+    from backtester.core.market_replay import MarketReplay
     import pathlib
 
     # Use actual data if available; otherwise skip if data missing
     try:
-        import backtester.config as _cfg
+        import backtester.core.config as _cfg
         opts = _cfg.cfg.data.options_parquet
         spot = _cfg.cfg.data.spot_parquet
         import os
@@ -113,9 +113,9 @@ def test_callback_invoked_with_totals():
 
 def test_bad_callback_does_not_break_run():
     """A progress_cb that raises must not abort the run."""
-    from backtester.engine import run_grid_full
-    from backtester.market_replay import MarketReplay
-    import backtester.config as _cfg
+    from backtester.core.engine import run_grid_full
+    from backtester.core.market_replay import MarketReplay
+    import backtester.core.config as _cfg
     import os
 
     try:

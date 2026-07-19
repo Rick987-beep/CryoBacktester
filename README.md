@@ -64,78 +64,66 @@ The Research UI reads those same run bundles interactively at http://localhost:5
 
 ```
 CryoBacktester/
-├── backtester/                    # Core backtesting engine (run from repo root)
+├── backtester/                    # Package root (run from repo root)
 │   ├── run.py                     # CLI entry point
-│   ├── engine.py                  # Single-pass grid runner — run_grid_full()
-│   ├── market_replay.py           # Parquet loader → MarketState iterator
-│   ├── strategy_base.py           # Strategy protocol, Trade/OpenPosition dataclasses,
-│   │                              # composable entry/exit condition factories
-│   ├── results.py                 # GridResult: vectorised scoring, equity metrics
-│   ├── robustness.py              # Deflated Sharpe Ratio (Bailey & López de Prado)
-│   ├── walk_forward.py            # Walk-forward optimisation windows
-│   ├── reporting_v2.py            # Self-contained HTML report generator
-│   ├── reporting_charts.py        # SVG chart primitives
-│   ├── experiment.py              # Sensitivity/WFO from TOML experiment files
-│   ├── indicators.py              # Indicator pre-computation (supertrend, turbulence)
-│   ├── pricing.py                 # Deribit fee model, Black-Scholes helpers
-│   ├── bt_option_selection.py     # Option leg selection helpers
-│   ├── expiry_utils.py            # Expiry date utilities
-│   ├── config.py / config.toml   # Config loader + application settings
-│   │
+│   ├── core/                      # Engine, market replay, pricing, results
+│   │   ├── engine.py              # Single-pass grid runner — run_grid_full()
+│   │   ├── market_replay.py       # Parquet loader → MarketState iterator
+│   │   ├── strategy_base.py       # Strategy protocol, Trade/OpenPosition
+│   │   ├── results.py             # GridResult: vectorised scoring, equity metrics
+│   │   ├── pricing.py             # Deribit fee model, Black-Scholes helpers
+│   │   ├── option_selection.py    # Option leg selection helpers
+│   │   ├── expiry_utils.py        # Expiry date utilities
+│   │   ├── market_hours.py        # US market hours / NYSE calendar
+│   │   ├── config.py / config.toml
+│   ├── research/                  # Sensitivity, WFO, robustness
+│   │   ├── experiment.py
+│   │   ├── walk_forward.py
+│   │   └── robustness.py          # Deflated Sharpe Ratio
+│   ├── reporting/                 # Self-contained HTML reports
+│   │   ├── html_report.py
+│   │   └── charts.py              # SVG chart primitives
+│   ├── indicators/                # Indicator compute + build pipeline
+│   │   ├── pipeline.py            # IndicatorDep / build_indicators
+│   │   ├── hist_data.py           # On-disk Binance kline cache
+│   │   ├── supertrend.py
+│   │   ├── turbulence.py
+│   │   ├── trend_regime.py
+│   │   └── ingest_klines.py
 │   ├── ui/                        # Interactive Research UI (Panel + Bokeh + Plotly)
 │   │   ├── app.py                 # Entry point: python -m backtester.ui.app
 │   │   ├── state.py               # AppState param object (shared reactive state)
 │   │   ├── log.py                 # UI-scoped logger
-│   │   ├── views/                 # One file per tab
-│   │   │   ├── sidebar.py         # Run list, strategy picker, param editor, run control
-│   │   │   ├── grid_view.py       # Results Grid: sortable/filterable combo table
-│   │   │   ├── detail_view.py     # Combo Detail: stats card + equity chart + trade log
-│   │   │   ├── overlay_view.py    # Equity Overlay: multi-combo comparison chart
-│   │   │   ├── favourites_view.py # Favourites: starred combos with TOML export
-│   │   │   └── compare_view.py    # Compare: side-by-side combo metric table
+│   │   ├── views/                 # One file per screen
 │   │   ├── services/              # Data access layer
-│   │   │   ├── store_service.py   # SQLite run index + bundle persistence
-│   │   │   ├── cache_service.py   # LRU ResultCache (holds loaded GridResults)
-│   │   │   ├── equity_service.py  # Equity curve extraction from GridResult
-│   │   │   ├── run_service.py     # Async backtest execution bridge
-│   │   │   ├── run_worker.py      # Background worker thread for live runs
-│   │   │   ├── repro.py           # Reproducibility metadata helpers
-│   │   │   └── toml_export.py     # Favourite → experiment TOML snippet
 │   │   ├── charts/
-│   │   │   └── equity.py          # Plotly equity + drawdown chart builders
-│   │   └── state/
-│   │       └── ui_state.db        # SQLite DB (gitignored)
-│   │
+│   │   └── state/                 # SQLite DB (gitignored)
 │   ├── strategies/                # One file per strategy
 │   │   └── tests/                 # Strategy unit tests
-│   │
+│   ├── calm_nights/               # Calm-nights helpers (cadysho)
 │   ├── experiments/               # TOML experiment definitions
-│   │   ├── delta_strangle_tp_v1.toml
-│   │   └── short_str_turb_dyn_v1.toml
-│   │
-│   └── ingest/
-│       ├── check_data_completeness.py
-│       └── bulkdownloadTardis/    # Tardis bulk download pipeline
+│   ├── ingest/
+│   │   ├── check_data_completeness.py
+│   │   ├── check_parquet.py
+│   │   └── tardis/                # Tardis bulk download pipeline
+│   ├── data/                      # Parquet snapshots (gitignored)
+│   ├── archive/                   # Archived data + legacy strategies (gitignored)
+│   └── reports/                   # Generated HTML / run bundles (gitignored)
 │
-├── tests/                         # UI and integration tests
-│   └── ui/                        # Panel UI unit tests (180+ tests)
-│
-├── indicators/                    # Shared indicator compute functions
-│   ├── hist_data.py               # On-disk Binance kline cache (used by indicators)
-│   ├── supertrend.py              # SuperTrend computation
-│   └── turbulence.py              # Turbulence composite score
-│
-├── market_hours.py                # US market hours / NYSE calendar (stdlib only)
-└── pyproject.toml                 # Python project config and pytest settings
+├── tests/                         # Integration + UI tests
+│   └── ui/
+├── docs/
+├── analysis/                      # One-off analysis artifacts
+├── handover/                      # External handover packages
+└── pyproject.toml
 ```
 
 **Gitignored directories (local work, not code):**
 - `backtester/data/` — parquet snapshots (~924 MB)
-- `backtester/archive/` — archived parquets
-- `backtester/planning/` — research notes, drafts, reference reports
+- `backtester/archive/` — archived parquets + planning + legacy strategies
 - `backtester/reports/` — generated HTML reports and run bundles
 - `backtester/ui/state/` — SQLite UI state DB
-- `indicators/data/` — cached kline data
+- `backtester/indicators/data/` — cached kline data
 
 ---
 
@@ -153,10 +141,10 @@ All option prices are **BTC-denominated** (e.g. `0.0068 BTC`). USD value = `pric
 
 **Tardis bulk download** (historic data, up to ~2 weeks lag):
 ```bash
-python -m backtester.ingest.bulkdownloadTardis.bulk_fetch
+python -m backtester.ingest.tardis.bulk_fetch
 ```
-See `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` for format details.  
-For raw archive before subscription expiry, see `backtester/ingest/bulkdownloadTardis/TARDIS_ARCHIVE_PLAN.md`.
+See `backtester/ingest/tardis/TARDIS_DATA_NOTES.md` for format details.  
+For raw archive before subscription expiry, see `backtester/ingest/tardis/TARDIS_ARCHIVE_PLAN.md`.
 
 **Sync from VPS live recorder** (done from the CryoTrader repo):
 The live tick recorder runs as `ct-recorder` on the VPS and writes daily parquets.
@@ -166,7 +154,7 @@ Both sources produce the same parquet schema — the engine sees no difference.
 
 ### Data paths
 
-`backtester/config.toml` `[data]` section points to the data directory:
+`backtester/core/config.toml` `[data]` section points to the data directory:
 ```toml
 options_parquet = "data"
 spot_parquet    = "data"
@@ -177,7 +165,7 @@ spot_parquet    = "data"
 
 ## Market Replay
 
-`backtester/market_replay.py` — converts parquet files into a time-stepped iterator that strategies consume.
+`backtester/core/market_replay.py` — converts parquet files into a time-stepped iterator that strategies consume.
 
 **`MarketReplay`** loads all parquet files on construction. Strategies iterate over it:
 
@@ -305,7 +293,7 @@ Available modes: `"mark"`, `"executable"`, `"bid"`, `"ask"`.
 
 ## The Engine
 
-`backtester/engine.py` — runs all parameter combos in a **single pass** over the data.
+`backtester/core/engine.py` — runs all parameter combos in a **single pass** over the data.
 
 ```
 run_grid_full(strategy_cls, param_grid, replay)
@@ -422,15 +410,15 @@ class MyStrategy:
     indicator_deps = [IndicatorDep(name="turbulence", ...)]
 ```
 
-The engine calls `backtester/indicators.py` → `build_indicators()` once before the grid run, then attaches the computed series to every strategy instance. **All indicator computation uses historic cached data only** — no live API calls inside the backtest loop.
+The engine calls `backtester/indicators/pipeline.py` → `build_indicators()` once before the grid run, then attaches the computed series to every strategy instance. **All indicator computation uses historic cached data only** — no live API calls inside the backtest loop.
 
 ### Available indicators
 
 | Module | Purpose |
 |---|---|
-| `indicators/supertrend.py` | SuperTrend trend-direction signal |
-| `indicators/turbulence.py` | Composite turbulence score (Parkinson RV, trend, burst, decay) |
-| `indicators/hist_data.py` | On-disk Binance kline cache — loads/saves to `indicators/data/`, no live fetch at backtest time |
+| `backtester/indicators/supertrend.py` | SuperTrend trend-direction signal |
+| `backtester/indicators/turbulence.py` | Composite turbulence score (Parkinson RV, trend, burst, decay) |
+| `backtester/indicators/hist_data.py` | On-disk Binance kline cache — loads/saves to `backtester/indicators/data/`, no live fetch at backtest time |
 
 These files are separate copies from CryoTrader's `indicators/` and diverge independently.
 
@@ -519,7 +507,7 @@ Deviation types: `"pct"` (±N% of best), `"abs"` (±N in natural units), `"fixed
 
 ## Configuration
 
-`backtester/config.toml` — application-level settings. Strategy-specific logic stays in strategy files.
+`backtester/core/config.toml` — application-level settings. Strategy-specific logic stays in strategy files.
 
 Key sections:
 
@@ -558,10 +546,10 @@ Full step-by-step instructions are in `docs/strategy_howto.md`.
 
 **Key imports:**
 ```python
-from backtester.bt_option_selection import select_by_delta
-from backtester.expiry_utils import expiry_dt_utc, select_expiry
-from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
-from backtester.strategy_base import (
+from backtester.core.option_selection import select_by_delta
+from backtester.core.expiry_utils import expiry_dt_utc, select_expiry
+from backtester.core.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
+from backtester.core.strategy_base import (
     OpenPosition, Trade, check_expiry, close_position,
     price_legs, profit_target_pct, stop_loss_pct, max_hold_hours,
 )
@@ -690,4 +678,4 @@ Deribit taker fee model (per leg, per side):
 fee = min(0.03% × index_price, 12.5% × option_mark_price)
 ```
 
-At BTC ~$84k the index cap ≈ 0.00025 BTC/leg and typically binds for options above ~0.002 BTC. Implemented in `backtester/pricing.py`. Parameters configurable in `config.toml` `[fees]`.
+At BTC ~$84k the index cap ≈ 0.00025 BTC/leg and typically binds for options above ~0.002 BTC. Implemented in `backtester/core/pricing.py`. Parameters configurable in `config.toml` `[fees]`.

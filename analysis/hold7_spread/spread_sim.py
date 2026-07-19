@@ -44,7 +44,7 @@ DELTA_TARGETS = [0.03, 0.05, 0.08]
 
 def deribit_fee(spot: float, price_usd: float) -> float:
     """
-    Matches backtester/pricing.py exactly:
+    Matches backtester/core/pricing.py exactly:
       index_rate    = 0.00025  (0.025% of index per contract)
       price_cap_frac = 0.1042  (10.42% of option price)
     """
@@ -823,7 +823,7 @@ def _fee_section() -> str:
   <h2>Fee Model Verification</h2>
   <p style="margin-bottom:.75rem">
     Fees are applied to <strong>both the long entry and long exit</strong> using the same model
-    as the backtester (<code>backtester/pricing.py · deribit_fee_per_leg</code>):
+    as the backtester (<code>backtester/core/pricing.py · deribit_fee_per_leg</code>):
   </p>
   <table style="max-width:520px">
     <thead><tr><th>Parameter</th><th>Value</th><th>Formula</th></tr></thead>

@@ -39,7 +39,7 @@ handover/tudysho_cryotrader/reference/tudysho.py
 |---|--------------------------------|---------|
 | Param | `ENTRY_HOUR` — **UTC** hour | `entry_time` — **NYC wall-clock** `"HH:MM"` (DST-aware) |
 
-Live sets use `"12:00"` NYC. Do **not** pass this as `ENTRY_HOUR=12` UTC. Port `to_nyc` / `to_utc` from backtester `market_hours.py` or equivalent in CryoTrader.
+Live sets use `"12:00"` NYC. Do **not** pass this as `ENTRY_HOUR=12` UTC. Port `to_nyc` / `to_utc` from backtester `backtester/core/market_hours.py` or equivalent in CryoTrader.
 
 ### Sizing — **largest code change**
 

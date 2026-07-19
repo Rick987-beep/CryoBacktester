@@ -38,7 +38,7 @@ Steps each tick:
 
 The NYC **date** matters: Friday 12:00 NYC is a different UTC instant than Thursday 12:00 NYC near DST boundaries.
 
-Reference implementation: `reference/market_hours.py` (`to_nyc`, `to_utc`).
+Reference implementation: `reference/backtester/core/market_hours.py` (`to_nyc`, `to_utc`).
 
 ---
 
@@ -125,7 +125,7 @@ Full detail: `POSITION_RULES.md`.
 
 ## CryoTrader porting checklist (timezone)
 
-- [ ] Port or import `to_nyc` / `to_utc` (CryoTrader has `market_hours.py`).
+- [ ] Port or import `to_nyc` / `to_utc` (CryoTrader has `backtester/core/market_hours.py`).
 - [ ] Replace `ENTRY_HOUR` UTC gate with NYC `entry_time` from active slot.
 - [ ] Resolve slot using `to_nyc(dt).weekday()` and schedule in `LIVE_PARAM_SCHEDULE.json`.
 - [ ] Store `entry_time_nyc`, `slot_id`, and `combo_hash` on trade metadata at open.

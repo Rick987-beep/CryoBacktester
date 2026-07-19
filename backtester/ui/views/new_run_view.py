@@ -274,7 +274,7 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
         f_str = date_from_input.value.strip() or None
         t_str = date_to_input.value.strip() or None
 
-        import backtester.config as _bcfg
+        import backtester.core.config as _bcfg
         account_size = float(_bcfg.cfg.simulation.account_size_usd)
 
         try:

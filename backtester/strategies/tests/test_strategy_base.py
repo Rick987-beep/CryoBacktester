@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backtester.strategy_base import (
+from backtester.core.strategy_base import (
     OpenPosition,
     price_legs,
     stop_loss_pct,

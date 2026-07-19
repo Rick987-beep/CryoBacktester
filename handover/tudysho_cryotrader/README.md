@@ -96,7 +96,7 @@ handover/tudysho_cryotrader/
 │   ├── SOURCE.md                  ← canonical paths for copied files
 │   ├── tudysho.py                 ← copy of backtester/strategies/tudysho.py
 │   ├── test_tudysho.py
-│   ├── market_hours.py
+│   ├── backtester/core/market_hours.py
 │   └── expiry_utils.py
 └── backtests/
     ├── summary.json

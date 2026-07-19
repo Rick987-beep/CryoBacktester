@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backtester.strategy_base import OpenPosition
+from backtester.core.strategy_base import OpenPosition
 from backtester.strategies.tudysho import TuDySho
 
 
@@ -327,7 +327,7 @@ class TestNavPremiumSizing:
 
     def test_falls_back_to_account_size_without_state_fields(self):
         s = _strategy(nav_premium_pct=0.8, max_qty_per_1btc_equity=20)
-        from backtester.config import cfg
+        from backtester.core.config import cfg
         state = SimpleNamespace(spot=100_000.0)
         qty, meta = s._compute_quantity(state, premium_usd_per_contract=100.0)
         acct = cfg.simulation.account_size_usd

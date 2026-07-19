@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
-from backtester.pricing import EXPIRY_HOUR_UTC
+from backtester.core.pricing import EXPIRY_HOUR_UTC
 
 
 # ---------------------------------------------------------------------------

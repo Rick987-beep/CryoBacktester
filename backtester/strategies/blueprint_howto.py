@@ -36,10 +36,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from backtester.bt_option_selection import select_by_delta
-from backtester.expiry_utils import expiry_dt_utc, select_expiry
-from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
-from backtester.strategy_base import (
+from backtester.core.option_selection import select_by_delta
+from backtester.core.expiry_utils import expiry_dt_utc, select_expiry
+from backtester.core.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
+from backtester.core.strategy_base import (
     OpenPosition,
     Trade,
     check_expiry,

@@ -32,38 +32,50 @@ Strategies are occasionally ported from CryoBacktester → CryoTrader — that i
 
 ```
 CryoBacktester/
-├── backtester/                 # Core backtesting engine (run from repo root)
-│   ├── run.py                  # CLI: python -m backtester.run
-│   ├── engine.py               # Single-pass grid runner (run_grid_full)
-│   ├── market_replay.py        # 5-min snapshot iterator → MarketState
-│   ├── results.py              # GridResult: vectorised scoring, equity metrics
-│   ├── robustness.py           # Deflated Sharpe Ratio (Bailey & López de Prado)
-│   ├── walk_forward.py         # Walk-forward optimisation windows
-│   ├── reporting_v2.py         # Self-contained HTML report generator
-│   ├── reporting_charts.py     # SVG chart primitives
-│   ├── experiment.py           # Sensitivity/WFO from TOML experiment files
-│   ├── indicators.py           # Indicator pre-computation (supertrend, turbulence)
-│   ├── pricing.py              # Deribit fee model, Black-Scholes helpers
-│   ├── bt_option_selection.py  # Option leg selection for backtester
-│   ├── expiry_utils.py         # Expiry date utilities
-│   ├── config.py               # Config loader
-│   ├── config.toml             # Scoring weights, grid params, data paths
-│   ├── strategy_base.py        # Strategy protocol, trade dataclasses
-│   ├── strategies/             # One file per strategy
-│   │   └── tests/              # Strategy unit tests
-│   ├── experiments/            # TOML experiment definitions
+├── backtester/                      # Package root (run from repo root)
+│   ├── run.py                       # CLI: python -m backtester.run
+│   ├── core/                        # Engine, market replay, pricing, results
+│   │   ├── engine.py                # Single-pass grid runner (run_grid_full)
+│   │   ├── market_replay.py         # 5-min snapshot iterator → MarketState
+│   │   ├── results.py               # GridResult: vectorised scoring, equity metrics
+│   │   ├── pricing.py               # Deribit fee model, Black-Scholes helpers
+│   │   ├── option_selection.py      # Option leg selection helpers
+│   │   ├── expiry_utils.py          # Expiry date utilities
+│   │   ├── strategy_base.py         # Strategy protocol, trade dataclasses
+│   │   ├── market_hours.py          # US market hours / NYSE calendar
+│   │   ├── config.py                # Config loader
+│   │   └── config.toml              # Scoring weights, data paths
+│   ├── research/                    # Sensitivity, WFO, robustness
+│   │   ├── experiment.py
+│   │   ├── walk_forward.py
+│   │   └── robustness.py            # Deflated Sharpe Ratio
+│   ├── reporting/                   # Self-contained HTML reports
+│   │   ├── html_report.py
+│   │   └── charts.py                # SVG chart primitives
+│   ├── indicators/                  # Indicator compute + build pipeline
+│   │   ├── pipeline.py              # IndicatorDep / build_indicators
+│   │   ├── hist_data.py             # On-disk Binance kline cache
+│   │   ├── supertrend.py
+│   │   ├── turbulence.py
+│   │   ├── trend_regime.py
+│   │   └── ingest_klines.py
+│   ├── strategies/                  # One file per strategy
+│   │   └── tests/                   # Strategy unit tests
+│   ├── calm_nights/                 # Calm-nights indicator helpers (cadysho)
+│   ├── ui/                          # Interactive Research UI
+│   ├── experiments/                 # TOML experiment definitions
 │   ├── ingest/
 │   │   ├── check_data_completeness.py
-│   │   └── bulkdownloadTardis/ # Tardis bulk download pipeline
-│   ├── data/                   # Parquet snapshots (gitignored, ~924 MB)
-│   ├── data_archive/           # Archived parquets (gitignored, ~446 MB)
-│   ├── data_spot_rebuilt/      # Rebuilt spot parquets (gitignored)
-│   └── reports/                # Generated HTML reports (gitignored)
-├── indicators/                 # Local copies of shared indicator compute functions
-│   ├── hist_data.py            # On-disk Binance kline cache (for backtesting)
-│   ├── supertrend.py           # SuperTrend computation
-│   └── turbulence.py           # Turbulence composite score
-└── market_hours.py             # US market hours / NYSE calendar (stdlib only)
+│   │   ├── check_parquet.py
+│   │   └── tardis/                  # Tardis bulk download pipeline
+│   ├── data/                        # Parquet snapshots (gitignored)
+│   ├── archive/                     # Archived data + legacy strategies (gitignored)
+│   └── reports/                     # Generated HTML reports (gitignored)
+├── tests/                           # Integration + UI tests
+│   └── ui/
+├── docs/
+├── analysis/                        # One-off analysis artifacts
+└── handover/                        # External handover packages
 ```
 
 ---
@@ -95,7 +107,7 @@ All other strategies are in `backtester/archive/strategies_to_be_fixed/` — not
 1. Load snapshot parquets from `backtester/data/` via `MarketReplay`
 2. `engine.run_grid_full()` runs **all parameter combos in one pass** over the data
 3. `GridResult` computes vectorised metrics per combo: Sharpe, PnL, Omega, Ulcer Index, drawdown, DSR, composite score
-4. `reporting_v2.generate_html()` renders a self-contained HTML file (no recomputation)
+4. `backtester.reporting.generate_html()` renders a self-contained HTML file (no recomputation)
 
 ---
 
@@ -142,7 +154,7 @@ Parquet snapshots live in `backtester/data/` (~924 MB, gitignored). Two ingestio
 
 **Tardis bulk download** (historic, up to ~2 weeks lag):
 ```bash
-python -m backtester.ingest.bulkdownloadTardis.bulk_fetch
+python -m backtester.ingest.tardis.bulk_fetch
 ```
 
 **Sync live recorder data from VPS** (done from the CryoTrader repo):
@@ -151,15 +163,18 @@ Sync them down using `backtester/ingest/tickrecorder/sync.py` in CryoTrader.
 
 ---
 
-## Indicators (`indicators/`)
+## Indicators (`backtester/indicators/`)
 
-Pure-compute functions used by backtester strategies via `backtester/indicators.py`:
+Pure-compute functions used by backtester strategies via `backtester.indicators.pipeline`:
 
 | File | Purpose |
 |------|---------|
+| `pipeline.py` | `IndicatorDep` / `build_indicators` — wires compute into the engine |
 | `hist_data.py` | Persistent on-disk Binance kline cache — loads/saves to disk, no live fetch at backtest time |
 | `supertrend.py` | SuperTrend computation |
 | `turbulence.py` | Composite turbulence score (Parkinson RV, trend, burst, decay) |
+| `trend_regime.py` | 3-state BTC trend composite (+1 / 0 / −1) |
+| `ingest_klines.py` | CLI to refresh the on-disk kline cache |
 
 **Design rule**: backtesting must be fully reproducible from cached/historic data.
 Never add live-API fetches inside the backtest loop — only `hist_data.py`-style on-disk caches.
@@ -170,7 +185,7 @@ These indicator files are separate copies from CryoTrader's `indicators/` — th
 ## Coding conventions
 
 - Python 3.12; venv at `.venv/`
-- Strategies implement the `Strategy` protocol from `backtester/strategy_base.py`
+- Strategies implement the `Strategy` protocol from `backtester/core/strategy_base.py`
 - One strategy per file in `backtester/strategies/`
 - `PARAM_GRID` in each strategy = wide, unbiased discovery grid (never narrowed post-hoc)
 - Experiment TOMLs in `backtester/experiments/` capture "what we think is good and why"
@@ -185,10 +200,10 @@ Full detail is in `docs/strategy_howto.md`.
 
 ### Required imports
 ```python
-from backtester.bt_option_selection import select_by_delta
-from backtester.expiry_utils import expiry_dt_utc, select_expiry
-from backtester.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
-from backtester.strategy_base import (
+from backtester.core.option_selection import select_by_delta
+from backtester.core.expiry_utils import expiry_dt_utc, select_expiry
+from backtester.core.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
+from backtester.core.strategy_base import (
     OpenPosition, Trade, check_expiry, close_position,
     price_legs, profit_target_pct, stop_loss_pct, max_hold_hours,
 )
@@ -269,7 +284,7 @@ STRATEGIES["my_strategy"] = MyStrategy
 | `README.md` | Full backtester workflow, research pipeline, all sections |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
 | `backtester/strategies/blueprint_howto.py` | Canonical working strategy implementation |
-| `backtester/config.toml` | Scoring weights, grid params, simulation config |
-| `backtester/ingest/bulkdownloadTardis/TARDIS_DATA_NOTES.md` | Tardis data format notes |
-| `backtester/ingest/bulkdownloadTardis/TARDIS_ARCHIVE_PLAN.md` | Raw options_chain archive to Storage Box (download-only, pre-expiry) |
-| `backtester/ingest/bulkdownloadTardis/BULK_DOWNLOAD_PLAN.md` | Bulk extract pipeline (gz → parquets) |
+| `backtester/core/config.toml` | Scoring weights, grid params, simulation config |
+| `backtester/ingest/tardis/TARDIS_DATA_NOTES.md` | Tardis data format notes |
+| `backtester/ingest/tardis/TARDIS_ARCHIVE_PLAN.md` | Raw options_chain archive to Storage Box (download-only, pre-expiry) |
+| `backtester/ingest/tardis/BULK_DOWNLOAD_PLAN.md` | Bulk extract pipeline (gz → parquets) |

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 
-from market_hours import NYC, is_trading_day, to_utc
+from backtester.core.market_hours import NYC, is_trading_day, to_utc
 
 UTC = timezone.utc
 

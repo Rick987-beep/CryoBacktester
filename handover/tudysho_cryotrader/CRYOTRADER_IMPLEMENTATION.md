@@ -29,7 +29,7 @@ Start from **`CryoTrader/strategies/short_str_turb_dyn.py`** — do not use `Cry
 
 - [ ] Fork `CryoTrader/strategies/short_str_turb_dyn.py` as the starting file.
 - [ ] Confirm turbulence composite matches backtester (reuse existing `_turbulence_ok` + T−1h bucket logic).
-- [ ] **Entry time:** NYC `entry_time` per slot; port `to_nyc` / `to_utc` (`reference/market_hours.py`).
+- [ ] **Entry time:** NYC `entry_time` per slot; port `to_nyc` / `to_utc` (`reference/backtester/core/market_hours.py`).
 - [ ] Expose **`nav_usd`** and **`equity_usd`** on the account object used in sizing.
 
 ### Phase 2 — Param loading
@@ -67,7 +67,7 @@ Start from **`CryoTrader/strategies/short_str_turb_dyn.py`** — do not use `Cry
 | `CryoTrader/strategies/short_str_turb_dyn.py` | **Fork this** |
 | `CryoTrader/strategies/strategy.py` | Shared helpers |
 | `CryoTrader/option_selection.py` | `strangle`, `resolve_legs` |
-| `CryoTrader/indicators/turbulence.py` | Composite definition |
+| `CryoTrader/backtester/indicators/turbulence.py` | Composite definition |
 | `CryoTrader/execution/profiles.py` | `strangle_turb_best_effort` |
 
 ---
@@ -103,7 +103,7 @@ Live values: A `6.0`, B/C `4.0`. Reconcile with CryoTrader `_combined_sl()` — 
 | Path | Purpose |
 |------|---------|
 | `backtester/strategies/tudysho.py` | Canonical strategy (copied to `reference/`) |
-| `backtester/strategy_base.py` | Exit condition factories |
-| `backtester/bt_option_selection.py` | Delta selection |
-| `market_hours.py` | NYC/UTC |
+| `backtester/core/strategy_base.py` | Exit condition factories |
+| `backtester/core/option_selection.py` | Delta selection |
+| `backtester/core/market_hours.py` | NYC/UTC |
 | `docs/strategy_howto.md` | Leg dict required fields |

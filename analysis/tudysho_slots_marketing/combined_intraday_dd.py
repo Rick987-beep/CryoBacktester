@@ -226,7 +226,7 @@ def compute_combined_intraday_equity(
 
 
 def nav_daily_for_equity_metrics(daily: pd.DataFrame, capital: float) -> pd.DataFrame:
-    """nav_daily frame for backtester.results.equity_metrics."""
+    """nav_daily frame for backtester.core.results.equity_metrics."""
     out = daily[["date", "nav_close", "nav_high", "nav_low"]].copy()
     out["realized_close"] = daily["nav_close_realized"] - capital
     return out
