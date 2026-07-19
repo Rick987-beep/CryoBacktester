@@ -1,5 +1,5 @@
 """
-views/overlay_view.py — Equity Overlay tab.
+views/overlay_view.py — Multi-combo equity overlay (embedded in Combo Detail).
 
 Renders a multi-combo equity overlay chart.
 Responds to state.selected_combo_keys and state.active_run_id.
@@ -7,7 +7,6 @@ Responds to state.selected_combo_keys and state.active_run_id.
 Controls:
   - Y-mode toggle: NAV vs Cum PnL
   - Log-y toggle
-  - Underwater subplot toggle (not yet implemented: wrapped for future)
 """
 import panel as pn
 import param
@@ -58,7 +57,20 @@ def build_overlay_view(state, cache) -> pn.Column:
 
         if run_id is None or not keys:
             chart_pane.object = equity_overlay_figure({})
-            warn_pane.object = ""
+            warn_pane.object = (
+                "<div style='color:#6b7280;font-size:12px'>"
+                "Select 2+ combos in the Results Grid to overlay equity curves."
+                "</div>"
+            )
+            return
+
+        if len(keys) == 1:
+            chart_pane.object = equity_overlay_figure({})
+            warn_pane.object = (
+                "<div style='color:#6b7280;font-size:12px'>"
+                "Select 2+ combos in the Results Grid to overlay equity curves."
+                "</div>"
+            )
             return
 
         if len(keys) > _MAX_OVERLAY:

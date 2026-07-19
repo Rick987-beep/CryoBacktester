@@ -598,6 +598,55 @@ class StoreService:
 
         return to_prune
 
+    def delete_runs(self, run_ids: list[int], *, allow_pinned: bool = False) -> list[RunRow]:
+        """Delete specific runs by id (favourites + SQLite row + bundle dir).
+
+        Pinned runs are skipped unless *allow_pinned* is True.
+        Returns the list of runs that were actually deleted.
+        Mirrors prune_runs safety: DB commit first, then rmtree bundles.
+        """
+        import shutil
+
+        if not run_ids:
+            return []
+
+        con = self._connect()
+        try:
+            placeholders = ",".join("?" * len(run_ids))
+            rows = con.execute(
+                f"SELECT * FROM runs WHERE id IN ({placeholders})",
+                tuple(run_ids),
+            ).fetchall()
+            candidates = [_row_to_run_row(r) for r in rows]
+        finally:
+            con.close()
+
+        to_delete = [
+            rr for rr in candidates
+            if allow_pinned or not rr.pinned
+        ]
+        if not to_delete:
+            return []
+
+        with _WRITE_LOCK:
+            con = self._connect()
+            try:
+                for rr in to_delete:
+                    con.execute("DELETE FROM favourites WHERE run_id = ?", (rr.id,))
+                    con.execute("DELETE FROM runs WHERE id = ?", (rr.id,))
+                con.commit()
+            finally:
+                con.close()
+
+        for rr in to_delete:
+            bundle_path = Path(rr.bundle_path)
+            if bundle_path.exists() and bundle_path.is_dir():
+                shutil.rmtree(bundle_path, ignore_errors=True)
+                log.info("Deleted bundle: %s", bundle_path)
+
+        return to_delete
+
+
 def _row_to_run_row(row: sqlite3.Row) -> RunRow:
     return RunRow(
         id=int(row["id"]),

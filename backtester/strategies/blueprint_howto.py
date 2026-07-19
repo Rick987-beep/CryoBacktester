@@ -135,6 +135,18 @@ class BlueprintHowto:
         "take_profit_pct": [0.30],
         "qty":             [1.0],
     }
+    # Optional per-param help shown in the Research UI New Run table.
+    # Missing keys (or omitting PARAM_HELP entirely) show "—" in the help column.
+    PARAM_HELP = {
+        "entry_date":      "UTC date (YYYY-MM-DD) on which the trade may open.",
+        "entry_hour_utc":  "UTC hour (0–23); first tick at or after this hour.",
+        "direction":       '"short" = sell strangle; "long" = buy strangle.',
+        "delta":           "Target |delta| per leg (0.20 ≈ 20-delta OTM).",
+        "dte":             "Calendar days to target expiry (1 = next-day).",
+        "stop_loss_pct":   "Max loss as fraction of entry premium (1.5 = 150%).",
+        "take_profit_pct": "Target profit as fraction of premium (0 = disabled).",
+        "qty":             "Contracts per leg.",
+    }
     # To add an indicator: uncomment and follow the pattern in short_str_turb_dyn.py.
     # indicator_deps = [
     #     IndicatorDep(name="turbulence", symbol="BTCUSDT", interval="15m"),

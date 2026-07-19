@@ -1,11 +1,13 @@
 """
-views/detail_view.py — Combo Detail tab.
+views/detail_view.py — Combo Detail page.
 
 Three stacked sections for one focused combo:
   1. Stats card — key/value grid of all scalar metrics.
   2. Equity + drawdown — Plotly two-subplot chart.
   3. Trades table — Tabulator of all trades for this combo.
      Clicking a row opens the Trade Inspector panel (replaces a placeholder pane).
+
+Plus a multi-combo Equity Overlay section (when ≥2 grid rows are selected).
 
 Layout switches whenever state.active_combo_key or state.active_run_id changes.
 """
@@ -41,6 +43,9 @@ _STATS_LABELS = {
     "consec_wins":    "Max Consec Wins",
     "consec_losses":  "Max Consec Losses",
 }
+
+
+_N_METRIC_ROWS = len(_STATS_LABELS)  # 13 — drives table height
 
 
 def _fmt(v) -> str:
@@ -91,47 +96,88 @@ def _fmt_trade_val(col: str, val) -> str:
     return str(val)
 
 
-def _stats_card_html(stats: dict, eq: dict | None, key: tuple, rank: int | None) -> str:
-    """Build an HTML snippet for the stats card."""
-    params = dict(key) if key else {}
-    rank_str = f"Rank #{rank}" if rank is not None else ""
-
-    # Params section
-    param_rows = "".join(
-        f"<tr><td><b>{k}</b></td><td>{v}</td></tr>"
-        for k, v in params.items()
+def _param_cell_html(name: str | None, value) -> str:
+    """One parameter/value cell (or empty placeholder)."""
+    if name is None:
+        return "<td style='padding:3px 14px 3px 0;color:#d1d5db'>&nbsp;</td>"
+    return (
+        f"<td style='padding:3px 18px 3px 0;vertical-align:top;white-space:nowrap'>"
+        f"<span style='color:#6b7280'>{name}</span>"
+        f"&nbsp;&nbsp;<b style='color:#1a1a2e'>{value}</b></td>"
     )
 
-    # Stats section — from all_stats
+
+def _stats_card_html(stats: dict, eq: dict | None, key: tuple, rank: int | None = None) -> str:
+    """Build HTML for Parameters (3 cols) + Performance Metrics (1 col), 13 rows."""
+    params = list(dict(key).items()) if key else []
+
     merged = dict(stats) if stats else {}
-    # Overlay equity-only metrics if available
     if eq:
         for k in ("sortino", "calmar", "consec_wins", "consec_losses"):
             if k in eq:
                 merged[k] = eq[k]
 
-    stat_rows = ""
-    for field, label in _STATS_LABELS.items():
-        val = merged.get(field)
-        stat_rows += f"<tr><td style='color:#6b7280'>{label}</td><td><b>{_fmt(val)}</b></td></tr>"
+    metric_items = [
+        (label, _fmt(merged.get(field)))
+        for field, label in _STATS_LABELS.items()
+    ]
+    n_rows = _N_METRIC_ROWS
+
+    # Column-major fill: col0 gets params[0:13], col1 params[13:26], col2 params[26:39]
+    def _param_at(col: int, row: int):
+        idx = col * n_rows + row
+        if idx < len(params):
+            return params[idx]
+        return None
+
+    body_rows = []
+    for row in range(n_rows):
+        cells = []
+        for col in range(3):
+            item = _param_at(col, row)
+            if item is None:
+                cells.append(_param_cell_html(None, None))
+            else:
+                cells.append(_param_cell_html(item[0], item[1]))
+        m_label, m_val = metric_items[row]
+        cells.append(
+            f"<td style='padding:3px 0 3px 18px;vertical-align:top;white-space:nowrap;"
+            f"border-left:1px solid #e5e7eb'>"
+            f"<span style='color:#6b7280'>{m_label}</span>"
+            f"&nbsp;&nbsp;<b style='color:#1a1a2e'>{m_val}</b></td>"
+        )
+        body_rows.append("<tr>" + "".join(cells) + "</tr>")
 
     return f"""
-<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;line-height:1.6">
-  <div>
-    <div style="font-weight:600;margin-bottom:4px;color:#1a1a2e">Params
-      {f'<span style="color:#6b7280;font-weight:normal;margin-left:8px">{rank_str}</span>' if rank_str else ''}
-    </div>
-    <table style="border-collapse:collapse">
-      {param_rows}
-    </table>
-  </div>
-  <div>
-    <div style="font-weight:600;margin-bottom:4px;color:#1a1a2e">Metrics</div>
-    <table style="border-collapse:collapse">
-      {stat_rows}
-    </table>
-  </div>
+<div style="font-size:13px;line-height:1.45;margin:4px 0 12px 0">
+  <table style="border-collapse:collapse;width:100%;table-layout:fixed">
+    <colgroup>
+      <col style="width:22%"><col style="width:22%"><col style="width:22%"><col style="width:34%">
+    </colgroup>
+    <thead>
+      <tr>
+        <th colspan="3" style="text-align:left;padding:4px 14px 8px 0;color:#1a1a2e;
+            font-size:14px;border-bottom:1px solid #e5e7eb">Parameters</th>
+        <th style="text-align:left;padding:4px 0 8px 18px;color:#1a1a2e;font-size:14px;
+            border-bottom:1px solid #e5e7eb;border-left:1px solid #e5e7eb">Performance Metrics</th>
+      </tr>
+    </thead>
+    <tbody>
+      {"".join(body_rows)}
+    </tbody>
+  </table>
 </div>"""
+
+
+def _headline_html(combo_id: str, rank: int | None) -> str:
+    rank_str = f"Rank #{rank}" if rank is not None else "Rank —"
+    return (
+        f"<div style='display:flex;align-items:baseline;gap:16px;flex-wrap:wrap'>"
+        f"<span style='font-size:20px;font-weight:700;color:#1a1a2e;"
+        f"font-family:ui-monospace,Menlo,monospace'>{combo_id}</span>"
+        f"<span style='font-size:16px;font-weight:600;color:#374151'>{rank_str}</span>"
+        f"</div>"
+    )
 
 
 def _trades_df(result, combo_idx: int) -> pd.DataFrame:
@@ -333,12 +379,21 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
 
         _refresh_star_btn(run_id, key)
 
-        # 1 — Stats card (with star button)
+        from backtester.ui.services.store_service import key_hash as _kh
+        combo_id = _kh(key)
+        headline = pn.Row(
+            pn.pane.HTML(_headline_html(combo_id, rank), sizing_mode="stretch_width"),
+            _star_btn,
+            _star_feedback,
+            sizing_mode="stretch_width",
+            margin=(4, 0, 8, 0),
+        )
+
+        # 1 — Parameters + Performance Metrics table
         card = pn.pane.HTML(
             _stats_card_html(stats, eq, key, rank),
             sizing_mode="stretch_width",
         )
-        star_row = pn.Row(_star_btn, _star_feedback, sizing_mode="stretch_width")
 
         # 2 — Equity + drawdown chart
         if eq and eq.get("daily"):
@@ -408,7 +463,9 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
 
             tab.param.watch(_on_trade_select, "selection")
             trades_section = pn.Column(
-                pn.pane.HTML("<h4 style='margin:8px 0 4px 0;color:#1a1a2e'>Trades</h4>"),
+                pn.pane.HTML(
+                    "<h4 style='margin:8px 0 4px 0;color:#1a1a2e'>Trades List</h4>"
+                ),
                 tab,
                 pn.pane.HTML(
                     "<div style='color:#6b7280;font-size:12px;margin-top:4px'>"
@@ -419,7 +476,7 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
             )
             trades_pane = trades_section
 
-        _content[:] = [star_row, card, equity_pane, wfo_pane, trades_pane]
+        _content[:] = [headline, card, equity_pane, wfo_pane, trades_pane]
 
     # ── WFO helper ─────────────────────────────────────────────────────────────
     def _wfo_section(run_id) -> pn.viewable.Viewable:
@@ -485,4 +542,15 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
 
     state.param.watch(_on_change, ["active_run_id", "active_combo_key"])
 
-    return pn.Column(_content, sizing_mode="stretch_width")
+    # Multi-combo equity overlay (folded from former Equity Overlay tab)
+    from backtester.ui.views.overlay_view import build_overlay_view
+    overlay_section = build_overlay_view(state, cache)
+
+    return pn.Column(
+        _content,
+        pn.pane.HTML(
+            "<hr style='margin:20px 0 8px 0;border:none;border-top:1px solid #e5e7eb'>"
+        ),
+        overlay_section,
+        sizing_mode="stretch_width",
+    )

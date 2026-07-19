@@ -35,6 +35,18 @@ def _decode_query(qs: str) -> dict:
     return result
 
 
+def test_legacy_tab_url_mapping():
+    """Legacy Overlay/Compare tab names remap for bookmarks."""
+    from backtester.ui.views.chrome import normalize_tab_name
+    from backtester.ui.state import AppState
+
+    state = AppState()
+    state.active_tab = normalize_tab_name("Equity Overlay")
+    assert state.active_tab == "Combo Detail"
+    state.active_tab = normalize_tab_name("Compare")
+    assert state.active_tab == "Favourites"
+
+
 def test_encode_decode_state():
     """Encoding and decoding URL state returns consistent keys."""
     from backtester.ui.services.store_service import key_hash

@@ -683,7 +683,6 @@ Steps:
 **Deliverables**
 
 - Column chooser in the grid view (hide/show per column); preset saved to SQLite keyed by `(strategy, sha256(sorted_param_names))`; falls back to defaults when schema differs.
-- Dark mode toggle (Panel `FastListTemplate` `theme="dark"`); preference saved per user.
 - Keyboard shortcuts (Panel's `pn.state.onload` + JS snippet): `/` focus filter, `f` toggle star on focused row, `Esc` close modal / clear selection.
 - Export filtered grid view to CSV (button in grid toolbar).
 - Param-grid editor range shorthand: `0.1..0.5:0.1` → `[0.1, 0.2, 0.3, 0.4, 0.5]`; `10..50:5` → `[10, 15, 20, …, 50]`. Same validator path as CSV.
@@ -698,7 +697,7 @@ Steps:
 **Manual live test** — signed off 2026-05-13
 
 1. ✅ Hide/show columns; reload → columns stay hidden.
-2. ✅ Toggle dark mode; reload → persists.
+2. ✅ Reload app → light theme only (dark mode removed).
 3. ✅ Keyboard shortcuts removed (didn't react; removed per user request).
 4. ✅ CSV export works.
 5. ✅ Range shorthand (`0.1..0.5:0.1`) works (limited test).
