@@ -34,7 +34,7 @@ def test_csv_has_expected_columns(tiny_grid_result):
     csv_df = df.drop(columns=["_key_hash"], errors="ignore")
     csv_str = csv_df.to_csv(index=False)
     parsed = pd.read_csv(io.StringIO(csv_str))
-    for col in ("rank", "score", "total_pnl", "sharpe"):
+    for col in ("rank", "score", "total_pnl", "ann_return", "sharpe"):
         assert col in parsed.columns, f"Expected column '{col}' in CSV"
 
 

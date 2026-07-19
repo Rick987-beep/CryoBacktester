@@ -260,7 +260,7 @@ function sortRobTable(col, th) {
     for p in param_names:
         hdr += f'<th onclick="sortRobTable({col},this)" data-asc="0" style="cursor:pointer">{_param_label(p)}</th>'
         col += 1
-    for lbl in ["PnL", "Win%", "Sharpe", "MaxDD%", "PF", "Score"]:
+    for lbl in ["PnL", "AnnRet%", "Win%", "Sharpe", "MaxDD%", "PF", "Score"]:
         hdr += f'<th onclick="sortRobTable({col},this)" data-asc="0" style="cursor:pointer">{lbl}</th>'
         col += 1
     hdr += '</tr></thead>'
@@ -281,6 +281,7 @@ function sortRobTable(col, th) {
             row += f'<td data-v="{params[p]}">{_fmt_val(params[p])}</td>'
         row += (
             f'<td class="{pnl_cls}" data-v="{s["total_pnl"]:.0f}">{_fmt_pnl(s["total_pnl"])}</td>'
+            f'<td data-v="{s.get("ann_return", 0)*100:.1f}">{s.get("ann_return", 0)*100:.1f}%</td>'
             f'<td data-v="{s["win_rate"]*100:.0f}">{s["win_rate"]*100:.0f}%</td>'
             f'<td data-v="{s["sharpe"]:.2f}">{s["sharpe"]:.2f}</td>'
             f'<td data-v="{s["max_dd_pct"]:.1f}">{s["max_dd_pct"]:.1f}%</td>'
@@ -549,6 +550,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         parts.append(f"""<div class="grid-info">
   <b>Best Combo &mdash; Risk Summary:</b> &nbsp;
     Max DD: {_fmt_pnl(_eq["max_drawdown"])} ({_eq["max_dd_pct"]:.1f}%) &nbsp;|&nbsp;
+  Ann. Return: {_bs.get("ann_return", _eq.get("ann_return", 0))*100:.1f}% &nbsp;|&nbsp;
   Sharpe: {_eq["sharpe"]:.2f} &nbsp;|&nbsp;
   Sortino: {_eq["sortino"]:.2f} &nbsp;|&nbsp;
   Calmar: {_eq["calmar"]:.2f} &nbsp;|&nbsp;
@@ -575,6 +577,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         pnl_cls = _pnl_class(best_stats["total_pnl"])
         metrics_html = [
             ("Total PnL", f'<span class="{pnl_cls}">{_fmt_pnl(best_stats["total_pnl"])}</span>'),
+            ("Ann. Return", f'{best_stats.get("ann_return", 0)*100:.1f}%'),
             ("Trades", str(best_stats["n"])),
             ("Avg PnL", _fmt_pnl(best_stats["avg_pnl"])),
             ("Win Rate", f'{best_stats["win_rate"]*100:.0f}%'),
@@ -675,7 +678,8 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
     hdr = "<tr><th>#</th>"
     for p in param_names:
         hdr += f"<th>{_param_label(p)}</th>"
-    hdr += ("<th>Trades</th><th>Total PnL</th><th>Avg PnL</th><th>Med PnL</th>"
+    hdr += ("<th>Trades</th><th>Total PnL</th><th>Ann. Return</th>"
+            "<th>Avg PnL</th><th>Med PnL</th>"
             "<th>Win%</th><th>Max Win</th><th>Max Loss</th>"
             "<th>Max DD</th><th>Sharpe</th><th>Sortino</th><th>Calmar</th><th>PF</th>"
             "<th>R&sup2;</th><th>Omega</th><th>Ulcer</th><th>Consist</th>"
@@ -695,6 +699,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         row += (
             f'<td>{s["n"]}</td>'
             f'<td class="{pnl_cls}">{_fmt_pnl(s["total_pnl"])}</td>'
+            f'<td>{s.get("ann_return", 0)*100:.1f}%</td>'
             f'<td class="{avg_cls}">{_fmt_pnl(s["avg_pnl"])}</td>'
             f'<td>{_fmt_pnl(s["median_pnl"])}</td>'
             f'<td>{s["win_rate"]*100:.0f}%</td>'
@@ -725,7 +730,8 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
     hdr2 = "<tr><th>#</th>"
     for p in param_names:
         hdr2 += f"<th>{_param_label(p)}</th>"
-    hdr2 += ("<th>Trades</th><th>Total PnL</th><th>Avg PnL</th><th>Med PnL</th>"
+    hdr2 += ("<th>Trades</th><th>Total PnL</th><th>Ann. Return</th>"
+             "<th>Avg PnL</th><th>Med PnL</th>"
              "<th>Win%</th><th>Max Win</th><th>Max Loss</th>"
              "<th>Max DD</th><th>Sharpe</th><th>PF</th><th>Score</th></tr>")
     parts.append(hdr2)
@@ -741,6 +747,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         row += (
             f'<td>{s["n"]}</td>'
             f'<td class="{pnl_cls}">{_fmt_pnl(s["total_pnl"])}</td>'
+            f'<td>{s.get("ann_return", 0)*100:.1f}%</td>'
             f'<td class="{avg_cls}">{_fmt_pnl(s["avg_pnl"])}</td>'
             f'<td>{_fmt_pnl(s["median_pnl"])}</td>'
             f'<td>{s["win_rate"]*100:.0f}%</td>'
@@ -893,6 +900,7 @@ def generate_html(strategy_name, result, n_intervals, runtime_s,
         parts.append(f"""
 <div class="grid-info">
   <b>Max Drawdown:</b> {_fmt_pnl(eq["max_drawdown"])} ({eq["max_dd_pct"]:.1f}%) &nbsp;|&nbsp;
+  <b>Ann. Return:</b> {eq.get("ann_return", 0)*100:.1f}% &nbsp;|&nbsp;
   <b>Sharpe:</b> {eq["sharpe"]:.2f} &nbsp;|&nbsp;
   <b>Sortino:</b> {eq["sortino"]:.2f} &nbsp;|&nbsp;
   <b>Calmar:</b> {eq["calmar"]:.2f} &nbsp;|&nbsp;

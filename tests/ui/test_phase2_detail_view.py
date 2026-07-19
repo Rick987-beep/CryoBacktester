@@ -17,11 +17,14 @@ def test_stats_card_contains_key_metrics(tiny_grid_result):
     html = _stats_card_html(stats, eq, key, rank)
     assert "Sharpe" in html
     assert "Total PnL" in html
+    assert "Annualized Return" in html
     assert "Max DD" in html
     assert "Parameters" in html
     assert "Performance Metrics" in html
     assert "Params" not in html.replace("Parameters", "")
-    assert html.count("<tr>") == _N_METRIC_ROWS + 1  # header + 13 body rows
+    assert html.count("<tr>") == _N_METRIC_ROWS + 1  # header + body rows
+    # Ann return shown as xx.x%
+    assert "%" in html
 
 
 def test_trades_table_filtered_to_combo(tiny_grid_result):

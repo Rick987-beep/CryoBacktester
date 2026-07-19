@@ -36,6 +36,7 @@ def test_add_list_remove(store_with_run):
         score=0.85,
         sharpe=1.23,
         total_pnl=456.0,
+        ann_return=0.42,
         params_str="delta=0.20  dte=1",
         strategy="test_strat",
     )
@@ -52,6 +53,7 @@ def test_add_list_remove(store_with_run):
     assert abs(f.score - 0.85) < 1e-9
     assert abs(f.sharpe - 1.23) < 1e-9
     assert abs(f.total_pnl - 456.0) < 1e-9
+    assert abs(f.ann_return - 0.42) < 1e-9
     assert f.strategy == "test_strat"
 
     # get_favourite_by_combo

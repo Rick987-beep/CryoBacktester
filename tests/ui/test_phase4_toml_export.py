@@ -27,6 +27,7 @@ def _make_fav(combo_key, strategy="test_strat", name="my combo", note="some note
         score=0.75,
         sharpe=1.5,
         total_pnl=300.0,
+        ann_return=0.25,
         params_str="delta=0.20  dte=1",
         added_at="2026-01-15T12:00:00Z",
     )
