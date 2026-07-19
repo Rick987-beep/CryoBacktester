@@ -24,7 +24,8 @@ from backtester.ui.services.store_service import key_from_json
 log = get_ui_logger(__name__)
 
 _DISPLAY_COLS = [
-    "combo_id", "added_at", "score", "total_pnl", "sharpe", "strategy", "note",
+    "combo_id", "added_at", "score", "total_pnl", "ann_return", "sharpe",
+    "strategy", "note",
 ]
 
 _SORT_COL = "added_at_sort"
@@ -34,6 +35,7 @@ _COL_TITLES = {
     "added_at":   "Added",
     "score":      "Score",
     "total_pnl":  "Total PnL",
+    "ann_return": "Ann. Return",
     "sharpe":     "Sharpe",
     "strategy":   "Strategy",
     "note":       "Note",
@@ -44,6 +46,8 @@ _ADDED_COL_WIDTH = 138       # dd-mm-yyyy hh:mm
 _SCORE_COL_WIDTH = 70        # +25% vs 56
 _TOTAL_PNL_COL_WIDTH = 90    # +25% vs 72
 _TOTAL_PNL_MAX_WIDTH = 110   # +25% vs 88
+_ANN_RETURN_COL_WIDTH = 90
+_ANN_RETURN_MAX_WIDTH = 105
 _SHARPE_COL_WIDTH = 80       # +25% vs 64
 _SHARPE_MAX_WIDTH = 95       # +25% vs 76
 _PARAMS_TEXTAREA_ROWS = 25
@@ -106,6 +110,8 @@ def _favourites_column_config() -> dict:
             {"field": "Score", "width": _SCORE_COL_WIDTH, "widthGrow": 0, "maxWidth": _SCORE_COL_WIDTH, **no_sort},
             {"field": "Total PnL", "width": _TOTAL_PNL_COL_WIDTH, "widthGrow": 0,
              "maxWidth": _TOTAL_PNL_MAX_WIDTH, **no_sort},
+            {"field": "Ann. Return", "width": _ANN_RETURN_COL_WIDTH, "widthGrow": 0,
+             "maxWidth": _ANN_RETURN_MAX_WIDTH, **no_sort},
             {"field": "Sharpe", "width": _SHARPE_COL_WIDTH, "widthGrow": 0,
              "maxWidth": _SHARPE_MAX_WIDTH, **no_sort},
             {"field": "Strategy", "minWidth": 80, "widthGrow": 1, **no_sort},
@@ -205,6 +211,10 @@ def build_favourites_view(state, store, cache) -> pn.Column:
                 "added_at":   _format_added_at(raw_added),
                 "score":      round(fav.score, 4) if fav.score is not None else None,
                 "total_pnl":  round(fav.total_pnl, 2) if fav.total_pnl is not None else None,
+                # Percent units for Tabulator "%" formatter (fraction stored in DB).
+                "ann_return": (
+                    round(fav.ann_return * 100, 1) if fav.ann_return is not None else None
+                ),
                 "sharpe":     round(fav.sharpe, 3) if fav.sharpe is not None else None,
                 "strategy":   fav.strategy or "",
                 "note":       fav.note or "",
@@ -244,6 +254,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
             formatters={
                 "Score": {"type": "progress", "min": 0, "max": 1, "color": "#1a9641"},
                 "Total PnL": {"type": "money", "symbol": "$", "precision": 0},
+                "Ann. Return": {"type": "number", "precision": 1, "suffix": "%"},
                 "Sharpe": {"type": "number", "precision": 3},
             },
         )

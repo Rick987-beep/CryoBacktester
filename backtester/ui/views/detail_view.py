@@ -31,6 +31,7 @@ _TRADE_COLS = ["entry_time", "exit_time", "days_held", "entry_spot", "pnl",
 _STATS_LABELS = {
     "n":              "Trades",
     "total_pnl":      "Total PnL ($)",
+    "ann_return":     "Annualized Return",
     "sharpe":         "Sharpe",
     "sortino":        "Sortino",
     "calmar":         "Calmar",
@@ -45,7 +46,7 @@ _STATS_LABELS = {
 }
 
 
-_N_METRIC_ROWS = len(_STATS_LABELS)  # 13 — drives table height
+_N_METRIC_ROWS = len(_STATS_LABELS)  # drives table height
 
 
 def _fmt(v) -> str:
@@ -59,6 +60,18 @@ def _fmt(v) -> str:
             return f"{v:,.0f}"
         return f"{v:.3f}"
     return str(v)
+
+
+def _fmt_stat(field: str, v) -> str:
+    """Format a named performance metric (ann_return as xx.x%)."""
+    if field == "ann_return":
+        if v is None:
+            return "—"
+        try:
+            return f"{float(v) * 100:.1f}%"
+        except (TypeError, ValueError):
+            return "—"
+    return _fmt(v)
 
 
 # Columns whose values are USD amounts → format as xx,xxx.xx
@@ -113,12 +126,12 @@ def _stats_card_html(stats: dict, eq: dict | None, key: tuple, rank: int | None 
 
     merged = dict(stats) if stats else {}
     if eq:
-        for k in ("sortino", "calmar", "consec_wins", "consec_losses"):
-            if k in eq:
+        for k in ("sortino", "calmar", "consec_wins", "consec_losses", "ann_return"):
+            if k in eq and (k not in merged or merged.get(k) is None):
                 merged[k] = eq[k]
 
     metric_items = [
-        (label, _fmt(merged.get(field)))
+        (label, _fmt_stat(field, merged.get(field)))
         for field, label in _STATS_LABELS.items()
     ]
     n_rows = _N_METRIC_ROWS
@@ -339,6 +352,7 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
                     score=result.scores.get(key) if result else None,
                     sharpe=float(stats.get("sharpe", 0)) if stats.get("sharpe") is not None else None,
                     total_pnl=float(stats.get("total_pnl", 0)) if stats.get("total_pnl") is not None else None,
+                    ann_return=float(stats.get("ann_return", 0)) if stats.get("ann_return") is not None else None,
                     params_str=params_str,
                     strategy=strategy,
                 )

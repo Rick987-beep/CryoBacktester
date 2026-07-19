@@ -42,7 +42,7 @@ log = get_ui_logger(__name__)
 
 # Columns shown by default (param columns are added dynamically)
 _FIXED_DISPLAY_COLS = [
-    "rank", "score", "n", "total_pnl", "sharpe", "profit_factor",
+    "rank", "score", "n", "total_pnl", "ann_return", "sharpe", "profit_factor",
     "max_dd_pct", "win_rate", "avg_pnl", "omega", "consistency",
 ]
 
@@ -65,6 +65,7 @@ _PARAM_MIN_COL_WIDTH = 48
 _COL_FORMATTERS = {
     "score":          {"type": "progress", "min": 0, "max": 1, "color": "#1a9641"},
     "total_pnl":      {"type": "money", "symbol": "$", "precision": 0},
+    "ann_return":     {"type": "number", "precision": 1, "suffix": "%"},
     "sharpe":         {"type": "number", "precision": 2},
     "profit_factor":  {"type": "number", "precision": 2},
     "max_dd_pct":     {"type": "number", "precision": 1, "suffix": "%"},
@@ -371,6 +372,8 @@ def _grid_dataframe(result) -> tuple[pd.DataFrame, dict[str, tuple]]:
         # Stats columns
         row["n"] = stats.get("n", 0)
         row["total_pnl"] = round(float(stats.get("total_pnl", 0)), 2)
+        # Store as percent units for the "%" Tabulator formatter (same as max_dd_pct).
+        row["ann_return"] = round(float(stats.get("ann_return", 0)) * 100, 1)
         row["sharpe"] = round(float(stats.get("sharpe", 0)), 3)
         row["profit_factor"] = round(float(stats.get("profit_factor", 0)), 2)
         row["max_dd_pct"] = round(float(stats.get("max_dd_pct", 0)), 2)
@@ -863,6 +866,7 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
                     score=result.scores.get(key) if result else None,
                     sharpe=float(stats.get("sharpe", 0)) if stats.get("sharpe") is not None else None,
                     total_pnl=float(stats.get("total_pnl", 0)) if stats.get("total_pnl") is not None else None,
+                    ann_return=float(stats.get("ann_return", 0)) if stats.get("ann_return") is not None else None,
                     params_str=params_str,
                     strategy=strategy,
                 )

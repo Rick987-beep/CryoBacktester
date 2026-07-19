@@ -126,6 +126,21 @@ def _all_combo_stats(df, keys, capital=10000, nav_daily_df=None, date_from=None,
     std_d = daily_returns_pivot.std(ddof=1).replace(0, np.nan)
     sharpe = (avg_d / std_d * 365 ** 0.5).fillna(0.0)
 
+    # Annualized return (CAGR) — same formula as equity_metrics / Calmar numerator.
+    # Calendar days / 365; informative only (not used in scoring).
+    n_days_ann = len(daily_returns_pivot)
+    years_ann = max(n_days_ann / 365.0, 1.0 / 365.0)
+    if n_days_ann > 0 and capital > 0:
+        final_eq_all = capital + daily_returns_pivot.cumsum().iloc[-1]
+        ratio = final_eq_all / capital
+        ann_return = pd.Series(0.0, index=ratio.index, dtype=float)
+        positive = ratio > 0
+        ann_return.loc[positive] = ratio.loc[positive].pow(1.0 / years_ann) - 1.0
+        # Non-positive terminal equity → -100% annualized (undefined real CAGR).
+        ann_return.loc[~positive] = -1.0
+    else:
+        ann_return = pd.Series(dtype=float)
+
     # Omega ratio (threshold = 0): sum of gains / sum of losses using daily returns
     pos_sum = daily_returns_pivot.clip(lower=0).sum()
     neg_sum = daily_returns_pivot.clip(upper=0).abs().sum()
@@ -181,6 +196,7 @@ def _all_combo_stats(df, keys, capital=10000, nav_daily_df=None, date_from=None,
             "max_win":       float(max_win[combo_idx]),
             "max_loss":      float(max_loss[combo_idx]),
             "profit_factor": float(pf.get(combo_idx, 0.0)),
+            "ann_return":    float(ann_return.get(combo_idx, 0.0)),
             "sharpe":        float(sharpe.get(combo_idx, 0.0)),
             "max_dd_pct":    float(max_dd_pct_all.get(combo_idx, 0.0)),
             "omega":         float(omega_all.get(combo_idx, 1.0)),
@@ -516,7 +532,12 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
     # Max drawdown is the running peak-to-trough fraction computed above.
     final_eq = capital + cum
     years = max(n_days / PERIODS, 1 / PERIODS)
-    cagr = (final_eq / capital) ** (1.0 / years) - 1 if capital > 0 else 0.0
+    if capital > 0 and final_eq > 0:
+        cagr = (final_eq / capital) ** (1.0 / years) - 1
+    elif capital > 0:
+        cagr = -1.0
+    else:
+        cagr = 0.0
     calmar = cagr / max_dd_pct if max_dd_pct > 0 else 0.0
 
     max_cw = max_cl = cw = cl = 0
@@ -534,6 +555,7 @@ def equity_metrics(df_combo, capital=10000, nav_daily_combo=None, date_from=None
         "max_drawdown": max_dd,
         "max_dd_pct": max_dd_pct * 100,
         "profit_factor": pf,
+        "ann_return": cagr,
         "sharpe": sharpe,
         "sortino": sortino,
         "calmar": calmar,

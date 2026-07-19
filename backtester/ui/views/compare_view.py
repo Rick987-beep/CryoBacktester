@@ -21,6 +21,7 @@ log = get_ui_logger(__name__)
 # Metrics shown in the delta table (lower_better = True means lower is better)
 _COMPARE_METRICS: list[tuple[str, str, bool]] = [
     ("total_pnl",   "Total PnL ($)",     False),
+    ("ann_return",  "Annualized Return", False),
     ("sharpe",      "Sharpe",            False),
     ("sortino",     "Sortino",           False),
     ("calmar",      "Calmar",            False),
@@ -235,9 +236,9 @@ def build_compare_view(state, store, cache) -> pn.Column:
                     winner = "A" if v_a > v_b else ("B" if v_b > v_a else "tie")
             delta_rows.append({
                 "Metric": metric_label,
-                "A": _fmt(v_a),
-                "B": _fmt(v_b),
-                "Δ (B−A)": _fmt(delta),
+                "A": _fmt(v_a, metric_key),
+                "B": _fmt(v_b, metric_key),
+                "Δ (B−A)": _fmt(delta, metric_key),
                 "Winner": winner,
             })
 
@@ -282,11 +283,13 @@ def build_compare_view(state, store, cache) -> pn.Column:
     )
 
 
-def _fmt(v) -> str:
+def _fmt(v, metric_key: str | None = None) -> str:
     if v is None:
         return "—"
     try:
         fv = float(v)
+        if metric_key == "ann_return":
+            return f"{fv * 100:.1f}%"
         if abs(fv) >= 1000:
             return f"{fv:,.0f}"
         return f"{fv:.3f}"

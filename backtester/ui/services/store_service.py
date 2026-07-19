@@ -63,6 +63,7 @@ class FavRow(NamedTuple):
     score: float | None
     sharpe: float | None
     total_pnl: float | None
+    ann_return: float | None
     params_str: str
     added_at: str
 
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS favourites (
     score           REAL,
     sharpe          REAL,
     total_pnl       REAL,
+    ann_return      REAL,
     params_str      TEXT NOT NULL DEFAULT '',
     added_at        TEXT NOT NULL,
     UNIQUE(run_id, combo_hash)
@@ -169,8 +171,15 @@ class StoreService:
         con.execute(_DDL_FAVOURITES)
         con.execute(_DDL_COLUMN_PRESETS)
         con.execute(_DDL_USER_PREFS)
+        self._migrate_schema(con)
         con.commit()
         con.close()
+
+    def _migrate_schema(self, con: sqlite3.Connection) -> None:
+        """Additive migrations for existing ui_state.db files."""
+        fav_cols = {row[1] for row in con.execute("PRAGMA table_info(favourites)")}
+        if "ann_return" not in fav_cols:
+            con.execute("ALTER TABLE favourites ADD COLUMN ann_return REAL")
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self._db_path), check_same_thread=False)
@@ -403,6 +412,7 @@ class StoreService:
         score: float | None = None,
         sharpe: float | None = None,
         total_pnl: float | None = None,
+        ann_return: float | None = None,
         params_str: str = "",
         strategy: str = "",
     ) -> int:
@@ -419,10 +429,10 @@ class StoreService:
                 con.execute(
                     """INSERT INTO favourites
                        (run_id, combo_hash, combo_key_json, name, strategy, note,
-                        score, sharpe, total_pnl, params_str, added_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                        score, sharpe, total_pnl, ann_return, params_str, added_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (run_id, combo_hash, combo_key_json, name, strategy, note,
-                     score, sharpe, total_pnl, params_str, added_at),
+                     score, sharpe, total_pnl, ann_return, params_str, added_at),
                 )
                 con.commit()
                 fav_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -452,7 +462,8 @@ class StoreService:
 
     def update_favourite(self, fav_id: int, **fields) -> None:
         """Update mutable fields (name, note, etc.) by keyword argument."""
-        allowed = {"name", "note", "score", "sharpe", "total_pnl", "params_str", "strategy"}
+        allowed = {"name", "note", "score", "sharpe", "total_pnl", "ann_return",
+                   "params_str", "strategy"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return
@@ -667,6 +678,8 @@ def _row_to_run_row(row: sqlite3.Row) -> RunRow:
     )
 
 def _row_to_fav_row(row: sqlite3.Row) -> "FavRow":
+    # keys() works for sqlite3.Row; old DBs may lack ann_return until migration.
+    keys = row.keys()
     return FavRow(
         id=int(row["id"]),
         run_id=int(row["run_id"]),
@@ -678,6 +691,7 @@ def _row_to_fav_row(row: sqlite3.Row) -> "FavRow":
         score=row["score"],
         sharpe=row["sharpe"],
         total_pnl=row["total_pnl"],
+        ann_return=row["ann_return"] if "ann_return" in keys else None,
         params_str=row["params_str"] or "",
         added_at=row["added_at"],
     )

@@ -76,7 +76,10 @@ def test_favourites_display_columns_order():
     from backtester.ui.views.favourites_view import _COL_TITLES, _DISPLAY_COLS
 
     titles = [_COL_TITLES[c] for c in _DISPLAY_COLS]
-    assert titles == ["ID", "Added", "Score", "Total PnL", "Sharpe", "Strategy", "Note"]
+    assert titles == [
+        "ID", "Added", "Score", "Total PnL", "Ann. Return", "Sharpe",
+        "Strategy", "Note",
+    ]
     assert "params_str" not in _DISPLAY_COLS
     assert "name" not in _DISPLAY_COLS
 
