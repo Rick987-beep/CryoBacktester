@@ -1,0 +1,72 @@
+{
+  "date_from": "2026-07-20",
+  "date_to": "2026-07-30",
+  "days": [
+    {
+      "date": "2026-07-20",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-21",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-22",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-23",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-24",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-25",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-26",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-27",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-28",
+      "options": true,
+      "spot": true,
+      "incomplete_options": false
+    },
+    {
+      "date": "2026-07-29",
+      "options": true,
+      "spot": true,
+      "incomplete_options": true
+    },
+    {
+      "date": "2026-07-30",
+      "options": false,
+      "spot": false,
+      "incomplete_options": false
+    }
+  ]
+}

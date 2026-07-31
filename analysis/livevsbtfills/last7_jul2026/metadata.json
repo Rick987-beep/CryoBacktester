@@ -1,0 +1,29 @@
+{
+  "title": "Last 7 live fills vs backtester (Jul 20\u201329, 2026)",
+  "created": "2026-07-29",
+  "live": {
+    "slot": "slot-02",
+    "blotter": "data/slot-02.jsonl",
+    "config_source": "CryoTrader/slots/slot-02.toml",
+    "strategy": "tudysho Eisbach v1.0.0"
+  },
+  "backtest": {
+    "strategy": "tudysho_eisbach",
+    "combo_ref": "UI run 387 favourite 97dabfdeaade (mon_thu params)",
+    "date_range": [
+      "2026-07-19",
+      "2026-07-29"
+    ],
+    "account_size_usd": 100000,
+    "sizing": "0.8% NAV / 12 per BTC-equity (BT convention, not live 0.28%/4.36/21)",
+    "bundle": "backtester/reports/tudysho_eisbach_slot02_20260729_081714.bundle",
+    "n_trades": 6
+  },
+  "caveats": [
+    "Jul 20 live fill still used prior config (16:00 entry, delta 0.1) before slot-02 param update",
+    "Live partial fills (zero call, partial put) not modelled in BT",
+    "Live combined_mark_sl vs BT stop_loss_pct on combined mark \u2014 similar math, different exit label",
+    "Jul 29 BT data incomplete through 07:55 UTC; expiry at 08:00 may use last snapshot",
+    "BT requires bid>0; live uses mark fallback when bid missing"
+  ]
+}

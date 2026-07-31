@@ -26,6 +26,8 @@ from backtester.research.walk_forward import run_walk_forward
 from backtester.research.experiment import load_experiment
 from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
 from backtester.strategies.tudysho import TuDySho
+from backtester.strategies.tudysho_eisbach import TuDyShoEisbach
+from backtester.strategies.tudysho_starnberg import TuDyShoStarnberg
 from backtester.strategies.stradysho import StraDySho
 from backtester.strategies.tudysho_v1 import TuDyShoV1
 from backtester.strategies.tudysho_v2 import TuDyShoV2
@@ -39,6 +41,8 @@ from backtester.strategies.theta_engine_v1 import ThetaEnginev1
 from backtester.strategies.theta_engine_v2 import ThetaEngineV2
 from backtester.strategies.theta_engine_v3 import ThetaEngineV3
 from backtester.strategies.theta_engine_v4 import ThetaEngineV4
+from backtester.strategies.theta_engine_v5 import ThetaEngineV5
+from backtester.strategies.theta_engine_v6 import ThetaEngineV6
 from backtester.core.config import cfg as _cfg
 
 # ── Strategy Registry ────────────────────────────────────────────
@@ -51,6 +55,8 @@ from backtester.core.config import cfg as _cfg
 STRATEGIES = {
     "short_str_turb_dyn":  ShortStrTurbDyn,
     "tudysho":             TuDySho,
+    "tudysho_eisbach":     TuDyShoEisbach,
+    "tudysho_starnberg":   TuDyShoStarnberg,
     "stradysho":           StraDySho,
     "tudysho_v1":          TuDyShoV1,
     "tudysho_v2":          TuDyShoV2,
@@ -64,6 +70,8 @@ STRATEGIES = {
     "theta_engine_v2":     ThetaEngineV2,
     "theta_engine_v3":     ThetaEngineV3,
     "theta_engine_v4":     ThetaEngineV4,
+    "theta_engine_v5":     ThetaEngineV5,
+    "theta_engine_v6":     ThetaEngineV6,
 }
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet

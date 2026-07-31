@@ -1,0 +1,18 @@
+date,weekday,live_n,bt_n,live_pnl_usd,bt_pnl_usd,live_pnl_per_lot,bt_pnl_per_lot,notes
+2026-07-01,Wed,1,1,543.37,600.62,27.17,26.81,live still short_str_turb_dyn; strikes L 62000/58000 vs BT 61500/58000
+2026-07-02,Thu,1,1,110.53,362.93,5.53,16.5,live still short_str_turb_dyn; strikes L 64000/59500 vs BT 63000/59500
+2026-07-03,Fri,1,1,125.04,242.29,6.25,11.11,live still short_str_turb_dyn; strikes L 64000/60000 vs BT 64000/60500
+2026-07-04,Sat,0,0,0.0,0.0,0.0,0.0,flat
+2026-07-05,Sun,0,0,0.0,0.0,0.0,0.0,flat
+2026-07-06,Mon,1,1,125.64,364.16,6.28,17.26,live still short_str_turb_dyn; strikes L 66000/61500 vs BT 66000/62500; BT no mon_early (0-DTE call bid=0 after min_otm); live was legacy strat
+2026-07-07,Tue,1,0,251.35,0.0,12.57,0.0,live still short_str_turb_dyn; count L1/B0; BT skip: min_otm call bid=0 in snapshots
+2026-07-08,Wed,1,1,688.1,607.93,34.41,27.89,
+2026-07-09,Thu,1,0,255.78,0.0,12.79,0.0,count L1/B0; BT skip: min_otm call bid=0 in snapshots
+2026-07-10,Fri,1,1,229.75,244.48,11.49,11.48,strikes L 66000/62000 vs BT 66000/62500
+2026-07-11,Sat,0,0,0.0,0.0,0.0,0.0,flat
+2026-07-12,Sun,0,0,0.0,0.0,0.0,0.0,flat
+2026-07-13,Mon,2,2,461.7,737.65,23.08,33.61,
+2026-07-14,Tue,1,1,462.45,494.95,23.12,23.13,
+2026-07-15,Wed,1,1,229.99,247.76,11.5,11.63,
+2026-07-16,Thu,1,1,337.42,248.19,16.87,11.44,strikes L 66000/62500 vs BT 65500/62000; BT delayed to 23:20 waiting for positive bids after min_otm
+2026-07-17,Fri,1,1,458.43,-90.54,22.92,-4.13,BT end_of_data (run ends 2026-07-18); live expired Sat 08:00

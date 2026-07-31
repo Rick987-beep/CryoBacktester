@@ -1,0 +1,9 @@
+
+"Runs" Screen:
+This needs some major changes:
+Having a table with the runs is good. But what is "label" and "git_dirty"?
+what is the "pinned" functionality? a favourites list of runs? okay, but then let's call it that.
+Let's go line by line through the screen:
+Runs (headline is fine)
+Button bar: Open-Grid, Re-run (new feature, re-run and prepopulate params with run), Delete Selected, (Un-)Favourite or Star
+

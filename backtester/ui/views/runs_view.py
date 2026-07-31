@@ -1,7 +1,9 @@
 """
-views/runs_view.py — Full-page run management (list, pin, delete, prune).
+views/runs_view.py — Full-page run management (list, favourite, delete, prune).
 """
 from __future__ import annotations
+
+import json
 
 import pandas as pd
 import panel as pn
@@ -10,8 +12,8 @@ from backtester.ui.log import get_ui_logger
 
 log = get_ui_logger(__name__)
 
-_COLS = ["id", "created_at", "strategy", "label", "n_combos", "n_trades",
-         "pinned", "git_dirty", "runtime_s"]
+_COLS = ["id", "favourite", "created_at", "strategy", "label", "n_combos",
+         "n_trades", "runtime_s"]
 
 
 def build_runs_view(state, store, cache) -> pn.Column:
@@ -32,23 +34,19 @@ def build_runs_view(state, store, cache) -> pn.Column:
         name="Open → Grid", button_type="primary", width=120, margin=(4, 4),
         disabled=True,
     )
-    pin_btn = pn.widgets.Button(
-        name="📌 Pin", button_type="default", width=90, margin=(4, 4),
-        disabled=True,
-    )
-    unpin_btn = pn.widgets.Button(
-        name="Unpin", button_type="default", width=90, margin=(4, 4),
+    rerun_btn = pn.widgets.Button(
+        name="Re-run", button_type="default", width=90, margin=(4, 4),
         disabled=True,
     )
     delete_btn = pn.widgets.Button(
-        name="🗑 Delete selected", button_type="danger", width=140, margin=(4, 4),
+        name="Delete Selected", button_type="danger", width=140, margin=(4, 4),
         disabled=True,
     )
 
     # ── Prune panel ──────────────────────────────────────────────────────────
     prune_days = pn.widgets.IntInput(
-        name="Delete unpinned runs older than (days)",
-        value=30, start=1, width=280, margin=(4, 4),
+        name="Delete non-favourited runs older than (days)",
+        value=30, start=1, width=320, margin=(4, 4),
     )
     prune_preview_btn = pn.widgets.Button(
         name="Preview prune", button_type="warning", width=120, margin=(4, 4),
@@ -68,13 +66,12 @@ def build_runs_view(state, store, cache) -> pn.Column:
         for rr in rows:
             records.append({
                 "id": rr.id,
+                "favourite": "★" if rr.pinned else "☆",
                 "created_at": (rr.created_at or "")[:19].replace("T", " "),
                 "strategy": rr.strategy,
                 "label": rr.label or "",
                 "n_combos": rr.n_combos,
                 "n_trades": rr.n_trades,
-                "pinned": bool(rr.pinned),
-                "git_dirty": bool(rr.git_dirty) if rr.git_dirty is not None else False,
                 "runtime_s": round(rr.runtime_s, 1) if rr.runtime_s is not None else None,
             })
         return pd.DataFrame(records)
@@ -96,9 +93,56 @@ def build_runs_view(state, store, cache) -> pn.Column:
         ids = _selected_ids()
         n = len(ids)
         open_btn.disabled = n != 1
-        pin_btn.disabled = n == 0
-        unpin_btn.disabled = n == 0
+        rerun_btn.disabled = n != 1
         delete_btn.disabled = n == 0
+
+    def _on_label_edit(event):
+        if event.column != "label":
+            return
+        tab = _tab_ref.get("tab")
+        if tab is None:
+            return
+        try:
+            run_id = int(tab.value.iloc[event.row]["id"])
+        except Exception:
+            return
+        label = (event.value or "").strip() or None
+        try:
+            store.set_label(run_id, label)
+            status.object = (
+                f"<span style='color:#16a34a'>Label saved for run #{run_id}.</span>"
+            )
+        except Exception as exc:
+            status.object = f"<span style='color:#dc2626'>⚠ {exc}</span>"
+            log.error("runs_view: set_label failed: %s", exc)
+
+    def _on_star_click(event):
+        tab = _tab_ref.get("tab")
+        if tab is None:
+            return
+        try:
+            run_id = int(tab.value.iloc[event.row]["id"])
+        except Exception:
+            return
+        rr = store.get_run(run_id)
+        if rr is None:
+            return
+        try:
+            if rr.pinned:
+                cache.unpin(run_id)
+                status.object = (
+                    f"<span style='color:#16a34a'>Unfavourited run #{run_id}.</span>"
+                )
+            else:
+                cache.pin(run_id)
+                status.object = (
+                    f"<span style='color:#16a34a'>Favourited run #{run_id}.</span>"
+                )
+        except Exception as exc:
+            status.object = f"<span style='color:#dc2626'>⚠ {exc}</span>"
+            log.error("runs_view: star toggle failed: %s", exc)
+            return
+        _refresh()
 
     def _refresh(*_):
         try:
@@ -121,16 +165,20 @@ def build_runs_view(state, store, cache) -> pn.Column:
             sizing_mode="stretch_width",
             height=520,
             show_index=False,
+            titles={"favourite": "★"},
+            widths={"favourite": 48},
             configuration={"columnDefaults": {"headerSort": True}},
         )
-        tab.editable = False
-        tab.editors = {c: None for c in df.columns}
+        tab.editable = True
+        tab.editors = {c: ("input" if c == "label" else None) for c in df.columns}
+        tab.on_edit(_on_label_edit)
+        tab.on_click(_on_star_click, column="favourite")
         tab.param.watch(lambda e: _update_action_buttons(), "selection")
         _tab_ref["tab"] = tab
         table_holder[:] = [tab]
         status.object = (
             f"<span style='color:#6b7280'>{len(df)} run(s) — "
-            f"sort by clicking column headers; select rows for pin/delete.</span>"
+            f"click ★/☆ to favourite; click a label cell to edit.</span>"
         )
         _update_action_buttons()
 
@@ -148,23 +196,30 @@ def build_runs_view(state, store, cache) -> pn.Column:
             status.object = f"<span style='color:#dc2626'>⚠ {exc}</span>"
             log.error("runs_view: open failed: %s", exc)
 
-    def _on_pin(event):
-        for rid in _selected_ids():
-            try:
-                cache.pin(rid)
-            except Exception as exc:
-                log.warning("runs_view: pin %s failed: %s", rid, exc)
-        _refresh()
-        status.object = "<span style='color:#16a34a'>Pinned.</span>"
-
-    def _on_unpin(event):
-        for rid in _selected_ids():
-            try:
-                cache.unpin(rid)
-            except Exception as exc:
-                log.warning("runs_view: unpin %s failed: %s", rid, exc)
-        _refresh()
-        status.object = "<span style='color:#16a34a'>Unpinned.</span>"
+    def _on_rerun(event):
+        ids = _selected_ids()
+        if len(ids) != 1:
+            return
+        rid = ids[0]
+        rr = store.get_run(rid)
+        if rr is None:
+            status.object = f"<span style='color:#dc2626'>⚠ Run #{rid} not found.</span>"
+            return
+        try:
+            param_grid = json.loads(rr.param_grid_json) if rr.param_grid_json else {}
+        except json.JSONDecodeError as exc:
+            status.object = f"<span style='color:#dc2626'>⚠ Invalid param grid: {exc}</span>"
+            return
+        state.rerun_request = {
+            "strategy": rr.strategy,
+            "param_grid": param_grid,
+            "date_from": rr.date_from,
+            "date_to": rr.date_to,
+        }
+        state.active_tab = "New Run"
+        status.object = (
+            f"<span style='color:#2563eb'>New Run prefilled from run #{rid} — review and Run.</span>"
+        )
 
     def _on_delete(event):
         ids = _selected_ids()
@@ -184,7 +239,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
         _refresh()
         msg = f"Deleted {len(deleted)} run(s)."
         if skipped:
-            msg += f" Skipped {skipped} pinned — unpin first."
+            msg += f" Skipped {skipped} favourited — click ★ to unfavourite first."
         status.object = f"<span style='color:#16a34a'>{msg}</span>"
 
     def _on_prune_preview(event):
@@ -194,7 +249,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
             prune_output.object = "<span style='color:#16a34a'>Nothing to prune.</span>"
             prune_confirm_btn.disabled = True
             return
-        lines = [f"<b>Would delete {len(to_prune)} unpinned run(s):</b>"]
+        lines = [f"<b>Would delete {len(to_prune)} non-favourited run(s):</b>"]
         for rr in to_prune[:12]:
             ts = (rr.created_at or "")[:16].replace("T", " ")
             lines.append(f"&nbsp;&nbsp;#{rr.id}&nbsp;{rr.strategy}&nbsp;{ts}")
@@ -219,8 +274,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
 
     refresh_btn.on_click(lambda e: _refresh())
     open_btn.on_click(_on_open)
-    pin_btn.on_click(_on_pin)
-    unpin_btn.on_click(_on_unpin)
+    rerun_btn.on_click(_on_rerun)
     delete_btn.on_click(_on_delete)
     prune_preview_btn.on_click(_on_prune_preview)
     prune_confirm_btn.on_click(_on_prune_confirm)
@@ -234,7 +288,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
     _refresh()
 
     actions = pn.Row(
-        refresh_btn, open_btn, pin_btn, unpin_btn, delete_btn,
+        refresh_btn, open_btn, rerun_btn, delete_btn,
         sizing_mode="stretch_width",
     )
     prune_row = pn.Row(

@@ -153,21 +153,8 @@ def _esc(text: str) -> str:
     )
 
 
-def _ellipsis_cell(label: str, text: str, flex: str = "1 1 0") -> str:
-    """Single-line cell that truncates with …; full text in title tooltip."""
-    safe = _esc(text)
-    display = safe if safe else "—"
-    return (
-        f'<div style="flex:{flex};min-width:0;overflow:hidden;white-space:nowrap;'
-        f'text-overflow:ellipsis;padding:0 10px;border-left:1px solid #e5e7eb" '
-        f'title="{safe}">'
-        f'<span style="color:#6b7280;font-weight:600;margin-right:6px">{label}</span>'
-        f'{display}</div>'
-    )
-
-
 def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
-    """Single-line selection bar: Run | Combo ID | Params | Metrics [| Cancel]."""
+    """Single-line selection bar: Selected Run | Selected Combo [| Cancel]."""
     bar_html = pn.pane.HTML(
         "",
         sizing_mode="stretch_width",
@@ -184,10 +171,10 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
     )
 
     def _refresh_labels(*_):
-        # ── Run ──────────────────────────────────────────────────────────────
+        # ── Selected Run ─────────────────────────────────────────────────────
         rid = state.active_run_id
         if rid is None:
-            run_txt = "No run selected"
+            run_txt = "—"
         else:
             rr = store.get_run(rid) if store is not None else None
             if rr is None:
@@ -197,23 +184,25 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
                 label = rr.label or rr.strategy
                 run_txt = f"#{rr.id} · {label} · {ts} · {rr.n_combos or '—'} combos"
 
-        # ── Combo ID + params + metrics ──────────────────────────────────────
+        # ── Selected Combo (ID + params + metrics) ───────────────────────────
         key = state.active_combo_key
         if key is None:
-            cid_txt = "—"
-            params_txt = ""
-            metrics_txt = ""
+            combo_txt = "—"
         else:
             from backtester.ui.services.store_service import key_hash as _kh
-            cid_txt = _kh(key)
+            parts = [f"ID{_kh(key)}"]
             params_txt = _combo_params_str(key)
-            metrics_txt = ""
+            if params_txt:
+                parts.append(params_txt)
             if cache is not None and rid is not None:
                 try:
                     result = cache.get(rid)
                     metrics_txt = _metrics_str(result, key)
+                    if metrics_txt:
+                        parts.append(metrics_txt)
                 except Exception as exc:
                     log.debug("selection_bar: metrics unavailable: %s", exc)
+            combo_txt = " · ".join(parts)
 
         # ── In-flight strip ──────────────────────────────────────────────────
         handle = state.active_run_handle
@@ -228,21 +217,21 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
             cancel_btn.visible = False
 
         run_safe = _esc(run_txt)
-        cid_safe = _esc(cid_txt)
+        combo_safe = _esc(combo_txt)
         bar_html.object = (
             '<div style="display:flex;align-items:center;height:36px;font-size:13px;'
             'line-height:36px;background:#f8fafc;border-bottom:1px solid #e5e7eb;'
             'overflow:hidden;white-space:nowrap">'
-            f'<div style="flex:0 1 auto;max-width:28%;min-width:140px;overflow:hidden;'
+            f'<div style="flex:0 1 auto;max-width:40%;min-width:160px;overflow:hidden;'
             f'text-overflow:ellipsis;padding:0 10px" title="{run_safe}">'
-            f'<span style="color:#6b7280;font-weight:600;margin-right:6px">Run</span>'
-            f'{run_safe}</div>'
-            f'<div style="flex:0 0 auto;padding:0 10px;border-left:1px solid #e5e7eb;'
-            f'font-family:ui-monospace,Menlo,monospace;font-size:12px" title="{cid_safe}">'
-            f'<span style="color:#6b7280;font-weight:600;margin-right:6px;'
-            f'font-family:inherit">ID</span>{cid_safe}</div>'
-            + _ellipsis_cell("Params", params_txt, "1 1 0")
-            + _ellipsis_cell("Metrics", metrics_txt, "1 1 0")
+            f'<span style="color:#6b7280;font-weight:600;margin-right:6px">'
+            f'Selected Run:</span>{run_safe}</div>'
+            f'<div style="flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;'
+            f'padding:0 10px;border-left:1px solid #e5e7eb" title="{combo_safe}">'
+            f'<span style="color:#6b7280;font-weight:600;margin-right:6px">'
+            f'Selected Combo:</span>'
+            f'<span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">'
+            f'{combo_safe}</span></div>'
             + flight
             + "</div>"
         )

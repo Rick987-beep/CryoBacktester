@@ -33,13 +33,26 @@ def _make_eq(n_days: int = 30, start_pnl: float = 100.0) -> dict:
 
 
 def test_equity_figure_has_nav_and_drawdown():
-    """equity_figure: NAV band (2) + equity line + drawdown = 4 traces, 2 y-axes."""
+    """equity_figure: hi/lo band (2) + HWM + equity + drawdown = 5 traces, 2 y-axes."""
     from backtester.ui.charts.equity import equity_figure
     eq = _make_eq()
     fig = equity_figure(eq, capital=10000)
-    assert len(fig.data) == 4, f"Expected 4 traces, got {len(fig.data)}"
+    assert len(fig.data) == 5, f"Expected 5 traces, got {len(fig.data)}"
     assert "yaxis2" in fig.layout
     assert any(getattr(t, "name", None) == "Drawdown %" for t in fig.data)
+    assert any(getattr(t, "name", None) == "HWM" for t in fig.data)
+    # Underwater periods get pale red background bands
+    shapes = fig.layout.shapes or ()
+    assert len(shapes) >= 1, "Expected at least one underwater vrect shape"
+
+
+def test_underwater_spans_contiguous():
+    from backtester.ui.charts.equity import _underwater_spans_from_close
+    dates = ["d1", "d2", "d3", "d4", "d5", "d6"]
+    closes = [100.0, 90.0, 95.0, 110.0, 105.0, 112.0]
+    assert _underwater_spans_from_close(dates, closes, capital=100.0) == [
+        ("d2", "d3"), ("d5", "d5"),
+    ]
 
 
 def test_equity_figure_empty_returns_figure():

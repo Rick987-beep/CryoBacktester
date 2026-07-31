@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Livecompare slot 02</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#F5F5F0;margin:0;padding:2rem;color:#1a1a1a}
+header{background:#1A2B3C;color:#fff;padding:1.5rem 2rem;border-bottom:4px solid #2E6B5A}
+table{width:100%;border-collapse:collapse;background:#fff;margin:1rem 0}
+th{background:#1A2B3C;color:#fff;text-align:left;padding:.5rem}
+td{padding:.45rem;border-top:1px solid #e5e7eb;font-size:.9rem}
+.pos{color:#059669;font-weight:600}.neg{color:#DC2626;font-weight:600}.warn{color:#D97706;font-weight:600}
+</style></head><body>
+<header><h1>Livecompare — slot 02</h1>
+<p>Last 7 live fills vs tudysho_eisbach</p></header>
+<div style="max-width:1100px;margin:0 auto">
+<h2>Warnings</h2><ul><li><strong>SIZING_DIFF</strong> (warn): BT uses default sizing (0.8% NAV / 12 per BTC-equity); compare $/lot only</li><li><strong>FILL_MODEL</strong> (warn): BT requires bid&gt;0; live min_qty_price_floor=0 allows mark fallback</li><li><strong>MON_EARLY_DISABLED</strong> (info): mon_early disabled on live; BT uses turbulence_threshold=999</li><li><strong>DATA_GAP</strong> (error): Missing options parquet for 2026-07-30</li></ul>
+<h2>Comparison</h2>
+<table><thead><tr><th>Date</th><th>Sched</th><th>Comp</th><th>Live $/lot</th><th>BT $/lot</th><th>Codes</th><th>Forensics</th></tr></thead>
+<tbody><tr><td>2026-07-20</td><td>mon_thu</td><td><span class="neg">EXCLUDE</span></td><td>11.85</td><td>—</td><td>CONFIG_DRIFT|NO_BT_TRADE</td><td>Live trade metadata params differ from current slot TOML</td></tr><tr><td>2026-07-21</td><td>mon_thu</td><td><span class="warn">WARN</span></td><td>5.90</td><td>11.86</td><td>FILL_MODEL|PARTIAL_FILL|SIZING_DIFF|STRIKE_MISMATCH</td><td>BTC-22JUL26-69000-C: filled 0/20.2 @ None</td></tr><tr><td>2026-07-22</td><td>mon_thu</td><td><span class="pos">OK</span></td><td>11.72</td><td>11.86</td><td>FILL_MODEL|SIZING_DIFF</td><td></td></tr><tr><td>2026-07-23</td><td>mon_thu</td><td><span class="pos">OK</span></td><td>29.18</td><td>28.99</td><td>FILL_MODEL|SIZING_DIFF</td><td></td></tr><tr><td>2026-07-24</td><td>fri</td><td><span class="pos">OK</span></td><td>11.46</td><td>11.48</td><td>FILL_MODEL|SIZING_DIFF</td><td></td></tr><tr><td>2026-07-27</td><td>mon_thu</td><td><span class="pos">OK</span></td><td>-59.35</td><td>-100.90</td><td>FILL_MODEL|SIZING_DIFF</td><td>Stopped out via combined_mark_sl(metadata) at 2026-07-27 23:00 UTC</td></tr><tr><td>2026-07-28</td><td>mon_thu</td><td><span class="neg">EXCLUDE</span></td><td>0.94</td><td>-2.79</td><td>DATA_GAP|EXIT_MISMATCH|FILL_MODEL|PARTIAL_FILL|SIZING_DIFF|STRIKE_MISMATCH</td><td>BTC-29JUL26-65500-C: filled 0/20.2 @ None; BTC-29JUL26-61500-P: filled 3.3/20.2 @ 0.0001</td></tr></tbody></table>
+<p style="color:#666;font-size:.85rem">Generated 2026-07-29 10:31</p>
+</div></body></html>

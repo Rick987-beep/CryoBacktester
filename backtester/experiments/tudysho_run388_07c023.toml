@@ -1,0 +1,121 @@
+# tudysho_run388_07c023.toml
+# ── Reproduce UI run 388 favourite combo 07c023af9621 ────────────
+#
+# Discovery: 2025-07-15 → 2026-07-15, 243 combos, account $100k
+# Bundle:    backtester/reports/tudysho_20260721_081029.bundle
+# Favourite note: "July rerun, low stop loss, early entry, low otm pct"
+#
+# Metrics (full sample):
+#   score≈0.90  Sharpe≈5.11  total_pnl≈$95.8k  ann_return≈0.96
+#
+#   python -m backtester.run --experiment tudysho_run388_07c023 --mode sensitivity
+#   python -m backtester.run --experiment tudysho_run388_07c023 --mode wfo
+
+strategy = "tudysho"
+
+[sensitivity]
+steps = 5
+
+[sensitivity.best]
+leg_type                       = "strangle"
+dte                            = 1
+delta                          = 0.05
+entry_time                     = "13:00"
+stop_loss_pct                  = 4.0
+trade_monday                   = 1
+trade_tuesday                  = 1
+trade_wednesday                = 1
+trade_thursday                 = 1
+trade_friday                   = 0
+trade_saturday                 = 0
+trade_sunday                   = 0
+min_otm_pct                    = 2.5
+turbulence_threshold           = 60
+nav_premium_pct                = 0.8
+max_qty_per_1btc_equity        = 12
+leg_min_price                  = 0
+proximity_stop_hours           = 8
+proximity_buffer_usd           = 400
+premium_sl_except_final_hours  = 8
+equity_drawdown_stop_pct       = 0
+equity_sl_only_final_hours     = 0
+equity_sl_except_final_hours   = 0
+
+# Sweep the knobs that discovery actually varied; hold the rest fixed.
+[sensitivity.deviation.leg_type]
+type = "fixed"
+
+[sensitivity.deviation.dte]
+type = "fixed"
+
+[sensitivity.deviation.delta]
+type   = "abs"
+amount = 0.02          # → [0.03, 0.04, 0.05, 0.06, 0.07]
+
+[sensitivity.deviation.entry_time]
+type = "fixed"         # string clock; not numeric
+
+[sensitivity.deviation.stop_loss_pct]
+type   = "abs"
+amount = 1.0           # → [3.0, 3.5, 4.0, 4.5, 5.0]
+
+[sensitivity.deviation.trade_monday]
+type = "fixed"
+
+[sensitivity.deviation.trade_tuesday]
+type = "fixed"
+
+[sensitivity.deviation.trade_wednesday]
+type = "fixed"
+
+[sensitivity.deviation.trade_thursday]
+type = "fixed"
+
+[sensitivity.deviation.trade_friday]
+type = "fixed"
+
+[sensitivity.deviation.trade_saturday]
+type = "fixed"
+
+[sensitivity.deviation.trade_sunday]
+type = "fixed"
+
+[sensitivity.deviation.min_otm_pct]
+type   = "abs"
+amount = 0.3           # → [2.2, 2.35, 2.5, 2.65, 2.8]
+
+[sensitivity.deviation.turbulence_threshold]
+type = "fixed"
+
+[sensitivity.deviation.nav_premium_pct]
+type = "fixed"
+
+[sensitivity.deviation.max_qty_per_1btc_equity]
+type = "fixed"
+
+[sensitivity.deviation.leg_min_price]
+type = "fixed"
+
+[sensitivity.deviation.proximity_stop_hours]
+type = "fixed"
+
+[sensitivity.deviation.proximity_buffer_usd]
+type   = "abs"
+amount = 200           # → [200, 300, 400, 500, 600]
+
+[sensitivity.deviation.premium_sl_except_final_hours]
+type = "fixed"
+
+[sensitivity.deviation.equity_drawdown_stop_pct]
+type = "fixed"
+
+[sensitivity.deviation.equity_sl_only_final_hours]
+type = "fixed"
+
+[sensitivity.deviation.equity_sl_except_final_hours]
+type = "fixed"
+
+[wfo]
+is_days   = 60
+oos_days  = 20
+step_days = 20

@@ -401,6 +401,7 @@ def run_grid_full(
     _f_fee_usd = []     # derived: fee_btc × spot
     _f_balance_usd = []  # running USD cash balance per combo after this fill
     _f_exit_reason = []
+    _f_comment = []
     _f_status = []
 
     # Per-combo pos_id → open trade_idx mapping (for open_idx linkage)
@@ -478,7 +479,7 @@ def run_grid_full(
         trade_status = getattr(trade, 'status', 0)
         pos_id = trade.metadata.get('pos_id')
 
-        def _emit(leg, open_tidx, ts, spot, event, reason, status, is_close):
+        def _emit(leg, open_tidx, ts, spot, event, reason, status, is_close, comment=""):
             strike = leg.get("strike", 0)
             expiry = leg.get("expiry", "")
             opt_type = "C" if leg.get("is_call") else "P"
@@ -535,6 +536,7 @@ def run_grid_full(
             _f_fee_usd.append(fee_usd)
             _f_balance_usd.append(running_balance[i])
             _f_exit_reason.append(reason)
+            _f_comment.append(comment)
             _f_status.append(status)
 
             # Record open trade_idx ON the leg so close fills can link
@@ -546,12 +548,14 @@ def run_grid_full(
                 leg["_open_idx"] = tidx
                 leg["entry_spot"] = float(spot)
 
+        comment = str(trade.metadata.get("comment", "") or "")
+
         if trade_side == 'open':
             if pos_id is not None:
                 _pos_open_idx[i][pos_id] = tidx
             for leg in legs:
                 _emit(leg, tidx, trade.entry_time, trade.entry_spot,
-                      "open", "", trade_status, is_close=False)
+                      "open", "", trade_status, is_close=False, comment=comment)
             return
 
         # side == 'close'
@@ -569,7 +573,8 @@ def run_grid_full(
 
         for leg in legs:
             _emit(leg, _open_tidx, trade.exit_time, trade.exit_spot,
-                  "close", trade.exit_reason or "", trade_status, is_close=True)
+                  "close", trade.exit_reason or "", trade_status,
+                  is_close=True, comment=comment)
 
     t0 = _time.time()
     n_states = 0
@@ -717,13 +722,15 @@ def run_grid_full(
             "fee_usd":     pd.array(_f_fee_usd, dtype="float32"),
             "balance_usd": pd.array(_f_balance_usd, dtype="float32"),
             "exit_reason": pd.Categorical(_f_exit_reason),
+            "comment":     pd.array(_f_comment, dtype="object"),
             "status":      pd.array(_f_status, dtype="uint16"),
         })
     else:
         df_fills = pd.DataFrame(columns=[
             "combo_idx", "trade_idx", "open_idx", "ts", "event", "contract",
             "side", "qty", "price_btc", "amount_btc", "fee_btc", "spot",
-            "amount_usd", "fee_usd", "balance_usd", "exit_reason", "status",
+            "amount_usd", "fee_usd", "balance_usd", "exit_reason", "comment",
+            "status",
         ])
 
     return df, keys, nav_daily_df, final_nav_df, df_fills

@@ -48,6 +48,42 @@ def test_trades_df_has_derived_columns(tiny_grid_result):
     assert "pnl_pct" in df_t.columns
 
 
+def test_trades_df_includes_comment_when_present():
+    """Fills view shows comment when column exists; omits when absent (old bundles)."""
+    import pandas as pd
+    from types import SimpleNamespace
+    from backtester.ui.views.detail_view import _trades_df, _FILLS_COLS
+
+    assert "comment" in _FILLS_COLS
+
+    base = {
+        "combo_idx": [0, 0],
+        "ts": pd.to_datetime(["2025-07-28 17:15", "2025-07-28 17:15"]),
+        "trade_idx": [1, 2],
+        "event": ["open", "open"],
+        "contract": ["BTC-29JUL25-121000-C", "BTC-29JUL25-114000-P"],
+        "side": ["sell", "sell"],
+        "qty": [5.1, 5.1],
+        "amount_usd": [100.0, 100.0],
+        "balance_usd": [100_000.0, 100_100.0],
+        "fee_usd": [1.0, 1.0],
+        "spot": [118_000.0, 118_000.0],
+        "exit_reason": ["", ""],
+    }
+    with_comment = pd.DataFrame({**base, "comment": ["macro delay 2h", "macro delay 2h"]})
+    result = SimpleNamespace(df_fills=with_comment, df=None)
+    out = _trades_df(result, 0)
+    assert "comment" in out.columns
+    assert list(out["comment"]) == ["macro delay 2h", "macro delay 2h"]
+
+    # Old fills.parquet without comment — must not crash; column omitted
+    old = pd.DataFrame(base)
+    result_old = SimpleNamespace(df_fills=old, df=None)
+    out_old = _trades_df(result_old, 0)
+    assert "comment" not in out_old.columns
+    assert len(out_old) == 2
+
+
 def test_detail_view_builds_without_error(tiny_grid_result, sqlite_store):
     """build_detail_view returns a Panel Column without exceptions."""
     pn.extension("tabulator", "plotly", sizing_mode="stretch_width")

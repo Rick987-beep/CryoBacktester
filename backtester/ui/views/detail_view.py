@@ -22,7 +22,8 @@ log = get_ui_logger(__name__)
 
 # Fills-view columns (used when result.df_fills is available — one row per leg per event)
 _FILLS_COLS = ["ts", "trade_idx", "event", "contract", "side", "qty",
-               "amount_usd", "balance_usd", "fee_usd", "spot", "exit_reason"]
+               "amount_usd", "balance_usd", "fee_usd", "spot", "exit_reason",
+               "comment"]
 
 # Summary-view columns (fallback when df_fills is absent)
 _TRADE_COLS = ["entry_time", "exit_time", "days_held", "entry_spot", "pnl",
@@ -98,6 +99,11 @@ def _fmt_trade_val(col: str, val) -> str:
     if col in _PCT_COLS:
         try:
             return f"{float(val):.2f}%"
+        except (TypeError, ValueError):
+            return str(val)
+    if col == "qty":
+        try:
+            return f"{float(val):.1f}"
         except (TypeError, ValueError):
             return str(val)
     if isinstance(val, float):
@@ -182,13 +188,21 @@ def _stats_card_html(stats: dict, eq: dict | None, key: tuple, rank: int | None 
 </div>"""
 
 
-def _headline_html(combo_id: str, rank: int | None) -> str:
-    rank_str = f"Rank #{rank}" if rank is not None else "Rank —"
+def _headline_html(combo_id: str, rank: int | None, starred: bool = False) -> str:
+    rank_str = f"#{rank}" if rank is not None else "—"
+    star = "★" if starred else "☆"
     return (
-        f"<div style='display:flex;align-items:baseline;gap:16px;flex-wrap:wrap'>"
-        f"<span style='font-size:20px;font-weight:700;color:#1a1a2e;"
-        f"font-family:ui-monospace,Menlo,monospace'>{combo_id}</span>"
-        f"<span style='font-size:16px;font-weight:600;color:#374151'>{rank_str}</span>"
+        f"<div style='text-align:left;font-size:16px;font-weight:600;color:#1a1a2e;"
+        f"line-height:28px'>"
+        f"<span style='color:#6b7280;font-weight:600'>Combo ID</span> "
+        f"<span style='font-family:ui-monospace,Menlo,monospace;font-weight:700'>"
+        f"{combo_id}</span>"
+        f"&nbsp;&nbsp;"
+        f"<span style='color:#6b7280;font-weight:600'>Scoring Rank</span> "
+        f"<span style='font-weight:700'>{rank_str}</span>"
+        f"&nbsp;&nbsp;"
+        f"<span style='color:#d97706;font-size:18px' title="
+        f"{'Starred' if starred else 'Not starred'}'>{star}</span>"
         f"</div>"
     )
 
@@ -358,6 +372,8 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
                 )
                 _star_btn.name = "★ Unstar"
                 _star_feedback.object = "<span style='color:#16a34a'>★ Starred!</span>"
+            # Refresh headline so ★/☆ matches favourite state
+            _render(run_id, key)
         except Exception as exc:
             _star_feedback.object = f"<span style='color:#dc2626'>⚠ {exc}</span>"
             log.error("detail_view: star toggle failed: %s", exc)
@@ -395,12 +411,16 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
 
         from backtester.ui.services.store_service import key_hash as _kh
         combo_id = _kh(key)
+        starred = False
+        if store is not None:
+            starred = store.get_favourite_by_combo(run_id, key) is not None
         headline = pn.Row(
-            pn.pane.HTML(_headline_html(combo_id, rank), sizing_mode="stretch_width"),
+            pn.pane.HTML(_headline_html(combo_id, rank, starred=starred)),
             _star_btn,
             _star_feedback,
             sizing_mode="stretch_width",
             margin=(4, 0, 8, 0),
+            styles={"justify-content": "flex-start", "align-items": "center"},
         )
 
         # 1 — Parameters + Performance Metrics table
@@ -410,12 +430,24 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
         )
 
         # 2 — Equity + drawdown chart
+        _eq_heading = pn.pane.HTML(
+            "<h4 style='margin:12px 0 4px 0;text-align:left;color:#1a1a2e'>"
+            "Equity and Drawdown Graph</h4>",
+            sizing_mode="stretch_width",
+        )
         if eq and eq.get("daily"):
-            title = f"Rank #{rank} equity" if rank else "Equity"
-            fig = equity_figure(eq, title=title, capital=result.account_size)
-            equity_pane = pn.pane.Plotly(fig, sizing_mode="stretch_width")
+            fig = equity_figure(eq, title=None, capital=result.account_size)
+            equity_pane = pn.Column(
+                _eq_heading,
+                pn.pane.Plotly(fig, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width",
+            )
         else:
-            equity_pane = pn.pane.Markdown("_No equity data for this combo._")
+            equity_pane = pn.Column(
+                _eq_heading,
+                pn.pane.Markdown("_No equity data for this combo._"),
+                sizing_mode="stretch_width",
+            )
 
         # 3 — WFO IS/OOS section (Phase 4) — shown only when meta has wfo_result
         wfo_pane = _wfo_section(run_id)
@@ -452,6 +484,8 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
                     _tab_fmts[_c] = NumberFormatter(format="0.00")
                 elif _c == "days_held":
                     _tab_fmts[_c] = NumberFormatter(format="0.00")
+                elif _c == "qty":
+                    _tab_fmts[_c] = NumberFormatter(format="0.0")
 
             tab = pn.widgets.Tabulator(
                 df_trades[display_cols],

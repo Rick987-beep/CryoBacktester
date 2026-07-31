@@ -18,6 +18,9 @@ _EQUITY_LINE_COLOR = "#2563eb"
 _DD_FILL_COLOR = "rgba(220,38,38,0.3)"
 _DD_LINE_COLOR = "#dc2626"
 _ZERO_LINE_COLOR = "#6b7280"
+# Pale red bands behind equity while NAV is below high-water mark
+_UNDERWATER_BG = "rgba(220, 38, 38, 0.07)"
+_HWM_LINE_COLOR = "#94a3b8"
 
 # eq["daily"] is a list of tuples:
 # (date_str, pnl_d, cum_pnl, high, low, close_nav)
@@ -63,11 +66,44 @@ def _drawdown_series(daily: list, capital: float) -> list[float]:
     return dd
 
 
+def _hwm_close_series(closes: list[float], capital: float) -> list[float]:
+    """Running high-water mark of the close series (classic equity HWM)."""
+    peak = capital
+    hwm = []
+    for c in closes:
+        peak = max(peak, float(c))
+        hwm.append(peak)
+    return hwm
+
+
+def _underwater_spans_from_close(
+    dates: list, closes: list[float], capital: float,
+) -> list[tuple[str, str]]:
+    """Contiguous spans where close NAV is strictly below its running HWM."""
+    hwm = _hwm_close_series(closes, capital)
+    spans: list[tuple[str, str]] = []
+    start_i: int | None = None
+    for i, (c, peak) in enumerate(zip(closes, hwm)):
+        underwater = float(c) < float(peak) - 1e-9
+        if underwater and start_i is None:
+            start_i = i
+        elif not underwater and start_i is not None:
+            spans.append((dates[start_i], dates[i - 1]))
+            start_i = None
+    if start_i is not None:
+        spans.append((dates[start_i], dates[-1]))
+    return spans
+
+
 # ── Single-combo figure ───────────────────────────────────────────────────────
 
 def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
                   y_mode: str = "nav") -> go.Figure:
     """Build a two-subplot figure: equity (top) + underwater drawdown (bottom).
+
+    Periods where close NAV is below its high-water mark get a pale red
+    background band on the equity pane (standard tear-sheet convention),
+    plus a dotted HWM line on NAV charts.
 
     Args:
         eq:       equity_metrics() result dict with a "daily" list.
@@ -85,6 +121,8 @@ def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
     hi_vals = [float(row[3]) for row in daily]
     lo_vals = [float(row[4]) for row in daily]
     dd = _drawdown_series(daily, capital)
+    closes = _daily_close_series(daily, capital)
+    hwm = _hwm_close_series(closes, capital)
 
     fig = make_subplots(
         rows=2, cols=1,
@@ -117,6 +155,19 @@ def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
         ),
         row=1, col=1,
     )
+
+    # High-water mark (step line) — only meaningful on NAV scale
+    if y_mode == "nav":
+        fig.add_trace(
+            go.Scatter(
+                x=dates, y=hwm,
+                mode="lines",
+                name="HWM",
+                line=dict(color=_HWM_LINE_COLOR, width=1, dash="dot"),
+                hovertemplate="HWM %{y:,.0f}<extra></extra>",
+            ),
+            row=1, col=1,
+        )
 
     # Equity close trace
     fig.add_trace(
@@ -157,6 +208,17 @@ def equity_figure(eq: dict, title: str | None = None, capital: float = 10000,
         ),
         row=2, col=1,
     )
+
+    # Pale red bands for close-below-HWM episodes (after traces so subplot axes exist)
+    for x0, x1 in _underwater_spans_from_close(dates, closes, capital):
+        fig.add_vrect(
+            x0=x0, x1=x1,
+            fillcolor=_UNDERWATER_BG,
+            opacity=1.0,
+            layer="below",
+            line_width=0,
+            row=1, col=1,
+        )
 
     fig.update_layout(
         title=title,

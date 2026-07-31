@@ -179,3 +179,76 @@ def test_runs_view_activate_sets_active_run_id(sqlite_store, tiny_grid_result, t
     state.active_tab = "Results Grid"
     assert state.active_run_id == run_id
     assert state.active_tab == "Results Grid"
+
+
+def test_runs_view_columns_and_rerun_prefill(sqlite_store, tiny_grid_result, tmp_path):
+    """Runs table drops git_dirty, shows favourite; Re-run prefills New Run state."""
+    from backtester.ui.state import AppState
+    from backtester.ui.services.cache_service import ResultCache
+    from backtester.ui.views.runs_view import _COLS, build_runs_view
+
+    path = sqlite_store.write_bundle(
+        tiny_grid_result, strategy="rerun_me", runtime_s=1.0,
+    )
+    run_id = sqlite_store.register_bundle(path)
+    sqlite_store.set_label(run_id, "my test label")
+    sqlite_store.set_pinned(run_id, True)
+
+    cache = ResultCache(sqlite_store, max_unpinned=5)
+    state = AppState()
+    build_runs_view(state, sqlite_store, cache)
+
+    rr = sqlite_store.get_run(run_id)
+    assert rr.label == "my test label"
+    assert rr.pinned is True
+    assert "git_dirty" not in _COLS
+    assert _COLS[0] == "id"
+    assert _COLS[1] == "favourite"
+
+    state.rerun_request = {
+        "strategy": rr.strategy,
+        "param_grid": __import__("json").loads(rr.param_grid_json),
+        "date_from": rr.date_from,
+        "date_to": rr.date_to,
+    }
+    assert state.rerun_request["strategy"] == "rerun_me"
+
+
+def test_runs_view_star_click_toggles_favourite(sqlite_store, tiny_grid_result, tmp_path):
+    """Clicking the favourite cell toggles pin state via the registered on_click."""
+    from types import SimpleNamespace
+
+    from backtester.ui.state import AppState
+    from backtester.ui.services.cache_service import ResultCache
+    from backtester.ui.views.runs_view import build_runs_view
+
+    path = sqlite_store.write_bundle(
+        tiny_grid_result, strategy="star_me", runtime_s=1.0,
+    )
+    run_id = sqlite_store.register_bundle(path)
+    cache = ResultCache(sqlite_store, max_unpinned=5)
+    cache.get(run_id)
+    state = AppState()
+    view = build_runs_view(state, sqlite_store, cache)
+
+    tabs = list(view.select(pn.widgets.Tabulator))
+    assert tabs, "expected a Tabulator in Runs view"
+    tab = tabs[0]
+    assert list(tab.value.columns)[:2] == ["id", "favourite"]
+    assert tab.value.iloc[0]["favourite"] == "☆"
+    assert sqlite_store.get_run(run_id).pinned is False
+
+    cbs = tab._on_click_callbacks.get("favourite")
+    assert cbs, "expected favourite on_click"
+    for cb in cbs:
+        cb(SimpleNamespace(column="favourite", row=0))
+
+    assert sqlite_store.get_run(run_id).pinned is True
+    tabs = list(view.select(pn.widgets.Tabulator))
+    assert tabs[0].value.iloc[0]["favourite"] == "★"
+
+    for cb in tabs[0]._on_click_callbacks["favourite"]:
+        cb(SimpleNamespace(column="favourite", row=0))
+    assert sqlite_store.get_run(run_id).pinned is False
+    tabs = list(view.select(pn.widgets.Tabulator))
+    assert tabs[0].value.iloc[0]["favourite"] == "☆"
