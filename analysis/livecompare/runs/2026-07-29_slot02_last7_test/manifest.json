@@ -1,0 +1,54 @@
+{
+  "created_at": "2026-07-29T08:31:04.568888+00:00",
+  "slot": "02",
+  "last_n": 7,
+  "date_from": "2026-07-20",
+  "date_to": "2026-07-30",
+  "live_strategy": "tudysho",
+  "bt_strategy": "tudysho_eisbach",
+  "bundle": "backtester/reports/tudysho_eisbach_slot02_slot_20260729_083041.bundle",
+  "sizing_mode": "bt_default",
+  "n_live": 7,
+  "n_bt": 6,
+  "comparability_counts": {
+    "OK": 4,
+    "EXCLUDE": 2,
+    "WARN": 1
+  },
+  "warnings": [
+    {
+      "code": "SIZING_DIFF",
+      "severity": "warn",
+      "message": "BT uses default sizing (0.8% NAV / 12 per BTC-equity); compare $/lot only",
+      "context": {
+        "live": {
+          "nav_premium_pct": 0.28,
+          "max_qty_per_1btc_equity": 4.36,
+          "max_quantity": 21,
+          "min_qty_price_floor": 0
+        }
+      }
+    },
+    {
+      "code": "FILL_MODEL",
+      "severity": "warn",
+      "message": "BT requires bid>0; live min_qty_price_floor=0 allows mark fallback",
+      "context": {
+        "live_min_qty_price_floor": 0
+      }
+    },
+    {
+      "code": "MON_EARLY_DISABLED",
+      "severity": "info",
+      "message": "mon_early disabled on live; BT uses turbulence_threshold=999",
+      "context": {}
+    },
+    {
+      "code": "DATA_GAP",
+      "severity": "error",
+      "message": "Missing options parquet for 2026-07-30",
+      "context": {}
+    }
+  ],
+  "resolved_config_hash": "f5990fd869f2"
+}

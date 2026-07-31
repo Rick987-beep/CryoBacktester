@@ -1,0 +1,49 @@
+{
+  "title": "Eisbach live vs backtester fill comparison",
+  "created": "2026-07-20",
+  "window": {
+    "entry_from": "2026-07-01",
+    "entry_to": "2026-07-17"
+  },
+  "live": {
+    "slot": "slot-02",
+    "host": "root@46.225.137.92",
+    "blotter_path": "/opt/ct/trade_history/slot-02.jsonl",
+    "pulled": "2026-07-20",
+    "strategy_pre_jul8": "short_str_turb_dyn",
+    "strategy_from_jul8": "tudysho (Eisbach v1.0.0)",
+    "sizing": {
+      "nav_premium_pct": 0.28,
+      "max_qty_per_1btc_equity": 4.36,
+      "max_quantity": 20,
+      "typical_equity_usd": 285000,
+      "typical_lots": 20
+    }
+  },
+  "backtest": {
+    "run_id": 375,
+    "combo_hash": "42dbac5b4976",
+    "strategy": "tudysho_eisbach",
+    "bundle": "backtester/reports/tudysho_eisbach_20260720_090214.bundle",
+    "account_size_usd": 100000,
+    "sizing": {
+      "nav_premium_pct": 0.8,
+      "max_qty_per_1btc_equity": 12,
+      "max_quantity": null,
+      "typical_lots": 21
+    },
+    "date_range": ["2026-07-01", "2026-07-18"]
+  },
+  "intentional_bt_differences": [
+    "Turbulence uses current-hour bucket (backtester convention), not live prior-hour bucket",
+    "Sizing uses 0.8% NAV / 12 per BTC-equity on $100k sim account, not live book sizing",
+    "Entry requires bid > 0 on both legs after min_otm; live falls back to mark when bid missing"
+  ],
+  "artifacts": {
+    "raw_blotter": "data/slot-02.jsonl",
+    "live_trades_csv": "data/live_jul1_17.csv",
+    "bt_trades_csv": "data/bt_jul1_17.csv",
+    "day_by_day_csv": "data/day_by_day.csv",
+    "fill_gap_csv": "data/fill_gap.csv"
+  }
+}

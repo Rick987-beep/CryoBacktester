@@ -33,8 +33,8 @@ class AppState(param.Parameterized):
     active_run_handle = param.Parameter(default=None, allow_None=True,
                                         doc="RunHandle while a backtest is running; None otherwise")
 
-    # Signal from Favourites "Re-run" button
-    # When set to {"strategy": str, "param_grid": dict}, New Run picks it up
+    # Signal from Favourites "Re-run" or Runs "Re-run" button
+    # When set to {"strategy": str, "param_grid": dict, ...}, New Run picks it up
     # and prefills its controls, then resets this to None.
     rerun_request = param.Parameter(default=None, allow_None=True,
-                                    doc="Dict {strategy, param_grid} to prefill New Run")
+                                    doc="Dict {strategy, param_grid, date_from?, date_to?} to prefill New Run")

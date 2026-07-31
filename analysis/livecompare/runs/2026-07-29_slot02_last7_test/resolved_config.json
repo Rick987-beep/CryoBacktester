@@ -1,0 +1,124 @@
+{
+  "slot": "02",
+  "live_strategy": "tudysho",
+  "bt_strategy": "tudysho_eisbach",
+  "slot_toml": "/Users/ulrikdeichsel/CryoTrader/slots/slot-02.toml",
+  "slot_toml_hash": "f5990fd869f2",
+  "param_grid": {
+    "nav_premium_pct": [
+      0.8
+    ],
+    "max_qty_per_1btc_equity": [
+      12
+    ],
+    "leg_min_price": [
+      0
+    ],
+    "equity_drawdown_stop_pct": [
+      0
+    ],
+    "equity_sl_only_final_hours": [
+      0
+    ],
+    "equity_sl_except_final_hours": [
+      0
+    ],
+    "schedule_fri": [
+      {
+        "entry_time": "12:00",
+        "dte": 1,
+        "delta": 0.1,
+        "min_otm_pct": 2.4,
+        "turbulence_threshold": 99,
+        "stop_loss_pct": 4.0,
+        "proximity_stop_hours": 4,
+        "proximity_buffer_usd": 0,
+        "premium_sl_except_final_hours": 4,
+        "watch_until_utc_midnight": true
+      }
+    ],
+    "schedule_mon_early": [
+      {
+        "enabled": false,
+        "entry_time": "1:00",
+        "dte": 0,
+        "delta": 0.1,
+        "min_otm_pct": 1.0,
+        "turbulence_threshold": 999.0,
+        "stop_loss_pct": 4.0,
+        "proximity_stop_hours": 4,
+        "proximity_buffer_usd": 200,
+        "premium_sl_except_final_hours": 4,
+        "watch_until_utc_midnight": false,
+        "watch_until_utc_hour": 8
+      }
+    ],
+    "schedule_mon_thu": [
+      {
+        "entry_time": "13:00",
+        "dte": 1,
+        "delta": 0.05,
+        "min_otm_pct": 2.6,
+        "turbulence_threshold": 60,
+        "stop_loss_pct": 4.0,
+        "proximity_stop_hours": 8,
+        "proximity_buffer_usd": 500,
+        "premium_sl_except_final_hours": 8,
+        "watch_until_utc_midnight": true
+      }
+    ]
+  },
+  "bt_params_flat": {
+    "nav_premium_pct": 0.8,
+    "max_qty_per_1btc_equity": 12,
+    "leg_min_price": 0,
+    "equity_drawdown_stop_pct": 0,
+    "equity_sl_only_final_hours": 0,
+    "equity_sl_except_final_hours": 0,
+    "schedule_fri": {
+      "entry_time": "12:00",
+      "dte": 1,
+      "delta": 0.1,
+      "min_otm_pct": 2.4,
+      "turbulence_threshold": 99,
+      "stop_loss_pct": 4.0,
+      "proximity_stop_hours": 4,
+      "proximity_buffer_usd": 0,
+      "premium_sl_except_final_hours": 4,
+      "watch_until_utc_midnight": true
+    },
+    "schedule_mon_early": {
+      "enabled": false,
+      "entry_time": "1:00",
+      "dte": 0,
+      "delta": 0.1,
+      "min_otm_pct": 1.0,
+      "turbulence_threshold": 999.0,
+      "stop_loss_pct": 4.0,
+      "proximity_stop_hours": 4,
+      "proximity_buffer_usd": 200,
+      "premium_sl_except_final_hours": 4,
+      "watch_until_utc_midnight": false,
+      "watch_until_utc_hour": 8
+    },
+    "schedule_mon_thu": {
+      "entry_time": "13:00",
+      "dte": 1,
+      "delta": 0.05,
+      "min_otm_pct": 2.6,
+      "turbulence_threshold": 60,
+      "stop_loss_pct": 4.0,
+      "proximity_stop_hours": 8,
+      "proximity_buffer_usd": 500,
+      "premium_sl_except_final_hours": 8,
+      "watch_until_utc_midnight": true
+    }
+  },
+  "sizing_mode": "bt_default",
+  "account_size_usd": 100000.0,
+  "strategy_map_notes": [
+    "BT uses current-hour turbulence bucket; live may use prior-hour",
+    "BT requires bid>0; live min_qty_price_floor=0 allows mark fallback",
+    "BT has no schedule enabled flag; mon_early disabled via turb=999"
+  ]
+}

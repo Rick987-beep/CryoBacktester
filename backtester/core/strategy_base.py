@@ -368,6 +368,29 @@ def strike_proximity_stop(hours_before_expiry, buffer_usd=0.0):
     return check
 
 
+def strike_proximity_stop_pct(hours_before_expiry, buffer_pct=0.0):
+    # type: (float, float) -> ExitCondition
+    """Close short premium when spot breaches strike ± (buffer_pct % of spot).
+
+    ``buffer_pct`` is a percentage of ``state.spot`` at evaluation time
+    (e.g. 0.4 = 0.4%).  Converted to USD each tick so the buffer scales with
+    the index.  Same window / strangle semantics as ``strike_proximity_stop``.
+    """
+    def check(state, pos):
+        if hours_before_expiry <= 0:
+            return None
+        if pos.metadata.get("direction", "sell") != "sell":
+            return None
+        if not _in_proximity_window(state, pos, hours_before_expiry):
+            return None
+        spot = float(state.spot)
+        buffer_usd = spot * float(buffer_pct) / 100.0
+        if _strike_breach(spot, pos, buffer_usd):
+            return "strike_proximity_stop"
+        return None
+    return check
+
+
 def position_quotes_available(state, pos):
     # type: (Any, OpenPosition) -> bool
     """Return True when all open legs have option quote rows in this snapshot."""

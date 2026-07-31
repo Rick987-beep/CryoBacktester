@@ -1,0 +1,31 @@
+{
+  "warnings": [
+    {
+      "code": "SIZING_DIFF",
+      "severity": "warn",
+      "message": "BT uses default sizing (0.8% NAV / 12 per BTC-equity); compare $/lot only",
+      "context": {
+        "live": {
+          "nav_premium_pct": 0.28,
+          "max_qty_per_1btc_equity": 4.36,
+          "max_quantity": 21,
+          "min_qty_price_floor": 0
+        }
+      }
+    },
+    {
+      "code": "FILL_MODEL",
+      "severity": "warn",
+      "message": "BT requires bid>0; live min_qty_price_floor=0 allows mark fallback",
+      "context": {
+        "live_min_qty_price_floor": 0
+      }
+    },
+    {
+      "code": "MON_EARLY_DISABLED",
+      "severity": "info",
+      "message": "mon_early disabled on live; BT uses turbulence_threshold=999",
+      "context": {}
+    }
+  ]
+}

@@ -261,3 +261,37 @@ class TestFillsReconciliation:
         close_fill = df_fills[df_fills["event"] == "close"].iloc[0]
         assert float(open_fill["amount_usd"])  > 0   # sell → cash in
         assert float(close_fill["amount_usd"]) < 0   # buy  → cash out
+
+    def test_comment_column_defaults_empty(self):
+        _, df_fills = _run()
+        assert "comment" in df_fills.columns
+        assert (df_fills["comment"].astype(str) == "").all()
+
+
+class _CommentedOpenStrategy(_SingleLegSellStrategy):
+    """Same recon strategy but stamps metadata comment on open."""
+
+    def _open(self, state):
+        trades = super()._open(state)
+        trades[0].metadata["comment"] = "macro delay 2h"
+        return trades
+
+
+class TestFillComment:
+    def test_open_comment_copied_to_fill_rows(self):
+        from backtester.core.engine import run_grid_full
+
+        T0 = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+        T1 = datetime(2026, 4, 2, 12, 0, tzinfo=timezone.utc)
+        replay = _FakeReplay([_make_state(T0, _SPOT_OPEN), _make_state(T1, _SPOT_CLOSE)])
+        _, _, _, _, df_fills = run_grid_full(
+            _CommentedOpenStrategy,
+            {"dummy": [0]},
+            replay,
+            progress=False,
+        )
+        opens = df_fills[df_fills["event"] == "open"]
+        closes = df_fills[df_fills["event"] == "close"]
+        assert list(opens["comment"].astype(str)) == ["macro delay 2h"]
+        # Close Trade has no comment → empty
+        assert list(closes["comment"].astype(str)) == [""]

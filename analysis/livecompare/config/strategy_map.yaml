@@ -1,0 +1,38 @@
+# Live CryoTrader strategy → CryoBacktester strategy mapping.
+# Used by: python -m backtester.compare
+
+defaults:
+  account_size_usd: 100000
+  sizing_mode: bt_default   # bt_default | live_mirror
+  bt_sizing:
+    nav_premium_pct: 0.8
+    max_qty_per_1btc_equity: 12
+    leg_min_price: 0
+  live_sizing_keys:
+    - nav_premium_pct
+    - max_qty_per_1btc_equity
+    - max_quantity
+    - min_qty_price_floor
+
+exit_label_map:
+  combined_mark_sl: stop_loss
+  "combined_mark_sl(metadata)": stop_loss
+
+strategies:
+  tudysho:
+    bt_strategy: tudysho_eisbach
+    multi_schedule: true
+    schedule_prefix: schedule_
+    mon_early_disable:
+      method: turbulence_threshold
+      value: 999.0
+    notes:
+      - "BT uses current-hour turbulence bucket; live may use prior-hour"
+      - "BT requires bid>0; live min_qty_price_floor=0 allows mark fallback"
+      - "BT has no schedule enabled flag; mon_early disabled via turb=999"
+
+  short_str_turb_dyn:
+    bt_strategy: short_str_turb_dyn
+    multi_schedule: false
+    notes:
+      - "Legacy live strategy — not comparable to current tudysho Eisbach BT config"

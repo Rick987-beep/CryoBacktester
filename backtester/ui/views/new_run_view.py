@@ -366,10 +366,16 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
             for pname, ti in _param_inputs.items():
                 if pname in pg:
                     ti.value = csv_from_values(pg[pname])
+        date_from = req.get("date_from")
+        date_to = req.get("date_to")
+        if date_from is not None:
+            date_from_input.value = date_from or ""
+        if date_to is not None:
+            date_to_input.value = date_to or ""
         state.rerun_request = None
         state.active_tab = "New Run"
         status_label.object = (
-            "<span style='color:#2563eb'>Prefilled from favourite — review and Run.</span>"
+            "<span style='color:#2563eb'>Prefilled — review parameters and Run.</span>"
         )
 
     state.param.watch(_on_rerun_request, ["rerun_request"])
