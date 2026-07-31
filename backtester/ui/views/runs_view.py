@@ -12,12 +12,14 @@ from backtester.ui.log import get_ui_logger
 
 log = get_ui_logger(__name__)
 
-_COLS = ["id", "favourite", "created_at", "strategy", "label", "n_combos",
+_COLS = ["id", "favourite", "created_at", "strategy", "family", "label", "n_combos",
          "n_trades", "runtime_s"]
 
 
 def build_runs_view(state, store, cache) -> pn.Column:
     """Build the Runs management page."""
+    from workspace.catalog import FAMILIES, family_for, family_label
+
     try:
         store.scan_bundles()
     except Exception as exc:
@@ -26,6 +28,17 @@ def build_runs_view(state, store, cache) -> pn.Column:
     status = pn.pane.HTML("", sizing_mode="stretch_width", margin=(4, 4))
     table_holder = pn.Column(sizing_mode="stretch_width")
     _tab_ref: dict = {"tab": None}
+
+    _FAMILY_ALL = "all"
+    _family_opts = {"All": _FAMILY_ALL}
+    _family_opts.update({fam.label: fid for fid, fam in FAMILIES.items()})
+    family_filter = pn.widgets.Select(
+        name="Family",
+        options=_family_opts,
+        value=_FAMILY_ALL,
+        width=160,
+        margin=(4, 4),
+    )
 
     refresh_btn = pn.widgets.Button(
         name="↺ Refresh", button_type="light", width=100, margin=(4, 4),
@@ -64,17 +77,24 @@ def build_runs_view(state, store, cache) -> pn.Column:
             return pd.DataFrame(columns=_COLS)
         records = []
         for rr in rows:
+            fam_id = family_for(rr.strategy or "")
             records.append({
                 "id": rr.id,
                 "favourite": "★" if rr.pinned else "☆",
                 "created_at": (rr.created_at or "")[:19].replace("T", " "),
                 "strategy": rr.strategy,
+                "family": family_label(fam_id),
+                "family_id": fam_id,
                 "label": rr.label or "",
                 "n_combos": rr.n_combos,
                 "n_trades": rr.n_trades,
                 "runtime_s": round(rr.runtime_s, 1) if rr.runtime_s is not None else None,
             })
-        return pd.DataFrame(records)
+        df = pd.DataFrame(records)
+        selected = family_filter.value
+        if selected and selected != _FAMILY_ALL:
+            df = df[df["family_id"] == selected].reset_index(drop=True)
+        return df.drop(columns=["family_id"], errors="ignore")
 
     def _selected_ids() -> list[int]:
         tab = _tab_ref.get("tab")
@@ -273,6 +293,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
         _refresh()
 
     refresh_btn.on_click(lambda e: _refresh())
+    family_filter.param.watch(lambda e: _refresh(), "value")
     open_btn.on_click(_on_open)
     rerun_btn.on_click(_on_rerun)
     delete_btn.on_click(_on_delete)
@@ -288,7 +309,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
     _refresh()
 
     actions = pn.Row(
-        refresh_btn, open_btn, rerun_btn, delete_btn,
+        refresh_btn, family_filter, open_btn, rerun_btn, delete_btn,
         sizing_mode="stretch_width",
     )
     prune_row = pn.Row(

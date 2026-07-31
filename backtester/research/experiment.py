@@ -4,7 +4,7 @@ experiment.py — Load and interpret backtester experiment TOML files.
 An experiment file captures a specific research step (sensitivity analysis
 or walk-forward validation) against a named strategy candidate.
 
-File layout: backtester/experiments/<name>.toml
+File layout: workspace/experiments/<name>.toml
 
 Usage:
     from backtester.research.experiment import load_experiment
@@ -23,7 +23,8 @@ from typing import Any, Dict, List, Optional
 
 import tomllib
 
-EXPERIMENTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "experiments")
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+EXPERIMENTS_DIR = os.path.join(_REPO_ROOT, "workspace", "experiments")
 
 
 # ── Data classes ─────────────────────────────────────────────────

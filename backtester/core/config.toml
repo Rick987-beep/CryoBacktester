@@ -1,25 +1,27 @@
 # ── Backtester Application Configuration ─────────────────────────────────────
 #
 # Strategy-specific settings (PARAM_GRID, DATE_RANGE, entry logic) stay in
-# each strategy file. This file holds application-level settings only.
+# each strategy file under workspace/strategies/. This file holds application-
+# level settings only.
 #
-# All paths are relative to the backtester/ package root (parent of core/).
+# Data-plane roots (market, reports/runs, klines, tardis, macro) are resolved by
+# backtester.core.paths (defaults: repo data/market, data/runs, …). Env overrides:
+# CRYOBT_MARKET_DATA, CRYOBT_RUNS, CRYOBT_KLINE_DIR / CRYOTRADER_KLINE_DIR, etc.
+# TOML path fields below are legacy documentation; the loader prefers paths.py.
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 [data]
 
-# Default snapshot parquets fed to the backtest engine.
-# Point to the data/ directory — MarketReplay will load all options_YYYY-MM-DD.parquet
-# and spot_YYYY-MM-DD.parquet files found there (per-day layout from Tardis bulk download).
-# Old 2-week snapshots are kept as test_options_*.parquet / test_spot_*.parquet and ignored.
+# Historical: relative to backtester/. Prefer paths.py / env for new setups.
+# Default market snapshots live at {repo}/data/market/ (options_*.parquet, spot_*.parquet).
 options_parquet     = "data"
 spot_parquet        = "data"
 macro_calendar_dir  = "data/macro/economic_events/us_scheduled"
 
-# Raw tick data input and snapshot output directories (used by snapshot_builder).
+# Raw tick data / snapshot dirs (ingest); resolved via paths.py when env set.
 tardis_data_dir     = "ingest/tardis/data"
 snapshots_dir       = "data"
-reports_dir         = "reports"
+reports_dir         = "reports"   # effective default: {repo}/data/runs
 
 # Snapshot cadences (minutes).
 snapshot_interval_min   = 5   # option snapshot grid resolution

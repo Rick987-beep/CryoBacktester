@@ -190,7 +190,7 @@ class StoreService:
 
     def write_bundle(self, grid_result, strategy: str, runtime_s: float,
                      source: str = "cli", wfo_result=None,
-                     strategy_cls=None) -> Path:
+                     strategy_cls=None, family: str | None = None) -> Path:
         """Persist *grid_result* as a run bundle directory.
 
         When *strategy_cls* is provided, a byte copy of its module source is
@@ -229,6 +229,14 @@ class StoreService:
             "git_dirty": _repro.git_dirty(),
             "config_hash": _repro.config_hash(),
         }
+        if family:
+            meta["family"] = family
+        elif strategy:
+            try:
+                from workspace.catalog import family_for
+                meta["family"] = family_for(strategy)
+            except Exception:
+                pass
         if wfo_result is not None:
             try:
                 meta["wfo_result"] = _serialize_wfo_result(wfo_result)

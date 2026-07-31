@@ -14,7 +14,7 @@ Read fully before touching any code.
 1. **Never `git commit` or `git push`** without explicit user approval.
 2. **For any task bigger than a small edit: present a plan first.** Wait for the user to say "CODE" before writing code.
 3. **Bug spotted? Describe it, do NOT fix it.** Report the problem and stop. Wait for "CODE".
-4. **Run tests before and after any code change:** `python -m pytest backtester/strategies/tests/ -v`
+4. **Run tests before and after any code change:** `python -m pytest workspace/tests/ -v`
 5. **`PARAM_GRID` and `DATE_RANGE` in strategy files are NOT sacred.** Change them freely as part of any analysis or reproduction task — they are working state, not protected config.
 
 ---
@@ -30,55 +30,27 @@ Strategies are occasionally ported from CryoBacktester → CryoTrader — that i
 
 ## Repo structure
 
+Three planes: **product** (`backtester/`), **use** (`workspace/`), **data** (`data/`).
+
 ```
 CryoBacktester/
-├── backtester/                      # Package root (run from repo root)
-│   ├── run.py                       # CLI: python -m backtester.run
-│   ├── core/                        # Engine, market replay, pricing, results
-│   │   ├── engine.py                # Single-pass grid runner (run_grid_full)
-│   │   ├── market_replay.py         # 5-min snapshot iterator → MarketState
-│   │   ├── results.py               # GridResult: vectorised scoring, equity metrics
-│   │   ├── pricing.py               # Deribit fee model, Black-Scholes helpers
-│   │   ├── option_selection.py      # Option leg selection helpers
-│   │   ├── expiry_utils.py          # Expiry date utilities
-│   │   ├── strategy_base.py         # Strategy protocol, trade dataclasses
-│   │   ├── market_hours.py          # US market hours / NYSE calendar
-│   │   ├── config.py                # Config loader
-│   │   └── config.toml              # Scoring weights, data paths
-│   ├── research/                    # Sensitivity, WFO, robustness
-│   │   ├── experiment.py
-│   │   ├── walk_forward.py
-│   │   └── robustness.py            # Deflated Sharpe Ratio
-│   ├── reporting/                   # Self-contained HTML reports
-│   │   ├── html_report.py
-│   │   └── charts.py                # SVG chart primitives
-│   ├── indicators/                  # Indicator compute + build pipeline
-│   │   ├── pipeline.py              # IndicatorDep / build_indicators
-│   │   ├── hist_data.py             # On-disk Binance kline cache
-│   │   ├── supertrend.py
-│   │   ├── turbulence.py
-│   │   ├── trend_regime.py
-│   │   └── ingest_klines.py
-│   ├── strategies/                  # One file per strategy
-│   │   └── tests/                   # Strategy unit tests
-│   ├── calm_nights/                 # Calm-nights indicator helpers (cadysho)
-│   ├── ui/                          # Interactive Research UI
-│   ├── experiments/                 # TOML experiment definitions
-│   ├── ingest/
-│   │   ├── check_data_completeness.py
-│   │   ├── check_parquet.py
-│   │   └── tardis/                  # Tardis bulk download pipeline
-│   ├── data/                        # Parquet snapshots (gitignored)
-│   ├── archive/                     # Archived data + legacy strategies (gitignored)
-│   └── reports/                     # Generated HTML reports (gitignored)
-├── tests/                           # Integration + UI tests
-│   └── ui/
-├── docs/
-├── analysis/                        # One-off analysis artifacts
-└── handover/                        # External handover packages
+├── backtester/          # PRODUCT — engine, UI, indicators code, ingest, compare
+│   ├── core/            # includes paths.py data-plane resolver
+│   ├── strategies/      # compatibility shims → workspace.strategies
+│   ├── ui/  reporting/  research/  indicators/  ingest/  compare/
+│   └── run.py           # CLI; STRATEGIES façade from workspace.catalog
+├── workspace/           # USE — strategies by family, experiments, strategy tests
+│   ├── catalog.py       # families + stable strategy IDs (never rename IDs)
+│   ├── strategies/{tudysho,theta_engine,other}/
+│   ├── experiments/
+│   └── tests/
+├── data/                # DATA PLANE — market, klines, runs (gitignored blobs)
+├── tests/               # Product / UI / integration tests
+├── analysis/
+└── docs/
 ```
 
----
+Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS` (see `backtester.core.paths`).
 
 ## CLI
 
@@ -96,7 +68,7 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
 python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 ```
 
-Current strategy names: `short_str_turb_dyn`, `blueprint_howto`
+Strategy IDs: see `workspace/catalog.py` (tudysho*, theta_engine_v*, blueprint_howto, …)
 
 All other strategies are in `backtester/archive/strategies_to_be_fixed/` — not in the CLI registry.
 
@@ -138,19 +110,19 @@ Experiment TOMLs in `backtester/experiments/` capture candidates separately.
 
 ```bash
 # Run strategy tests (always do this)
-python -m pytest backtester/strategies/tests/ -v
+python -m pytest workspace/tests/ -v
 
 # Live/network tests only when explicitly asked
-python -m pytest backtester/strategies/tests/ -m live -v
+python -m pytest workspace/tests/ -m live -v
 ```
 
-Tests live in `backtester/strategies/tests/`. `@pytest.mark.live` tests require network access and are deselected by default (`addopts = "-m 'not live'"`).
+Tests live in `workspace/tests/`. `@pytest.mark.live` tests require network access and are deselected by default (`addopts = "-m 'not live'"`).
 
 ---
 
 ## Data
 
-Parquet snapshots live in `backtester/data/` (~924 MB, gitignored). Two ingestion sources:
+Parquet snapshots live in `data/market/` (~924 MB, gitignored). Two ingestion sources:
 
 **Tardis bulk download** (historic, up to ~2 weeks lag):
 ```bash
@@ -186,17 +158,21 @@ These indicator files are separate copies from CryoTrader's `indicators/` — th
 
 - Python 3.12; venv at `.venv/`
 - Strategies implement the `Strategy` protocol from `backtester/core/strategy_base.py`
-- One strategy per file in `backtester/strategies/`
+- **Canonical strategy code** lives under `workspace/strategies/{family}/` (tudysho, theta_engine, other)
+- Register new strategies in `workspace/catalog.py` (stable ID + family + status) — never rename IDs
+- `backtester/strategies/*.py` are **compatibility shims** only; do not put new logic there
 - `PARAM_GRID` in each strategy = wide, unbiased discovery grid (never narrowed post-hoc)
-- Experiment TOMLs in `backtester/experiments/` capture "what we think is good and why"
+- Experiment TOMLs in `workspace/experiments/`
+- Market data / runs / kline cache: `data/` (see `backtester.core.paths` + env overrides)
 - `logging.getLogger(__name__)` in every module
 
 ---
 
 ## Writing a new strategy — quick reference
 
-The canonical pattern lives in `backtester/strategies/blueprint_howto.py` — read it first.
+The canonical pattern lives in `workspace/strategies/other/blueprint_howto.py` — read it first.
 Full detail is in `docs/strategy_howto.md`.
+Put new strategies under the right family dir and register them in `workspace/catalog.py`.
 
 ### Required imports
 ```python
@@ -204,43 +180,43 @@ from backtester.core.option_selection import select_by_delta
 from backtester.core.expiry_utils import expiry_dt_utc, select_expiry
 from backtester.core.pricing import deribit_fee_per_leg, EXPIRY_HOUR_UTC
 from backtester.core.strategy_base import (
-    OpenPosition, Trade, check_expiry, close_position,
-    price_legs, profit_target_pct, stop_loss_pct, max_hold_hours,
+ OpenPosition, Trade, check_expiry, close_position,
+ price_legs, profit_target_pct, stop_loss_pct, max_hold_hours,
 )
 ```
 
 ### configure() — wire up exit conditions
 ```python
 def configure(self, params):
-    self._sl_pct  = float(params["stop_loss_pct"])
-    self._tp_pct  = float(params.get("take_profit_pct", 0.0))
-    self._pos     = None
-    self._opened  = False
-    # SL uses mark (stable, not manipulable by wide spreads)
-    # TP uses executable (bid/ask — only fires when real market price available)
-    self._exit_conds = [stop_loss_pct(self._sl_pct, price_mode="mark")]
-    if self._tp_pct > 0:
-        self._exit_conds.append(profit_target_pct(self._tp_pct, price_mode="executable"))
+ self._sl_pct  = float(params["stop_loss_pct"])
+ self._tp_pct  = float(params.get("take_profit_pct", 0.0))
+ self._pos     = None
+ self._opened  = False
+ # SL uses mark (stable, not manipulable by wide spreads)
+ # TP uses executable (bid/ask — only fires when real market price available)
+ self._exit_conds = [stop_loss_pct(self._sl_pct, price_mode="mark")]
+ if self._tp_pct > 0:
+  self._exit_conds.append(profit_target_pct(self._tp_pct, price_mode="executable"))
 ```
 
 ### Required leg fields (at open)
 ```python
 leg = {
-    "strike":          float,   # USD
-    "is_call":         bool,
-    "expiry":          str,     # e.g. "28MAY26"
-    "side":            "sell",  # or "buy" — drives price_legs() per-leg pricing
-    "qty":             float,
-    "price_btc":       float,   # fill price (bid for short, ask for long)
-    "entry_price":     float,   # same as price_btc (alias)
-    "entry_price_usd": float,   # price_btc × spot × qty
-    "entry_spot":      float,   # spot at entry (for close_position PnL math)
-    "entry_bid":       float,   # for logs / reporting
-    "entry_ask":       float,
-    "entry_mark":      float,
-    "entry_iv":        float,   # mark_iv from parquet (already %, e.g. 34.4 = 34.4%)
-    "entry_delta":     float,
-    "fee_usd_open":    float,   # deribit_fee_per_leg(spot, entry_price_usd)
+ "strike":          float,   # USD
+ "is_call":         bool,
+ "expiry":          str,     # e.g. "28MAY26"
+ "side":            "sell",  # or "buy" — drives price_legs() per-leg pricing
+ "qty":             float,
+ "price_btc":       float,   # fill price (bid for short, ask for long)
+ "entry_price":     float,   # same as price_btc (alias)
+ "entry_price_usd": float,   # price_btc × spot × qty
+ "entry_spot":      float,   # spot at entry (for close_position PnL math)
+ "entry_bid":       float,   # for logs / reporting
+ "entry_ask":       float,
+ "entry_mark":      float,
+ "entry_iv":        float,   # mark_iv from parquet (already %, e.g. 34.4 = 34.4%)
+ "entry_delta":     float,
+ "fee_usd_open":    float,   # deribit_fee_per_leg(spot, entry_price_usd)
 }
 ```
 
@@ -253,10 +229,10 @@ leg["exit_price_usd"] = float   # exit_price_btc × exit_spot × qty
 ### pos.metadata — mandatory keys
 ```python
 metadata = {
-    "direction": "sell",   # or "buy" — drives stop_loss_pct/profit_target_pct
-    "expiry":    expiry,   # expiry code string
-    "expiry_dt": exp_dt,   # tz-aware datetime — used by check_expiry()
-    "pos_id":    pos_id,   # monotonic int — links open fills to close fills
+ "direction": "sell",   # or "buy" — drives stop_loss_pct/profit_target_pct
+ "expiry":    expiry,   # expiry code string
+ "expiry_dt": exp_dt,   # tz-aware datetime — used by check_expiry()
+ "pos_id":    pos_id,   # monotonic int — links open fills to close fills
 }
 ```
 
@@ -269,11 +245,17 @@ Do NOT multiply by 100. Do NOT divide by 100 when storing in leg dict.
 - `"executable"` — ask for sell legs, bid for buy legs; use for TP
 - `"bid"` / `"ask"` — always that side regardless of leg direction
 
-### Register in run.py
+### Register in catalog (not run.py)
 ```python
-from backtester.strategies.my_strategy import MyStrategy
-STRATEGIES["my_strategy"] = MyStrategy
+# workspace/catalog.py — add a StrategySpec in _build_specs():
+from workspace.strategies.other.my_strategy import MyStrategy
+...
+StrategySpec("my_strategy", "other", MyStrategy, status="active"),
 ```
+Optional: add a thin shim at `backtester/strategies/my_strategy.py` that re-exports the class
+so old `from backtester.strategies.my_strategy import …` imports keep working.
+
+`backtester.run.STRATEGIES` is built automatically from the catalog.
 
 ---
 
@@ -283,8 +265,11 @@ STRATEGIES["my_strategy"] = MyStrategy
 |------|---------|
 | `README.md` | Full backtester workflow, research pipeline, all sections |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
-| `backtester/strategies/blueprint_howto.py` | Canonical working strategy implementation |
+| `workspace/strategies/other/blueprint_howto.py` | Canonical working strategy implementation |
+| `workspace/catalog.py` | Family registry + stable strategy IDs |
+| `workspace/README.md` / `data/README.md` | Use-plane and data-plane conventions |
 | `backtester/core/config.toml` | Scoring weights, grid params, simulation config |
+| `backtester/core/paths.py` | Data-plane path resolver + env overrides |
 | `backtester/ingest/tardis/TARDIS_DATA_NOTES.md` | Tardis data format notes |
 | `backtester/ingest/tardis/TARDIS_ARCHIVE_PLAN.md` | Raw options_chain archive to Storage Box (download-only, pre-expiry) |
 | `backtester/ingest/tardis/BULK_DOWNLOAD_PLAN.md` | Bulk extract pipeline (gz → parquets) |

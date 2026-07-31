@@ -25,7 +25,7 @@ log = get_ui_logger(__name__)
 
 _DISPLAY_COLS = [
     "combo_id", "added_at", "score", "total_pnl", "ann_return", "sharpe",
-    "strategy", "note",
+    "strategy", "family", "note",
 ]
 
 _SORT_COL = "added_at_sort"
@@ -38,6 +38,7 @@ _COL_TITLES = {
     "ann_return": "Ann. Return",
     "sharpe":     "Sharpe",
     "strategy":   "Strategy",
+    "family":     "Family",
     "note":       "Note",
 }
 
@@ -115,6 +116,8 @@ def _favourites_column_config() -> dict:
             {"field": "Sharpe", "width": _SHARPE_COL_WIDTH, "widthGrow": 0,
              "maxWidth": _SHARPE_MAX_WIDTH, **no_sort},
             {"field": "Strategy", "minWidth": 80, "widthGrow": 1, **no_sort},
+            {"field": "Family", "minWidth": 70, "widthGrow": 0, "widthShrink": 0,
+             "width": 100, **no_sort},
             {"field": "Note", "minWidth": 80, "widthGrow": 2, **no_sort},
             {"field": _SORT_COL, "visible": False, "sorter": "string"},
         ],
@@ -131,6 +134,7 @@ def _fav_by_combo_id(favs: list, combo_id: str):
 
 def build_favourites_view(state, store, cache) -> pn.Column:
     """Return the Favourites tab component."""
+    from workspace.catalog import FAMILIES, family_for, family_label
 
     title = pn.pane.Markdown("## Favourites", margin=(8, 4, 4, 4))
     empty_msg = pn.pane.Markdown(
@@ -140,6 +144,17 @@ def build_favourites_view(state, store, cache) -> pn.Column:
 
     tab_holder = pn.Column(sizing_mode="stretch_width")
     selected_fav: dict = {"row": None, "fav": None}  # mutable ref
+
+    _FAMILY_ALL = "all"
+    _family_opts = {"All": _FAMILY_ALL}
+    _family_opts.update({fam.label: fid for fid, fam in FAMILIES.items()})
+    family_filter = pn.widgets.Select(
+        name="Family",
+        options=_family_opts,
+        value=_FAMILY_ALL,
+        width=160,
+        margin=(4, 4),
+    )
 
     params_input = pn.widgets.TextAreaInput(
         name="Parameters",
@@ -206,6 +221,8 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         rows = []
         for fav in favs:
             raw_added = fav.added_at or ""
+            strat = fav.strategy or ""
+            fam_id = family_for(strat)
             rows.append({
                 "combo_id":   fav.combo_hash or "",
                 "added_at":   _format_added_at(raw_added),
@@ -216,12 +233,18 @@ def build_favourites_view(state, store, cache) -> pn.Column:
                     round(fav.ann_return * 100, 1) if fav.ann_return is not None else None
                 ),
                 "sharpe":     round(fav.sharpe, 3) if fav.sharpe is not None else None,
-                "strategy":   fav.strategy or "",
+                "strategy":   strat,
+                "family":     family_label(fam_id),
+                "family_id":  fam_id,
                 "note":       fav.note or "",
                 _SORT_COL:    raw_added,
                 "_fav_id":    fav.id,
             })
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        selected = family_filter.value
+        if selected and selected != _FAMILY_ALL:
+            df = df[df["family_id"] == selected].reset_index(drop=True)
+        return df.drop(columns=["family_id"], errors="ignore")
 
     def _refresh():
         df = _build_df()
@@ -293,6 +316,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         name="↺ Refresh", button_type="light", width=90, margin=(4, 4),
     )
     refresh_btn.on_click(lambda e: _refresh())
+    family_filter.param.watch(lambda e: _refresh(), "value")
 
     # Auto-refresh when this tab becomes active
     def _on_tab_change(event):
@@ -382,7 +406,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
 
     # ── Layout ───────────────────────────────────────────────────────────────
     action_row = pn.Row(
-        open_btn, rerun_btn, unstar_btn, copy_toml_btn, refresh_btn,
+        open_btn, rerun_btn, unstar_btn, copy_toml_btn, refresh_btn, family_filter,
         sizing_mode="stretch_width",
     )
     note_row = pn.Row(note_input, save_note_btn, sizing_mode="stretch_width")

@@ -82,7 +82,8 @@ def run_pipeline(spec: RunSpec) -> Path:
     write_json(spec.out_dir / "data_coverage.json", coverage)
 
     # 5. Run BT
-    bundles_root = _repo_root() / "backtester/reports"
+    from backtester.core.paths import runs_dir
+    bundles_root = runs_dir()
     if spec.skip_bt:
         existing_manifest = spec.out_dir / "manifest.json"
         bundle_rel = None

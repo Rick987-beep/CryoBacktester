@@ -204,6 +204,8 @@ def test_runs_view_columns_and_rerun_prefill(sqlite_store, tiny_grid_result, tmp
     assert "git_dirty" not in _COLS
     assert _COLS[0] == "id"
     assert _COLS[1] == "favourite"
+    assert "family" in _COLS
+    assert "strategy" in _COLS
 
     state.rerun_request = {
         "strategy": rr.strategy,

@@ -1,12 +1,22 @@
-# Data directories — large, not versioned
+# Data plane — large, not versioned (see data/README.md)
+data/market/
+data/klines/
+data/runs/
+data/tardis_raw/
+data/archive/
+
+# One-off analysis blobs (keep README/scripts only)
+analysis/deribit_btc_options_jul2026/data/
+analysis/deribit_btc_options_jul2026/*.zip
+
+# Legacy paths (now symlinks into data/) — ignore contents if resolved
 backtester/data/
 backtester/data_archive/
 backtester/data_spot_rebuilt/
 backtester/ingest/raw/
-backtester/archive/
+backtester/archive/data_archive/
+backtester/archive/data_spot_rebuilt/
 backtester/indicators/data/
-
-# Work-in-progress / planning / outputs — not code
 backtester/reports/
 
 # git-crypt symmetric key — never commit (see docs/git-crypt.md)

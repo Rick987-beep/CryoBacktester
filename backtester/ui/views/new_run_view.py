@@ -32,12 +32,34 @@ _PARAM_TABLE_CSS = """
 def build_new_run_view(state, store, cache, run_service) -> pn.Column:
     """Build the New Run page."""
     from backtester.run import STRATEGIES
+    from workspace.catalog import (
+        FAMILIES,
+        family_for,
+        strategy_options,
+    )
 
+    _FAMILY_ALL = "all"
+    _family_opts = {"All": _FAMILY_ALL}
+    _family_opts.update({fam.label: fid for fid, fam in FAMILIES.items()})
+    family_select = pn.widgets.Select(
+        name="Family",
+        options=_family_opts,
+        value=_FAMILY_ALL,
+        width=180,
+    )
+
+    def _strategy_select_options(family_id: str) -> dict:
+        return strategy_options(None if family_id == _FAMILY_ALL else family_id)
+
+    _init_opts = _strategy_select_options(_FAMILY_ALL)
+    _default_id = (
+        "blueprint_howto" if "blueprint_howto" in _init_opts.values()
+        else next(iter(_init_opts.values()))
+    )
     strategy_select = pn.widgets.Select(
         name="Strategy",
-        options=sorted(STRATEGIES.keys()),
-        value=("short_generic" if "short_generic" in STRATEGIES
-               else sorted(STRATEGIES.keys())[0]),
+        options=_init_opts,
+        value=_default_id,
         width=320,
     )
     reload_btn = pn.widgets.Button(
@@ -184,6 +206,14 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
         _load_date_range(event.new)
 
     strategy_select.param.watch(_on_strategy_change, "value")
+
+    def _on_family_change(event):
+        opts = _strategy_select_options(event.new)
+        strategy_select.options = opts
+        if strategy_select.value not in opts.values():
+            strategy_select.value = next(iter(opts.values()))
+
+    family_select.param.watch(_on_family_change, "value")
 
     def _on_reload(event):
         key = strategy_select.value
@@ -361,8 +391,13 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
             return
         strat = req.get("strategy")
         pg = req.get("param_grid", {})
-        if strat and strat in strategy_select.options:
-            strategy_select.value = strat
+        if strat:
+            fam = family_for(strat)
+            family_select.value = fam if fam in family_select.options.values() else _FAMILY_ALL
+            # Refresh options for family then set strategy
+            strategy_select.options = _strategy_select_options(family_select.value)
+            if strat in strategy_select.options.values():
+                strategy_select.value = strat
             for pname, ti in _param_inputs.items():
                 if pname in pg:
                     ti.value = csv_from_values(pg[pname])
@@ -382,7 +417,7 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
 
     return pn.Column(
         pn.pane.Markdown("## New Run", margin=(8, 4, 4, 4)),
-        pn.Row(strategy_select, reload_btn, sizing_mode="stretch_width"),
+        pn.Row(family_select, strategy_select, reload_btn, sizing_mode="stretch_width"),
         pn.pane.Markdown("### Parameters", margin=(12, 4, 4, 4)),
         param_editor_col,
         pn.pane.Markdown("### Date range", margin=(12, 4, 4, 4)),

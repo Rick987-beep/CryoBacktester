@@ -1,0 +1,87 @@
+# short_str_turb_dyn_v1.toml
+# ── Experiment: Short Strangle Turbulence Dynamic — Candidate v1 ─
+#
+# Step 2  (sensitivity):
+#   python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
+#
+# Step 3  (walk-forward validation):
+#   python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
+#
+# Candidate found from discovery run 2026-05-03:
+#   leg_type=strangle, dte=1, delta=0.15, entry_hour=19, stop_loss_pct=5.0,
+#   take_profit_pct=0, max_hold_hours=0, skip_weekends=1,
+#   min_otm_pct=2.5, turbulence_threshold=60,
+#   dyn_target_premium=500, max_quantity=20.0
+
+strategy = "short_str_turb_dyn"
+
+# ── Sensitivity analysis ─────────────────────────────────────────
+[sensitivity]
+
+steps = 5
+
+[sensitivity.best]
+leg_type              = "strangle"
+dte                   = 1
+delta                 = 0.15
+entry_hour            = 19
+stop_loss_pct         = 5.0
+take_profit_pct       = 0
+max_hold_hours        = 0
+skip_weekends         = 1
+min_otm_pct           = 2.5
+turbulence_threshold  = 60
+dyn_target_premium    = 500
+max_quantity          = 20.0
+leg_min_price         = 0     # 0 = disabled (matches pre-v1.19 behaviour)
+
+[sensitivity.deviation.leg_type]
+type = "fixed"
+
+[sensitivity.deviation.dte]
+type = "fixed"
+
+[sensitivity.deviation.delta]
+type = "fixed"     # 0.15 is well-established; not swept
+
+[sensitivity.deviation.entry_hour]
+type = "fixed"     # 19 UTC fixed
+
+[sensitivity.deviation.stop_loss_pct]
+type   = "pct"
+amount = 15        # ±15% → [4.25, 4.625, 5.0, 5.375, 5.75]
+
+[sensitivity.deviation.take_profit_pct]
+type = "fixed"     # 0 = no TP (boundary value; can't go negative)
+
+[sensitivity.deviation.max_hold_hours]
+type = "fixed"     # 0 = hold to expiry
+
+[sensitivity.deviation.skip_weekends]
+type = "fixed"
+
+[sensitivity.deviation.min_otm_pct]
+type   = "abs"
+amount = 0.5       # ±0.5% → [1.5, 2.0, 2.5, 3.0, 3.5]
+
+[sensitivity.deviation.turbulence_threshold]
+type   = "abs"
+amount = 10        # ±10 → [40, 50, 60, 70, 80]
+
+[sensitivity.deviation.dyn_target_premium]
+type   = "pct"
+amount = 20        # ±20% → [400, 450, 500, 550, 600]
+
+[sensitivity.deviation.max_quantity]
+type   = "abs"
+amount = 5         # ±5 → [10, 15, 20, 25, 30]
+
+[sensitivity.deviation.leg_min_price]
+type = "fixed"     # 0 = disabled throughout sensitivity
+
+
+# ── Walk-forward validation ──────────────────────────────────────
+[wfo]
+is_days   = 60    # In-sample window (calendar days)
+oos_days  = 20    # Out-of-sample window (calendar days)
+step_days = 20    # Window shift per step

@@ -39,7 +39,7 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Run a strategy discovery grid (requires data in backtester/data/)
+# 2. Run a strategy discovery grid (requires data in data/market/)
 python -m backtester.run --strategy short_str_turb_dyn
 
 # 3. Sensitivity analysis around a known-good candidate
@@ -52,15 +52,18 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 python -m backtester.ui.app
 
 # 6. Run tests
-python -m pytest tests/ backtester/strategies/tests/ -v
+python -m pytest tests/ workspace/tests/ -v
 ```
 
-Reports are written to `backtester/reports/` as self-contained HTML files.
+Reports and run bundles are written to `data/runs/` as self-contained HTML + `.bundle/` dirs.
 The Research UI reads those same run bundles interactively at http://localhost:5006.
 
 ---
 
 ## Repo Structure
+
+Three planes: **`backtester/`** (product), **`workspace/`** (strategies/experiments/tests), **`data/`** (market history, klines, run bundles). See `AGENTS.md`, `workspace/README.md`, `data/README.md`.
+
 
 ```
 CryoBacktester/
@@ -98,10 +101,8 @@ CryoBacktester/
 │   │   ├── services/              # Data access layer
 │   │   ├── charts/
 │   │   └── state/                 # SQLite DB (gitignored)
-│   ├── strategies/                # One file per strategy
-│   │   └── tests/                 # Strategy unit tests
+│   ├── strategies/                # Compatibility shims → workspace.strategies
 │   ├── calm_nights/               # Calm-nights helpers (cadysho)
-│   ├── experiments/               # TOML experiment definitions
 │   ├── ingest/
 │   │   ├── check_data_completeness.py
 │   │   ├── check_parquet.py
@@ -119,9 +120,9 @@ CryoBacktester/
 ```
 
 **Gitignored directories (local work, not code):**
-- `backtester/data/` — parquet snapshots (~924 MB)
+- `data/market/` — parquet snapshots (gitignored)
 - `backtester/archive/` — archived parquets + planning + legacy strategies
-- `backtester/reports/` — generated HTML reports and run bundles
+- `data/runs/` — generated HTML reports and run bundles
 - `backtester/ui/state/` — SQLite UI state DB
 - `backtester/indicators/data/` — cached kline data
 
@@ -130,7 +131,7 @@ CryoBacktester/
 ## Data
 
 ### Format
-Option data is stored as per-day parquet files in `backtester/data/`:
+Option data is stored as per-day parquet files in `data/market/`:
 - `options_YYYY-MM-DD.parquet` — 5-minute option chain snapshots
 - `spot_YYYY-MM-DD.parquet` — 1-minute BTC spot OHLC bars
 
@@ -170,7 +171,7 @@ spot_parquet    = "data"
 **`MarketReplay`** loads all parquet files on construction. Strategies iterate over it:
 
 ```python
-replay = MarketReplay("backtester/data", "backtester/data")
+replay = MarketReplay("data/market", "data/market")  # or leave defaults from config/paths
 for state in replay:
     trades = strategy.on_market_state(state)
 ```
@@ -364,7 +365,7 @@ python -m backtester.ui.app --dev        # autoreload on file changes
 
 ### What it reads
 
-The UI scans `backtester/reports/` for run bundles — directories created by `run.py`
+The UI scans `data/runs/` for run bundles — directories created by `run.py`
 (format: `<strategy>_<timestamp>.bundle/`) containing `meta.json`, `trade_log.parquet`,
 `nav_daily.parquet`, and `final_nav.parquet`. It does **not** re-run the backtest engine.
 
@@ -451,7 +452,7 @@ Weights live in `config.toml` `[scoring]` — changing them requires no code edi
 
 ## HTML Reports
 
-Each run writes a self-contained HTML file to `backtester/reports/`. No server or external assets required — open directly in a browser.
+Each run writes a self-contained HTML file to `data/runs/`. No server or external assets required — open directly in a browser.
 
 **Report sections:**
 
@@ -524,25 +525,26 @@ Key sections:
 
 ## Strategies
 
-All strategies live in `backtester/strategies/`. Register them in `backtester/run.py`.
+Canonical strategy code lives under **`workspace/strategies/{family}/`**.
+Register stable IDs in **`workspace/catalog.py`**. `backtester/strategies/` holds
+compatibility shims only.
 
-| CLI key | File | Description |
-|---|---|---|
-| `short_str_turb_dyn` | `short_str_turb_dyn.py` | Short strangle; enter only in low-turbulence regime; dynamic sizing |
-| `blueprint_howto` | `blueprint_howto.py` | Canonical annotated reference implementation for new strategy authors |
+| Family | Examples |
+|---|---|
+| `tudysho` | tudysho, eisbach, starnberg, stradysho, v1/v2 |
+| `theta_engine` | v1–v6 |
+| `other` | blueprint_howto, short_str_turb_dyn, cadysho, … |
 
-All other strategies have been moved to `backtester/archive/strategies_to_be_fixed/`
-and are not registered. They used the legacy `close_trade` / `close_short_strangle` API
-and must be migrated to `close_position` before re-registering.
+Legacy unfinished ports live in `backtester/archive/strategies_to_be_fixed/`.
 
 ---
 
 ## Adding a New Strategy
 
-The canonical reference implementation is `backtester/strategies/blueprint_howto.py` — read it first.
+The canonical reference is `workspace/strategies/other/blueprint_howto.py` — read it first.
 Full step-by-step instructions are in `docs/strategy_howto.md`.
 
-1. Create `backtester/strategies/my_strategy.py` implementing the `Strategy` protocol.
+1. Create `workspace/strategies/<family>/my_strategy.py` implementing the `Strategy` protocol.
 
 **Key imports:**
 ```python
@@ -608,18 +610,14 @@ metadata = {
 }
 ```
 
-2. Register in `backtester/run.py`:
-```python
-from backtester.strategies.my_strategy import MyStrategy
-STRATEGIES["my_strategy"] = MyStrategy
-```
+2. Register in `workspace/catalog.py` (stable ID + family + status). Optionally add a shim under `backtester/strategies/`.
 
 3. Run discovery:
 ```bash
 python -m backtester.run --strategy my_strategy
 ```
 
-4. Once you have a candidate, create `backtester/experiments/my_strategy_v1.toml` and run sensitivity + WFO.
+4. Once you have a candidate, create `workspace/experiments/my_strategy_v1.toml` and run sensitivity + WFO.
 
 **Key rule: keep `PARAM_GRID` wide and unbiased. Never narrow it after seeing results.**
 
@@ -629,21 +627,21 @@ python -m backtester.run --strategy my_strategy
 
 ```bash
 # Full test suite: UI tests + strategy tests
-python -m pytest tests/ backtester/strategies/tests/ -v
+python -m pytest tests/ workspace/tests/ -v
 
 # Strategy tests only (42 tests)
-python -m pytest backtester/strategies/tests/ -v
+python -m pytest workspace/tests/ -v
 
 # UI tests only
 python -m pytest tests/ui/ -v
 
 # Live/network tests (deselected by default, require network)
-python -m pytest backtester/strategies/tests/ -m live -v
+python -m pytest workspace/tests/ -m live -v
 ```
 
 Tests live in two directories:
 - `tests/ui/` — Panel UI unit tests (state, views, services, filter parser, etc.)
-- `backtester/strategies/tests/` — per-strategy backtesting unit tests
+- `workspace/tests/` — per-strategy backtesting unit tests
 
 `@pytest.mark.live` tests are excluded by default via `pyproject.toml` (`addopts = "-m 'not live'"`).
 `@pytest.mark.slow_ui` marks tests that require a real Panel server and are also excluded by default.

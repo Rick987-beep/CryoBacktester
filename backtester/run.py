@@ -24,55 +24,17 @@ from backtester.core.results import GridResult
 from backtester.reporting.html_report import generate_html
 from backtester.research.walk_forward import run_walk_forward
 from backtester.research.experiment import load_experiment
-from backtester.strategies.short_str_turb_dyn import ShortStrTurbDyn
-from backtester.strategies.tudysho import TuDySho
-from backtester.strategies.tudysho_eisbach import TuDyShoEisbach
-from backtester.strategies.tudysho_starnberg import TuDyShoStarnberg
-from backtester.strategies.stradysho import StraDySho
-from backtester.strategies.tudysho_v1 import TuDyShoV1
-from backtester.strategies.tudysho_v2 import TuDyShoV2
-from backtester.strategies.cadysho import Cadysho
-from backtester.strategies.blueprint_howto import BlueprintHowto
-from backtester.strategies.long_gamma_move import LongGammaMove
-from backtester.strategies.pagoda import Pagoda
-from backtester.strategies.covered_call_put import CoveredCallPut
-from backtester.strategies.cal_spread_atm import CalSpreadAtm
-from backtester.strategies.theta_engine_v1 import ThetaEnginev1
-from backtester.strategies.theta_engine_v2 import ThetaEngineV2
-from backtester.strategies.theta_engine_v3 import ThetaEngineV3
-from backtester.strategies.theta_engine_v4 import ThetaEngineV4
-from backtester.strategies.theta_engine_v5 import ThetaEngineV5
-from backtester.strategies.theta_engine_v6 import ThetaEngineV6
 from backtester.core.config import cfg as _cfg
+from backtester.core.paths import runs_dir
+from workspace.catalog import family_for, strategies_dict
 
-# ── Strategy Registry ────────────────────────────────────────────
+# ── Strategy Registry (façade) ───────────────────────────────────
 #
-# Only strategies migrated to the leg-aware engine-owned fills API
-# (close_position / partial_close / add_legs) are registered here.
+# Canonical registration lives in workspace.catalog.  Stable strategy
+# IDs must never be renamed (bundles, favourites, livecompare).
 # Legacy strategies live in backtester/archive/strategies_to_be_fixed/
-# and are not run from the CLI/UI until they are migrated.
 
-STRATEGIES = {
-    "short_str_turb_dyn":  ShortStrTurbDyn,
-    "tudysho":             TuDySho,
-    "tudysho_eisbach":     TuDyShoEisbach,
-    "tudysho_starnberg":   TuDyShoStarnberg,
-    "stradysho":           StraDySho,
-    "tudysho_v1":          TuDyShoV1,
-    "tudysho_v2":          TuDyShoV2,
-    "cadysho":             Cadysho,
-    "blueprint_howto":     BlueprintHowto,
-    "long_gamma_move":     LongGammaMove,
-    "pagoda":              Pagoda,
-    "covered_call_put":    CoveredCallPut,
-    "cal_spread_atm":      CalSpreadAtm,
-    "theta_engine_v1":     ThetaEnginev1,
-    "theta_engine_v2":     ThetaEngineV2,
-    "theta_engine_v3":     ThetaEngineV3,
-    "theta_engine_v4":     ThetaEngineV4,
-    "theta_engine_v5":     ThetaEngineV5,
-    "theta_engine_v6":     ThetaEngineV6,
-}
+STRATEGIES = strategies_dict()
 
 DEFAULT_OPTIONS = _cfg.data.options_parquet
 DEFAULT_SPOT = _cfg.data.spot_parquet
@@ -167,7 +129,7 @@ def run_backtest(
     _store = StoreService(str(_ui_state_dir), str(reports_dir))
     bundle_path = _store.write_bundle(
         result, strategy=strategy_key, runtime_s=grid_time, source=source,
-        strategy_cls=strategy_cls,
+        strategy_cls=strategy_cls, family=family_for(strategy_key),
     )
     _store.register_bundle(bundle_path)
 
@@ -289,7 +251,7 @@ def main():
         status_labels=getattr(strategy_cls, "TRADE_STATUS", getattr(strategy_cls, "STATUS_LABELS", None)),
     )
 
-    reports_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
+    reports_dir = str(runs_dir())
     os.makedirs(reports_dir, exist_ok=True)
     report_stem = args.experiment or args.strategy
     if args.mode != "discovery":
@@ -309,6 +271,7 @@ def main():
                 os.path.dirname(os.path.abspath(__file__)), "ui", "state"
             )
             _store = StoreService(_ui_state_dir, reports_dir)
+            _fam_key = exp.strategy if args.experiment else args.strategy
             _bundle_path = _store.write_bundle(
                 result,
                 strategy=report_stem,
@@ -316,6 +279,7 @@ def main():
                 source="cli",
                 wfo_result=wfo_result,
                 strategy_cls=strategy_cls,
+                family=family_for(_fam_key),
             )
             _store.register_bundle(_bundle_path)
             print(f"  Bundle: {_bundle_path}")

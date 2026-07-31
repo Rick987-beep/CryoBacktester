@@ -66,10 +66,8 @@ def run(
 
     strat_dir = bundle / "strategy"
     strat_dir.mkdir(exist_ok=True)
-    mod = Path(strategy_cls.__module__.replace(".", "/") + ".py")
-    src = Path(__file__).resolve().parents[1] / mod.name
-    # copy from strategies package
-    src = Path(__file__).resolve().parents[1] / "strategies" / f"{bt_strategy}.py"
+    import inspect
+    src = Path(inspect.getfile(strategy_cls)).resolve()
     if src.exists():
         shutil.copy2(src, strat_dir / src.name)
 
