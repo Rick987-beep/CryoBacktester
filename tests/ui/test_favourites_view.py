@@ -72,13 +72,13 @@ def test_favourites_view_shows_rows_after_star(store_with_run):
 
 
 def test_favourites_display_columns_order():
-    """Table columns: ID, Added, metrics, strategy, note."""
+    """Table columns: ID, Added, metrics, strategy, family, note."""
     from backtester.ui.views.favourites_view import _COL_TITLES, _DISPLAY_COLS
 
     titles = [_COL_TITLES[c] for c in _DISPLAY_COLS]
     assert titles == [
         "ID", "Added", "Score", "Total PnL", "Ann. Return", "Sharpe",
-        "Strategy", "Note",
+        "Strategy", "Family", "Note",
     ]
     assert "params_str" not in _DISPLAY_COLS
     assert "name" not in _DISPLAY_COLS

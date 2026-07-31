@@ -182,7 +182,15 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
             else:
                 ts = (rr.created_at or "")[:16].replace("T", " ")
                 label = rr.label or rr.strategy
-                run_txt = f"#{rr.id} · {label} · {ts} · {rr.n_combos or '—'} combos"
+                try:
+                    from workspace.catalog import family_for, family_label
+                    fam = family_label(family_for(rr.strategy or ""))
+                    run_txt = (
+                        f"#{rr.id} · {label} · {fam} · {ts} · "
+                        f"{rr.n_combos or '—'} combos"
+                    )
+                except Exception:
+                    run_txt = f"#{rr.id} · {label} · {ts} · {rr.n_combos or '—'} combos"
 
         # ── Selected Combo (ID + params + metrics) ───────────────────────────
         key = state.active_combo_key

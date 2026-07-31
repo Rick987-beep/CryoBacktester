@@ -5,7 +5,8 @@ Downloads OHLC klines from the Binance public spot API for an arbitrary date
 range and caches the result as a parquet on disk. Repeat calls covering the
 same range read from disk with only the missing tail fetched from Binance.
 
-Storage location: $CRYOTRADER_KLINE_DIR (default: backtester/indicators/data/ next to this file)
+Storage location: $CRYOBT_KLINE_DIR or $CRYOTRADER_KLINE_DIR
+                  (default: {repo}/data/klines via backtester.core.paths)
 Storage file:     {KLINE_DIR}/{SYMBOL}_{interval}.parquet  (one file per series)
 
 Public API
@@ -24,6 +25,7 @@ Public API
 """
 
 import logging
+import sys
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -43,11 +45,24 @@ _BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 _MAX_PER_REQUEST = 1000        # Binance hard limit
 _REQUEST_PAUSE_S = 0.08        # ~12 req/s — well under 1200 weight/min limit
 
-# Permanent storage for historical klines — next to this module, gitignored.
-# Override with CRYOTRADER_KLINE_DIR env var (e.g. for a shared NAS or CI).
-KLINE_DIR = Path(
-    os.environ.get("CRYOTRADER_KLINE_DIR", str(Path(__file__).parent / "data"))
-)
+# Permanent storage for historical klines — data plane (see backtester.core.paths).
+import backtester.core.paths as _paths
+
+
+def _kline_dir() -> Path:
+    # Prefer an explicitly patched module attribute (unit tests set KLINE_DIR).
+    mod = sys.modules[__name__]
+    if "KLINE_DIR" in mod.__dict__:
+        return Path(mod.__dict__["KLINE_DIR"])
+    # Live lookup so env overrides after importlib.reload(paths) are visible.
+    import backtester.core.paths as paths
+    return paths.kline_cache_dir()
+
+
+def __getattr__(name: str):
+    if name == "KLINE_DIR":
+        return _kline_dir()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +172,7 @@ def _fetch_range(symbol: str, interval: str, start_ms: int, end_ms: int) -> pd.D
 
 
 def _cache_path(symbol: str, interval: str) -> Path:
-    return KLINE_DIR / f"{symbol.upper()}_{interval}.parquet"
+    return _kline_dir() / f"{symbol.upper()}_{interval}.parquet"
 
 
 def _read_cache(path: Path) -> Optional[pd.DataFrame]:
@@ -175,7 +190,7 @@ def _read_cache(path: Path) -> Optional[pd.DataFrame]:
 
 
 def _write_cache(path: Path, df: pd.DataFrame) -> None:
-    KLINE_DIR.mkdir(parents=True, exist_ok=True)
+    _kline_dir().mkdir(parents=True, exist_ok=True)
     df.to_parquet(path)
     logger.debug("Cache written: %s (%d rows)", path.name, len(df))
 

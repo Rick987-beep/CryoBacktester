@@ -1,6 +1,6 @@
 # How to Write a New Strategy
 
-*Last updated: June 2026 — reflects price_legs / stop_loss_pct(price_mode) / profit_target_pct(price_mode) refactor.*
+*Last updated: July 2026 — workspace/ catalog layout; price_legs / stop_loss_pct(price_mode) / profit_target_pct(price_mode).*
 
 ---
 
@@ -81,7 +81,7 @@ Implement these five methods and two class attributes:
 
 ```python
 class MyStrategy:
-    name = "my_strategy"          # string key used in run.py registry and reports
+    name = "my_strategy"          # stable ID — register in workspace/catalog.py (never rename)
     DATE_RANGE = ("2025-01-01", "2026-01-01")   # default backtest window (YYYY-MM-DD)
     DESCRIPTION = "One-sentence description."
     PARAM_GRID = { ... }          # see §13
@@ -673,23 +673,38 @@ PARAM_GRID = {
 
 ## 14. Registering the strategy
 
-Add the import and registry entry in `backtester/run.py`:
+1. Put the module under the right family dir:
+   - `workspace/strategies/tudysho/`
+   - `workspace/strategies/theta_engine/`
+   - `workspace/strategies/other/`
+
+2. Register a **stable ID** in `workspace/catalog.py` (`_build_specs()`):
 
 ```python
-from backtester.strategies.my_strategy import MyStrategy
+from workspace.strategies.other.my_strategy import MyStrategy
+...
+StrategySpec("my_strategy", "other", MyStrategy, status="active"),
+```
 
-STRATEGIES = {
-    ...
-    "my_strategy": MyStrategy,
-}
+`backtester.run.STRATEGIES` is built from the catalog automatically. **Never rename
+strategy IDs** — bundles, favourites, livecompare, and experiments key off them.
+
+3. Optional shim (keeps `from backtester.strategies.my_strategy import …` working):
+
+```python
+# backtester/strategies/my_strategy.py
+import workspace.strategies.other.my_strategy as _impl
+globals().update(
+    {n: getattr(_impl, n) for n in dir(_impl) if not n.startswith("__")}
+)
 ```
 
 Only strategies that use the leg-aware API (`close_position` / `partial_close` /
-`add_legs` + explicit open Trade) belong in this registry. Legacy strategies live in
+`add_legs` + explicit open Trade) belong in the catalog. Legacy strategies live in
 `backtester/archive/strategies_to_be_fixed/` and must be migrated before
 re-registering.
 
-Currently registered: `short_str_turb_dyn`, `blueprint_howto`.
+Canonical blueprint: `workspace/strategies/other/blueprint_howto.py`.
 
 ---
 
@@ -707,7 +722,9 @@ Currently registered: `short_str_turb_dyn`, `blueprint_howto`.
 ### Anti-patterns
 
 - **Narrowing PARAM_GRID after seeing results** — this is look-ahead bias. Use an
-  experiment TOML.
+  experiment TOML under `workspace/experiments/`.
+- **Putting new strategy logic in `backtester/strategies/`** — that directory is
+  shim-only; edit `workspace/strategies/` instead.
 - **Live API calls inside `on_market_state`** — network calls inside the hot loop
   break reproducibility and ruin performance. Indicators must come from
   `set_indicators` or from the snapshot.
@@ -752,5 +769,5 @@ Before committing a new strategy, verify:
 - [ ] Imports from `backtester.core.expiry_utils`, not local copies.
 - [ ] `PARAM_GRID` is wide and unbiased; 0-disables optional parameters.
 - [ ] `mark_iv` stored as-is from parquet (already %, e.g. 34.4 = 34.4%).
-- [ ] Strategy is registered in `backtester/run.py`.
-- [ ] `python -m pytest backtester/strategies/tests/ -v` passes.
+- [ ] Strategy is registered in `workspace/catalog.py` (stable ID + family).
+- [ ] `python -m pytest workspace/tests/ -v` passes.

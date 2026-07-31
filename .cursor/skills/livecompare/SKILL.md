@@ -48,8 +48,10 @@ Read outputs **in this order**:
 ## Prerequisites
 
 - CryoTrader at `CT_ROOT` (default `../CryoTrader`) with `slots/slot-NN.toml`
-- Parquet data in `backtester/data/` for the window
+- Market parquets under `data/market/` (or `CRYOBT_MARKET_DATA`) for the window
+- BT strategy IDs from `workspace/catalog.py` (stable; never rename) — live→BT map in `analysis/livecompare/config/strategy_map.yaml`
 - SSH access for blotter pull unless `--skip-pull`
+- Run bundles default to `data/runs/` (`CRYOBT_RUNS`)
 
 ## Extend mapping
 

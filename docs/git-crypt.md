@@ -24,7 +24,7 @@ cd CryoBacktester
 git crypt unlock ~/.cryo-backtester-git-crypt.key
 ```
 
-After unlock, `backtester/strategies/*.py` (except `blueprint_howto.py`) are normal
+After unlock, `workspace/strategies/**/*.py` (except `blueprint_howto.py`) are normal
 plaintext files. Without the key, those paths show as binary blobs in git.
 
 ## Optional: unlock via environment variable
@@ -38,12 +38,17 @@ git crypt unlock
 
 | Path | Encrypted? |
 |------|------------|
-| `backtester/strategies/*.py` | Yes |
-| `backtester/strategies/blueprint_howto.py` | No (public) |
-| `backtester/strategies/tests/test_tudysho*.py`, etc. | Yes |
-| `backtester/strategies/tests/test_strategy_base.py` | No |
+| `workspace/strategies/**/*.py` | Yes (canonical strategy code) |
+| `workspace/strategies/other/blueprint_howto.py` | No (public) |
+| `workspace/strategies/**/__init__.py` | No |
+| `workspace/tests/test_*.py` | Yes (strategy-specific) |
+| `workspace/tests/test_strategy_base.py` | No |
+| `workspace/tests/test_backtester_indicators.py` | No |
+| `backtester/strategies/*.py` | No (compatibility shims only) |
 
 ## Note on history
 
+Older commits encrypted files under `backtester/strategies/`. After the workspace
+split, encrypt **`workspace/strategies/`** going forward (see `.gitattributes`).
 `short_str_turb_dyn.py` existed in plaintext in older commits before git-crypt was
 enabled. Rewriting history to remove it requires a separate force-push operation.

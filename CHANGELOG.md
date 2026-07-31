@@ -4,6 +4,62 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-07-31: product / workspace / data planes
+
+Restructure the repo into three clear planes so shippable product code,
+research “use” artifacts, and bulky data stop living on top of each other —
+without renaming stable strategy IDs or breaking old runs/UI.
+
+### Layout
+
+| Plane | Path | Role |
+|---|---|---|
+| **Product** | `backtester/` | Engine, UI, ingest, indicator *code*, livecompare |
+| **Workspace** | `workspace/` | Strategies by family, catalog, experiments, strategy tests |
+| **Data** | `data/` | Market parquets, klines, run bundles, archive blobs (gitignored) |
+
+Transitional symlinks keep old paths working (`backtester/data` → `data/market`,
+`backtester/reports` → `data/runs`, `backtester/indicators/data` → `data/klines`).
+Override roots via `backtester.core.paths` / env (`CRYOBT_MARKET_DATA`,
+`CRYOBT_KLINE_DIR`, `CRYOBT_RUNS`, …).
+
+### Strategy families
+
+- New `workspace/catalog.py`: lightweight `Family` + `StrategySpec` registry
+  (`tudysho`, `theta_engine`, `other`).
+- Canonical strategy modules under `workspace/strategies/{family}/`.
+- `backtester/strategies/*.py` are thin compatibility shims (stable import paths
+  and IDs preserved for bundles, favourites, livecompare, experiments).
+- git-crypt now encrypts `workspace/strategies/**` and most `workspace/tests/**`
+  (shims and `blueprint_howto` stay plaintext).
+
+### Research UI
+
+- **New Run**: Family + Strategy selects driven by the catalog.
+- **Runs** / **Favourites**: Family column + filter (family derived at display
+  time from strategy ID; optional `family` in new bundle `meta.json`).
+- **Selection bar**: quiet family label next to the selected run.
+
+### Docs & skills
+
+- `AGENTS.md`, `README.md`, `docs/strategy_howto.md`, `docs/git-crypt.md`,
+  `workspace/README.md`, `data/README.md`, livecompare skill updated for the
+  new layout and “how to add a family/strategy” checklist.
+
+### Tests
+
+- Strategy tests live under `workspace/tests/` (`pyproject.toml` `testpaths`
+  updated).
+- New coverage for catalog, import shims, path resolver, data-layout safety,
+  and UI family filters.
+
+### Non-goals (intentionally deferred)
+
+- No SQLite `family` column; no strategy ID renames; no Postgres — bulk trade
+  data remains in Parquet bundles; SQLite stays a thin run/favourites index.
+
+---
+
 ## [Unreleased] — 2026-05-14
 
 ### New Features

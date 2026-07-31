@@ -4,5 +4,5 @@ markers = [
     "slow_ui: tests that start a real Panel server (skipped by default)",
 ]
 addopts = "-m 'not live and not slow_ui'"
-testpaths = ["backtester/strategies/tests", "backtester/calm_nights/tests", "tests"]
-norecursedirs = ["backtester/data", "backtester/data_archive", "backtester/data_spot_rebuilt", "backtester/reports", "backtester/newstrategy"]
+testpaths = ["workspace/tests", "backtester/calm_nights/tests", "tests"]
+norecursedirs = ["backtester/data", "backtester/data_archive", "backtester/data_spot_rebuilt", "backtester/reports", "backtester/newstrategy", "data"]

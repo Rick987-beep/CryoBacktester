@@ -31,7 +31,14 @@ _HEALTHZ_ROUTE = "/healthz"
 _UI_DIR = os.path.dirname(os.path.abspath(__file__))
 _BACKTESTER_DIR = os.path.dirname(_UI_DIR)
 _DEFAULT_STATE_DIR = os.path.join(_UI_DIR, "state")
-_DEFAULT_BUNDLES_ROOT = os.path.join(_BACKTESTER_DIR, "reports")
+
+
+def _default_bundles_root() -> str:
+    from backtester.core.paths import runs_dir
+    return str(runs_dir())
+
+
+_DEFAULT_BUNDLES_ROOT = None  # resolved lazily in build_app
 
 
 class _HealthzHandler(RequestHandler):
@@ -51,7 +58,7 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
 
     Args:
         state_dir:    Directory for ui_state.db.  Defaults to backtester/ui/state/.
-        bundles_root: Directory scanned for *.bundle/ dirs.  Defaults to backtester/reports/.
+        bundles_root: Directory scanned for *.bundle/ dirs.  Defaults to data/runs/.
     """
     from backtester.ui.services.store_service import StoreService
     from backtester.ui.services.cache_service import ResultCache
@@ -69,7 +76,7 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     pn.extension("tabulator", "plotly", sizing_mode="stretch_width")
 
     _state_dir = state_dir or _DEFAULT_STATE_DIR
-    _bundles_root = bundles_root or _DEFAULT_BUNDLES_ROOT
+    _bundles_root = bundles_root or _default_bundles_root()
 
     store = StoreService(_state_dir, _bundles_root)
     cache = ResultCache(store, max_unpinned=5)

@@ -107,8 +107,9 @@ def load_config(path=_CONFIG_PATH):
     # type: (str) -> BacktesterConfig
     """Load backtester/core/config.toml and return a BacktesterConfig instance.
 
-    Path fields in the TOML are relative to the ``backtester/`` package root
-    (not the ``core/`` subdirectory), so ``data`` → ``backtester/data/``.
+    Path fields that describe the data plane (market, reports, klines, …)
+    are resolved by ``backtester.core.paths`` (repo ``data/`` + env overrides).
+    Remaining TOML path fields are relative to the ``backtester/`` package root.
     """
     with open(path, "rb") as fh:
         raw = tomllib.load(fh)
@@ -120,6 +121,13 @@ def load_config(path=_CONFIG_PATH):
         """Resolve a backtester/-relative path to an absolute path."""
         return os.path.normpath(os.path.join(base, p))
 
+    from backtester.core.paths import (
+        macro_calendar_dir,
+        market_data_dir,
+        runs_dir,
+        tardis_raw_dir,
+    )
+
     d = raw["data"]
     s = raw["simulation"]
     p = raw["pricing"]
@@ -127,14 +135,15 @@ def load_config(path=_CONFIG_PATH):
     f = raw["fees"]
     sc = raw["scoring"]
 
+    market = str(market_data_dir())
     return BacktesterConfig(
         data=DataConfig(
-            options_parquet=_abs(d["options_parquet"]),
-            spot_parquet=_abs(d["spot_parquet"]),
-            macro_calendar_dir=_abs(d.get("macro_calendar_dir", "data/macro/economic_events/us_scheduled")),
-            tardis_data_dir=_abs(d["tardis_data_dir"]),
-            snapshots_dir=_abs(d["snapshots_dir"]),
-            reports_dir=_abs(d["reports_dir"]),
+            options_parquet=market,
+            spot_parquet=market,
+            macro_calendar_dir=str(macro_calendar_dir()),
+            tardis_data_dir=str(tardis_raw_dir()),
+            snapshots_dir=market,
+            reports_dir=str(runs_dir()),
             snapshot_interval_min=int(d["snapshot_interval_min"]),
             spot_interval_min=int(d["spot_interval_min"]),
             parquet_compression=str(d["parquet_compression"]),

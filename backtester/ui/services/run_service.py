@@ -87,10 +87,9 @@ class RunService:
         progress_path = os.path.join(tmp_dir, f"ui-worker-{run_id}-progress.jsonl")
         config_path   = os.path.join(tmp_dir, f"ui-worker-{run_id}-config.json")
 
-        # Resolve bundles_root (same as DEFAULT_BUNDLES_ROOT in app.py)
-        _ui_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        _backtester_dir = os.path.dirname(_ui_dir)
-        bundles_root = os.path.join(_backtester_dir, "reports")
+        # Resolve bundles_root via data-plane paths
+        from backtester.core.paths import runs_dir
+        bundles_root = str(runs_dir())
 
         date_from, date_to = date_range if date_range else (None, None)
 
