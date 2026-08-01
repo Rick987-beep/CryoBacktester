@@ -48,15 +48,16 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
 # 4. Walk-forward validation
 python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 
-# 5. Launch the interactive Research UI
-python -m backtester.ui.app
+# 5. Launch the interactive Research UI (native window — preferred)
+python -m backtester.ui.desktop
+#    or open scripts/macos/CryoBacktester.app (Dock / Finder)
 
 # 6. Run tests
 python -m pytest tests/ workspace/tests/ -v
 ```
 
 Reports and run bundles are written to `data/runs/` as self-contained HTML + `.bundle/` dirs.
-The Research UI reads those same run bundles interactively at http://localhost:5006.
+The Research UI reads those same run bundles in a native window (or in the browser via `python -m backtester.ui.app`).
 
 ---
 
@@ -94,13 +95,15 @@ CryoBacktester/
 │   │   ├── trend_regime.py
 │   │   └── ingest_klines.py
 │   ├── ui/                        # Interactive Research UI (Panel + Bokeh + Plotly)
-│   │   ├── app.py                 # Entry point: python -m backtester.ui.app
+│   │   ├── desktop.py             # Native window: python -m backtester.ui.desktop
+│   │   ├── app.py                 # Browser CLI: python -m backtester.ui.app
+│   │   ├── server_utils.py        # wait_for_healthz + URL/WS origin helpers
 │   │   ├── state.py               # AppState param object (shared reactive state)
 │   │   ├── log.py                 # UI-scoped logger
 │   │   ├── views/                 # One file per screen
 │   │   ├── services/              # Data access layer
 │   │   ├── charts/
-│   │   └── state/                 # SQLite DB (gitignored)
+│   │   └── state/                 # SQLite DB + desktop.lock (gitignored)
 │   ├── strategies/                # Compatibility shims → workspace.strategies
 │   ├── calm_nights/               # Calm-nights helpers (cadysho)
 │   ├── ingest/
@@ -111,6 +114,9 @@ CryoBacktester/
 │   ├── archive/                   # Archived data + legacy strategies (gitignored)
 │   └── reports/                   # Generated HTML / run bundles (gitignored)
 │
+├── scripts/
+│   └── macos/CryoBacktester.app   # Thin Dock launcher → .venv desktop UI
+├── workspace/                     # USE plane — strategies, catalog, experiments
 ├── tests/                         # Integration + UI tests
 │   └── ui/
 ├── docs/
@@ -123,7 +129,7 @@ CryoBacktester/
 - `data/market/` — parquet snapshots (gitignored)
 - `backtester/archive/` — archived parquets + planning + legacy strategies
 - `data/runs/` — generated HTML reports and run bundles
-- `backtester/ui/state/` — SQLite UI state DB
+- `backtester/ui/state/` — SQLite UI state DB + desktop.lock
 - `backtester/indicators/data/` — cached kline data
 
 ---
@@ -354,14 +360,37 @@ In-sample (IS) uses the wide `PARAM_GRID` (honest search space). Out-of-sample (
 
 ## Research UI
 
-An interactive Panel-based web app for exploring backtest results without re-running the engine.
+An interactive Panel-based app for exploring backtest results without re-running the engine.
+The preferred launch is a **native desktop window** (pywebview / WKWebView on macOS) — one Dock icon, one window, no browser tabs.
 
 ```bash
-python -m backtester.ui.app              # open on http://localhost:5006
-python -m backtester.ui.app --port 5007  # custom port
-python -m backtester.ui.app --no-browser # suppress auto-open
+# Native desktop (preferred)
+python -m backtester.ui.desktop
+python -m backtester.ui.desktop --port 5007
+
+# Or open the thin local .app (uses this repo's .venv — not a frozen binary)
+open scripts/macos/CryoBacktester.app
+# Optional: symlink into ~/Applications and pin to Dock
+# If you move the .app, set CRYOBT_ROOT to the repo path.
+
+# Browser / Terminal (dev / debugging)
+python -m backtester.ui.app              # opens browser after /healthz is ready
+python -m backtester.ui.app --port 5007
+python -m backtester.ui.app --no-browser
 python -m backtester.ui.app --dev        # autoreload on file changes
 ```
+
+**Quit behaviour (desktop):** if a backtest worker is still running, a confirmation dialog appears. Cancel keeps the window open; confirm stops all workers (SIGTERM, then SIGKILL) and exits. Closing the window also releases the single-instance lock.
+
+**Troubleshooting**
+
+| Symptom | Fix |
+|---|---|
+| `desktop UI is already running` | Only one desktop instance is allowed; quit the other window first |
+| `port 5006 is already in use` | Stop the other process (`lsof -i :5006`) or pass `--port` |
+| `pywebview is not installed` | `pip install pywebview` (listed in `requirements.txt`) |
+| `.app` says missing `.venv` | Create `.venv` in the repo, or set `CRYOBT_ROOT` if the app was moved |
+| Blue header only / blank body | Must open `localhost` with matching Bokeh `websocket_origin` (fixed in desktop/app helpers). Quit stale UI and relaunch. |
 
 ### What it reads
 

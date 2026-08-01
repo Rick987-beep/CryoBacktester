@@ -13,6 +13,7 @@ tzdata>=2024.1            # IANA tz DB fallback for zoneinfo (no-op on macOS/Ubu
 panel>=1.4,<2             # Dashboard framework (Bokeh-based, Panel serve)
 bokeh>=3.4,<4             # Panel runtime dep (Tornado server)
 plotly>=5.20              # Equity charts rendered via pn.pane.Plotly
+pywebview>=5.0            # Native desktop window (WKWebView on macOS)
 
 # Development dependencies (optional)
 # pytest>=7.0.0           # Testing framework

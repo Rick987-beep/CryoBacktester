@@ -27,8 +27,9 @@ backtester/reports/
 # Runtime logs (UI worker, etc.)
 logs/
 
-# UI SQLite state DB
+# UI SQLite state DB + desktop single-instance lock
 backtester/ui/state/ui_state.db
+backtester/ui/state/desktop.lock
 
 # Python
 __pycache__/

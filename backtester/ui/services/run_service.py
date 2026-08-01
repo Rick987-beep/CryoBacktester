@@ -3,10 +3,17 @@ run_service.py — Launch and manage backtest worker subprocesses.
 
 RunHandle   — data class wrapping an in-flight subprocess.
 RunService  — spawns workers, tails progress, cancels.
+
+Workers are started in a new POSIX session (start_new_session=True) so the
+UI can signal the whole process group on cancel/quit and avoid orphaned
+backtests when the parent exits.
 """
+from __future__ import annotations
+
 import atexit
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -49,7 +56,62 @@ class RunService:
         self._store = store
         self._cache = cache
         self._handles: list[RunHandle] = []
-        atexit.register(self._cleanup)
+        atexit.register(self.shutdown_all)
+
+    def running_worker_count(self) -> int:
+        """Number of worker subprocesses that have not yet exited."""
+        return sum(1 for h in self._handles if h.is_alive())
+
+    def _spawn(self, cmd: list[str]) -> subprocess.Popen:
+        """Spawn ``cmd`` in a new session so we can killpg on shutdown.
+
+        Exposed for lifecycle tests that use a dummy child instead of a
+        real backtest worker.
+        """
+        kwargs: dict = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+        }
+        if os.name == "posix":
+            kwargs["start_new_session"] = True
+        return subprocess.Popen(cmd, **kwargs)
+
+    def _stop_handle(self, handle: RunHandle, timeout_s: float = 2.0) -> None:
+        """SIGTERM the worker process group, then SIGKILL if still alive."""
+        if not handle.is_alive():
+            return
+
+        def _signal(sig: int) -> None:
+            try:
+                if os.name == "posix":
+                    os.killpg(handle.pid, sig)
+                elif sig == signal.SIGTERM:
+                    handle.proc.terminate()
+                else:
+                    handle.proc.kill()
+            except ProcessLookupError:
+                return
+            except OSError as exc:
+                log.debug("run_service: signal %s pid=%d failed: %s", sig, handle.pid, exc)
+                try:
+                    if sig == signal.SIGTERM:
+                        handle.proc.terminate()
+                    else:
+                        handle.proc.kill()
+                except Exception:
+                    pass
+
+        _signal(signal.SIGTERM)
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline and handle.is_alive():
+            time.sleep(0.05)
+        if handle.is_alive():
+            log.warning("run_service: SIGKILL sent to pid=%d", handle.pid)
+            _signal(signal.SIGKILL)
+            try:
+                handle.proc.wait(timeout=1.0)
+            except Exception:
+                pass
 
     def submit(
         self,
@@ -70,14 +132,11 @@ class RunService:
             RunHandle for the in-flight run.
         """
         from backtester.core.config import cfg as _cfg
-        from backtester.run import DEFAULT_OPTIONS, DEFAULT_SPOT
 
         if account_size is None:
             account_size = float(_cfg.simulation.account_size_usd)
 
         run_id = uuid.uuid4().hex
-        tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "..", "..", "..", "logs")
         # Normalize to repo root logs/
         _repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))))
@@ -107,11 +166,19 @@ class RunService:
             json.dump(config, f)
 
         cmd = [sys.executable, "-m", _WORKER_MODULE, "--config", config_path]
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = self._spawn(cmd)
         log.info("run_service: spawned worker pid=%d strategy=%s", proc.pid, strategy_key)
 
         handle = RunHandle(proc, progress_path, config_path)
         self._handles.append(handle)
+        return handle
+
+    def submit_cmd(self, cmd: list[str]) -> RunHandle:
+        """Spawn an arbitrary command as a tracked worker (tests / tooling)."""
+        proc = self._spawn(cmd)
+        handle = RunHandle(proc, progress_path="", config_path="")
+        self._handles.append(handle)
+        log.info("run_service: spawned cmd worker pid=%d cmd=%s", proc.pid, cmd[:3])
         return handle
 
     def tail_progress(self, handle: RunHandle) -> Iterator[dict]:
@@ -120,7 +187,7 @@ class RunService:
         Each call resumes from where it left off.  Yields as many complete
         lines as are available; yields nothing if no new data.
         """
-        if not os.path.exists(handle.progress_path):
+        if not handle.progress_path or not os.path.exists(handle.progress_path):
             return
 
         with open(handle.progress_path, "rb") as f:
@@ -142,13 +209,18 @@ class RunService:
         if not handle.is_alive():
             return
         log.info("run_service: cancelling worker pid=%d", handle.pid)
-        handle.proc.terminate()
-        deadline = time.monotonic() + 2.0
-        while time.monotonic() < deadline and handle.is_alive():
-            time.sleep(0.05)
-        if handle.is_alive():
-            handle.proc.kill()
-            log.warning("run_service: SIGKILL sent to pid=%d", handle.pid)
+        self._stop_handle(handle, timeout_s=2.0)
+
+    def shutdown_all(self, timeout_s: float = 2.0) -> None:
+        """Terminate every still-running worker (quit / atexit / signals)."""
+        for handle in list(self._handles):
+            if handle.is_alive():
+                try:
+                    log.info("run_service: shutdown_all stopping pid=%d", handle.pid)
+                    self._stop_handle(handle, timeout_s=timeout_s)
+                except Exception as exc:
+                    log.debug("run_service: shutdown_all error pid=%s: %s",
+                              getattr(handle, "pid", "?"), exc)
 
     def await_result(self, handle: RunHandle) -> int | None:
         """Block until the worker exits.
@@ -168,12 +240,3 @@ class RunService:
                         log.error("run_service: failed to register bundle: %s", exc)
                 return None
         return None
-
-    def _cleanup(self):
-        """Terminate all still-running workers on interpreter exit."""
-        for handle in self._handles:
-            if handle.is_alive():
-                try:
-                    handle.proc.terminate()
-                except Exception:
-                    pass

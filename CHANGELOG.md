@@ -4,6 +4,52 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-01: Research UI native desktop shell
+
+Ship the Research UI as a local one-window macOS app (pywebview / WKWebView)
+instead of Terminal + browser tabs. Harden worker process lifecycle so quitting
+the UI does not leave orphaned backtests.
+
+### Desktop shell
+
+- Preferred entry: `python -m backtester.ui.desktop` (native window, no system
+  browser). Browser CLI remains: `python -m backtester.ui.app`.
+- Thin local launcher: `scripts/macos/CryoBacktester.app` (uses repo `.venv`;
+  not a frozen binary). Optional `CRYOBT_ROOT` if the `.app` is moved.
+- Single-instance flock (`desktop.lock`); quit confirmation when workers are
+  still running; confirm → `shutdown_all`.
+- Open `http://localhost:<port>/` with explicit Bokeh `websocket_origin` for
+  both `localhost` and `127.0.0.1` (avoids blank shell: header only, no widgets).
+
+### Worker lifecycle
+
+- Workers spawn in a new POSIX session; cancel / quit / atexit share
+  TERM → wait → KILL (`os.killpg` when available).
+- `RunService.running_worker_count()` / `shutdown_all()` for desktop + signals.
+
+### Browser CLI hygiene
+
+- Always `pn.serve(..., show=False)`; open the browser once after `/healthz`
+  (fixes empty `localhost` tabs from Bokeh’s eager `show=True`).
+
+### Docs / deps
+
+- `README.md`, `AGENTS.md`, `docs/upgrades/backtester-interactive-ui.md` updated.
+- `pywebview>=5.0` added under Interactive UI in `requirements.txt`.
+
+### Tests
+
+- `tests/ui/test_run_service_lifecycle.py` — process group + stubborn-worker KILL
+  (default CI, no parquet).
+- `tests/ui/test_desktop_shell.py` — lock, quit policy, URL/WS origin alignment,
+  `slow_ui` session hydration (nav RadioButtonGroup).
+
+### Non-goals
+
+- No py2app / Nuitka freeze; no Electron/Tauri; data plane stays outside the app.
+
+---
+
 ## Checkpoint — 2026-07-31: product / workspace / data planes
 
 Restructure the repo into three clear planes so shippable product code,

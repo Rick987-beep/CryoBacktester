@@ -38,7 +38,9 @@ CryoBacktester/
 │   ├── core/            # includes paths.py data-plane resolver
 │   ├── strategies/      # compatibility shims → workspace.strategies
 │   ├── ui/  reporting/  research/  indicators/  ingest/  compare/
+│   │         # ui: desktop.py (native) + app.py (browser)
 │   └── run.py           # CLI; STRATEGIES façade from workspace.catalog
+├── scripts/macos/CryoBacktester.app   # thin local Dock launcher → .venv desktop
 ├── workspace/           # USE — strategies by family, experiments, strategy tests
 │   ├── catalog.py       # families + stable strategy IDs (never rename IDs)
 │   ├── strategies/{tudysho,theta_engine,other}/
@@ -66,6 +68,13 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
 
 # Walk-forward validation
 python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
+
+# Research UI — native window (preferred)
+python -m backtester.ui.desktop
+# or: open scripts/macos/CryoBacktester.app
+
+# Research UI — browser / Terminal (dev)
+python -m backtester.ui.app --no-browser
 ```
 
 Strategy IDs: see `workspace/catalog.py` (tudysho*, theta_engine_v*, blueprint_howto, …)
@@ -264,6 +273,7 @@ so old `from backtester.strategies.my_strategy import …` imports keep working.
 | File | Content |
 |------|---------|
 | `README.md` | Full backtester workflow, research pipeline, all sections |
+| `CHANGELOG.md` | Checkpoint history of notable product changes |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
 | `workspace/strategies/other/blueprint_howto.py` | Canonical working strategy implementation |
 | `workspace/catalog.py` | Family registry + stable strategy IDs |
