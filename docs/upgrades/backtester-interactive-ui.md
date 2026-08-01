@@ -274,7 +274,9 @@ The active (in-memory) `GridResult` is kept by reference. Pinned runs stay in me
 ```
 backtester/ui/
     __init__.py
-    app.py                # Panel entry: `python -m backtester.ui.app`
+    app.py                # Browser CLI: `python -m backtester.ui.app`
+    desktop.py            # Native window: `python -m backtester.ui.desktop` (preferred)
+    server_utils.py       # wait_for_healthz, ui_base_url, ui_websocket_origins
     layout.py             # Sidebar + tab scaffolding
     state.py              # AppState dataclass (Param-based, reactive)
     views/
@@ -310,8 +312,9 @@ New runtime deps added to `requirements.txt`:
 - `pyarrow`          (already present)
 - no others
 
-CLI entry: `python -m backtester.ui.app [--port 5006] [--no-browser]`
-Opens the default browser to `http://localhost:5006` by default.
+CLI entry (browser): `python -m backtester.ui.app [--port 5006] [--no-browser]`
+Preferred desktop entry: `python -m backtester.ui.desktop` (pywebview, no system browser).
+Opens `http://127.0.0.1:5006` inside a native window / browser after `/healthz` is ready.
 
 ---
 

@@ -1,5 +1,8 @@
 """
-app.py — CryoBacktester Research UI entry point.
+app.py — CryoBacktester Research UI entry point (browser / Terminal).
+
+For the native one-window desktop shell, prefer:
+    python -m backtester.ui.desktop
 
 Usage:
     python -m backtester.ui.app
@@ -7,13 +10,24 @@ Usage:
     python -m backtester.ui.app --no-browser
     python -m backtester.ui.app --dev
 """
+from __future__ import annotations
+
 import argparse
 import os
+import signal
+import threading
+import webbrowser
 
 import panel as pn
 from tornado.web import RequestHandler
 
 from backtester.ui.log import get_ui_logger
+from backtester.ui.server_utils import (
+    UI_HOST,
+    ui_base_url,
+    ui_websocket_origins,
+    wait_for_healthz,
+)
 
 log = get_ui_logger(__name__)
 
@@ -55,6 +69,10 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
 
     Separated so tests can import and assert on the layout without booting
     a Tornado server.
+
+    The returned template exposes:
+        _cryo_run_service — RunService for quit/signal cleanup
+        _cryo_state, _cryo_store, _cryo_nav_pages — test helpers
 
     Args:
         state_dir:    Directory for ui_state.db.  Defaults to backtester/ui/state/.
@@ -133,10 +151,11 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     )
     template.main.append(main)
 
-    # Expose for tests (not used by Panel itself)
+    # Expose for tests + desktop/CLI lifecycle (not used by Panel itself)
     template._cryo_nav_pages = list(NAV_PAGES)
     template._cryo_state = state
     template._cryo_store = store
+    template._cryo_run_service = run_service
 
     # Keep active_combo_hash in sync with active_combo_key (URL-safe string)
     def _sync_combo_hash(event):
@@ -169,7 +188,8 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CryoBacktester Research UI"
+        description="CryoBacktester Research UI (browser). "
+                    "Prefer: python -m backtester.ui.desktop for a native window."
     )
     parser.add_argument("--port", type=int, default=5006,
                         help="Port to serve on (default: 5006)")
@@ -180,25 +200,55 @@ def main():
     parser.add_argument("--state-dir", default=None,
                         help="Directory for ui_state.db (default: backtester/ui/state/)")
     parser.add_argument("--bundles-root", default=None,
-                        help="Directory scanned for *.bundle/ dirs (default: backtester/reports/)")
+                        help="Directory scanned for *.bundle/ dirs (default: data/runs/)")
     args = parser.parse_args()
 
-    show = not args.no_browser
+    open_browser = not args.no_browser
     _state_dir = args.state_dir
     _bundles_root = args.bundles_root
 
-    log.info("Starting CryoBacktester Research UI on http://localhost:%d", args.port)
+    template = build_app(state_dir=_state_dir, bundles_root=_bundles_root)
+    run_service = template._cryo_run_service
 
+    def _on_signal(signum, _frame):
+        log.info("app: received signal %s — shutting down workers", signum)
+        run_service.shutdown_all()
+        # Let Panel/Tornado unwind; force-exit if needed
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+
+    url = ui_base_url(args.port)
+    ws_origins = ui_websocket_origins(args.port)
+    log.info("Starting CryoBacktester Research UI on %s", url)
+
+    if open_browser:
+        def _open_when_ready():
+            try:
+                wait_for_healthz(args.port, timeout_s=30.0, host=UI_HOST)
+                webbrowser.open(url)
+                log.info("Opened browser at %s", url)
+            except Exception as exc:
+                log.warning("Could not open browser after healthz: %s", exc)
+
+        threading.Thread(target=_open_when_ready, name="open-browser", daemon=True).start()
+
+    # Always show=False — Bokeh's eager show=True causes empty localhost tabs.
+    # websocket_origin must match the URL host or widgets never hydrate.
     pn.serve(
-        lambda: build_app(state_dir=_state_dir, bundles_root=_bundles_root),
+        template,
         port=args.port,
-        show=show,
+        address="127.0.0.1",
+        show=False,
         autoreload=args.dev,
         location=True,
+        websocket_origin=ws_origins,
         extra_patterns=[(_HEALTHZ_ROUTE, _HealthzHandler)],
     )
 
-    log.info("UI up on http://localhost:%d", args.port)
+    log.info("UI up on %s", url)
+    run_service.shutdown_all()
 
 
 if __name__ == "__main__":
