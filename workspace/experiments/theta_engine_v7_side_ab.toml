@@ -1,0 +1,38 @@
+# theta_engine_v7_side_ab.toml
+# ── A/B: cheaper_bid vs skew6 (locked book, Apr-2025 → Jul-2026) ──
+#
+# Primary experiment: one factor (side selection) only.
+#   A — cheaper_bid: sell lower bid on trade expiry/delta
+#   B — skew6: term-fan 25Δ RR at {7,14,21}, band=0
+#
+#   python -m backtester.run --strategy theta_engine_v7
+#   (PARAM_GRID / DATE_RANGE currently locked on the strategy for this run)
+#
+# Analysis: full-sample paired Δr; Apr–Jun 2025 stress; disagreement days.
+
+strategy = "theta_engine_v7"
+
+[sensitivity]
+steps = 1
+
+[sensitivity.best]
+side_mode              = "cheaper_bid"
+skew_dte_step          = 7
+skew_neutral_band      = 0.0
+skew_neutral_mode      = "skip"
+delta                  = 0.25
+min_dte                = 90
+hedge_delta            = 0.0
+hedge_qty_mult         = 0
+hold_days              = 0
+entry_time             = "12:00"
+stop_loss_pct          = 2.0
+take_profit_pct        = 0.4
+open_pnl_equity_stop_pct = 0
+entry_mon_fri          = 1
+entry_saturday         = 0
+entry_sunday           = 0
+max_concurrent         = 20
+qty_per_1btc_equity    = 0.2
+launch_accel           = 0
+launch_size_mult       = 1.0
