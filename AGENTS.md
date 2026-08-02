@@ -274,6 +274,7 @@ so old `from backtester.strategies.my_strategy import …` imports keep working.
 |------|---------|
 | `README.md` | Full backtester workflow, research pipeline, all sections |
 | `CHANGELOG.md` | Checkpoint history of notable product changes |
+| `scripts/macos/brand/DESIGN.md` | Cryo product-family visual language (icons / palette) |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
 | `workspace/strategies/other/blueprint_howto.py` | Canonical working strategy implementation |
 | `workspace/catalog.py` | Family registry + stable strategy IDs |
