@@ -115,7 +115,9 @@ CryoBacktester/
 │   └── reports/                   # Generated HTML / run bundles (gitignored)
 │
 ├── scripts/
-│   └── macos/CryoBacktester.app   # Thin Dock launcher → .venv desktop UI
+│   └── macos/
+│       ├── CryoBacktester.app     # Thin Dock launcher → .venv desktop UI
+│       └── brand/                 # Cryo family icons + DESIGN.md
 ├── workspace/                     # USE plane — strategies, catalog, experiments
 ├── tests/                         # Integration + UI tests
 │   └── ui/
@@ -372,6 +374,7 @@ python -m backtester.ui.desktop --port 5007
 open scripts/macos/CryoBacktester.app
 # Optional: symlink into ~/Applications and pin to Dock
 # If you move the .app, set CRYOBT_ROOT to the repo path.
+# Family icons + design language: scripts/macos/brand/ (see DESIGN.md)
 
 # Browser / Terminal (dev / debugging)
 python -m backtester.ui.app              # opens browser after /healthz is ready
