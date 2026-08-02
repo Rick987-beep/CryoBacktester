@@ -44,6 +44,16 @@ def macro_calendar_dir() -> Path:
     )
 
 
+def macro_dir() -> Path:
+    """Root for synced macro series (DVOL, calendars, …)."""
+    return _env_path("CRYOBT_MACRO") or (_REPO_ROOT / "data" / "macro")
+
+
+def dvol_dir() -> Path:
+    """Synced Deribit BTC_DVOL hive partitions (year=/month=.parquet)."""
+    return _env_path("CRYOBT_DVOL") or (macro_dir() / "deribit" / "BTC_DVOL")
+
+
 def tardis_raw_dir() -> Path:
     return _env_path("CRYOBT_TARDIS_RAW") or (_REPO_ROOT / "data" / "tardis_raw")
 

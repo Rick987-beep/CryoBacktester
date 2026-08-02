@@ -40,14 +40,21 @@ class DeviationSpec:
         "abs"   — ±amount in the parameter's natural unit, evenly distributed.
                   E.g. best=18, amount=2, steps=5 → [16, 17, 18, 19, 20]
         "fixed" — Do not perturb; always use [best_value].
+        "list"  — Use an explicit discrete list (``values``); best should be
+                  one of those values (for documentation / centre labelling).
     """
-    type: str       # "pct" | "abs" | "fixed"
+    type: str       # "pct" | "abs" | "fixed" | "list"
     amount: float = 0.0
+    values: Optional[List[Any]] = None
 
     @classmethod
     def from_dict(cls, d):
         # type: (dict) -> "DeviationSpec"
-        return cls(type=d["type"], amount=float(d.get("amount", 0.0)))
+        return cls(
+            type=d["type"],
+            amount=float(d.get("amount", 0.0)),
+            values=list(d["values"]) if d.get("values") is not None else None,
+        )
 
 
 @dataclass
@@ -77,7 +84,13 @@ class Experiment:
         steps = self.sensitivity_steps
         for param, best_val in self.sensitivity_best.items():
             spec = self.sensitivity_deviations.get(param)
-            if spec is None or spec.type == "fixed":
+            if spec is not None and spec.type == "list":
+                if not spec.values:
+                    raise ValueError(
+                        f"deviation.{param}: type=list requires non-empty values"
+                    )
+                grid[param] = list(spec.values)
+            elif spec is None or spec.type == "fixed":
                 grid[param] = [best_val]
             else:
                 grid[param] = _build_range(best_val, spec.type, spec.amount, steps)
@@ -97,7 +110,11 @@ class Experiment:
             dev_label = (
                 f"fixed"
                 if spec is None or spec.type == "fixed"
-                else f"{spec.type} ±{spec.amount}"
+                else (
+                    f"list({len(spec.values)} values)"
+                    if spec.type == "list"
+                    else f"{spec.type} ±{spec.amount}"
+                )
             )
             lines.append(f"  {param:22s} = {vals}  [{dev_label}, centre={centre}]")
         n_combos = 1

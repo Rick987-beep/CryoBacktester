@@ -1,0 +1,60 @@
+# theta_engine_v8 — WFO after Stages A–C (candidate vs daily_1430 control)
+#
+# IS grid is set by the orchestrator to two named entry_policy values.
+# Window geometry pre-registered here for --mode wfo / documentation.
+#
+# Prefer:
+#   python analysis/theta_engine_v8_entry_stages.py
+#
+# Standalone WFO uses strategy PARAM_GRID (discovery 7 policies) unless
+# the orchestrator injects the 2-policy shortlist.
+
+strategy = "theta_engine_v8"
+
+[sensitivity]
+steps = 1
+
+[sensitivity.best]
+delta              = 0.25
+min_dte            = 90
+hedge_delta        = 0.0
+hedge_qty_mult     = 0
+hold_days          = 0
+stop_loss_pct      = 3.0
+take_profit_pct    = 0.5
+max_concurrent     = 20
+qty_per_1btc_equity = 0.2
+launch_accel       = 0
+launch_size_mult   = 1.0
+entry_policy       = "daily_1430"
+
+[sensitivity.deviation.delta]
+type = "fixed"
+[sensitivity.deviation.min_dte]
+type = "fixed"
+[sensitivity.deviation.hedge_delta]
+type = "fixed"
+[sensitivity.deviation.hedge_qty_mult]
+type = "fixed"
+[sensitivity.deviation.hold_days]
+type = "fixed"
+[sensitivity.deviation.stop_loss_pct]
+type = "fixed"
+[sensitivity.deviation.take_profit_pct]
+type = "fixed"
+[sensitivity.deviation.max_concurrent]
+type = "fixed"
+[sensitivity.deviation.qty_per_1btc_equity]
+type = "fixed"
+[sensitivity.deviation.launch_accel]
+type = "fixed"
+[sensitivity.deviation.launch_size_mult]
+type = "fixed"
+[sensitivity.deviation.entry_policy]
+type = "list"
+values = ["daily_1430", "rich3_force4_1430"]
+
+[wfo]
+is_days   = 90
+oos_days  = 30
+step_days = 30

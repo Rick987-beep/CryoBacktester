@@ -1,0 +1,72 @@
+# theta_engine_v8 — Stage B: weekday schedule (clock locked from Stage A)
+#
+# Pre-registered: 4 schedules. entry_time centre updated by orchestrator after A.
+# Standalone default locks clock at 14:30 (discovery US-open control).
+#
+#   python -m backtester.run --experiment theta_engine_v8_entry_stage_b --mode sensitivity
+
+strategy = "theta_engine_v8"
+
+[sensitivity]
+steps = 1
+
+[sensitivity.best]
+delta              = 0.25
+min_dte            = 90
+hedge_delta        = 0.0
+hedge_qty_mult     = 0
+hold_days          = 0
+stop_loss_pct      = 3.0
+take_profit_pct    = 0.5
+max_concurrent     = 20
+qty_per_1btc_equity = 0.2
+launch_accel       = 0
+launch_size_mult   = 1.0
+entry_mode         = "daily_clock"
+entry_time         = "14:30"
+entry_schedule     = "mon_fri"
+vrp_min            = 0.0
+force_after_days   = 3
+force_schedule     = "mon_thu"
+
+[sensitivity.deviation.delta]
+type = "fixed"
+[sensitivity.deviation.min_dte]
+type = "fixed"
+[sensitivity.deviation.hedge_delta]
+type = "fixed"
+[sensitivity.deviation.hedge_qty_mult]
+type = "fixed"
+[sensitivity.deviation.hold_days]
+type = "fixed"
+[sensitivity.deviation.stop_loss_pct]
+type = "fixed"
+[sensitivity.deviation.take_profit_pct]
+type = "fixed"
+[sensitivity.deviation.max_concurrent]
+type = "fixed"
+[sensitivity.deviation.qty_per_1btc_equity]
+type = "fixed"
+[sensitivity.deviation.launch_accel]
+type = "fixed"
+[sensitivity.deviation.launch_size_mult]
+type = "fixed"
+[sensitivity.deviation.entry_mode]
+type = "fixed"
+[sensitivity.deviation.entry_time]
+type = "fixed"
+[sensitivity.deviation.vrp_min]
+type = "fixed"
+[sensitivity.deviation.force_after_days]
+type = "fixed"
+[sensitivity.deviation.force_schedule]
+type = "fixed"
+
+[sensitivity.deviation.entry_schedule]
+type = "list"
+values = ["mon_fri", "mon_thu", "tue_fri", "mwf"]
+
+[wfo]
+is_days   = 90
+oos_days  = 30
+step_days = 30

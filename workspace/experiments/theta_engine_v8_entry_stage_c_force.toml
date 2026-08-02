@@ -1,0 +1,71 @@
+# theta_engine_v8 — Stage C2: force_after_days (vrp_min locked from C1)
+#
+# Pre-registered: 4 force gaps. vrp_min / entry_time updated by orchestrator.
+#
+#   python -m backtester.run --experiment theta_engine_v8_entry_stage_c_force --mode sensitivity
+
+strategy = "theta_engine_v8"
+
+[sensitivity]
+steps = 1
+
+[sensitivity.best]
+delta              = 0.25
+min_dte            = 90
+hedge_delta        = 0.0
+hedge_qty_mult     = 0
+hold_days          = 0
+stop_loss_pct      = 3.0
+take_profit_pct    = 0.5
+max_concurrent     = 20
+qty_per_1btc_equity = 0.2
+launch_accel       = 0
+launch_size_mult   = 1.0
+entry_mode         = "rich_or_forced"
+entry_time         = "14:30"
+entry_schedule     = "mon_fri"
+vrp_min            = 3.0
+force_after_days   = 3
+force_schedule     = "mon_thu"
+
+[sensitivity.deviation.delta]
+type = "fixed"
+[sensitivity.deviation.min_dte]
+type = "fixed"
+[sensitivity.deviation.hedge_delta]
+type = "fixed"
+[sensitivity.deviation.hedge_qty_mult]
+type = "fixed"
+[sensitivity.deviation.hold_days]
+type = "fixed"
+[sensitivity.deviation.stop_loss_pct]
+type = "fixed"
+[sensitivity.deviation.take_profit_pct]
+type = "fixed"
+[sensitivity.deviation.max_concurrent]
+type = "fixed"
+[sensitivity.deviation.qty_per_1btc_equity]
+type = "fixed"
+[sensitivity.deviation.launch_accel]
+type = "fixed"
+[sensitivity.deviation.launch_size_mult]
+type = "fixed"
+[sensitivity.deviation.entry_mode]
+type = "fixed"
+[sensitivity.deviation.entry_time]
+type = "fixed"
+[sensitivity.deviation.entry_schedule]
+type = "fixed"
+[sensitivity.deviation.vrp_min]
+type = "fixed"
+[sensitivity.deviation.force_schedule]
+type = "fixed"
+
+[sensitivity.deviation.force_after_days]
+type = "list"
+values = [2, 3, 4, 5]
+
+[wfo]
+is_days   = 90
+oos_days  = 30
+step_days = 30
