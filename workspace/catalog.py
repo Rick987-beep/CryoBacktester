@@ -64,6 +64,7 @@ def _build_specs() -> Dict[str, StrategySpec]:
     from workspace.strategies.theta_engine.v5 import ThetaEngineV5
     from workspace.strategies.theta_engine.v6 import ThetaEngineV6
     from workspace.strategies.theta_engine.v7 import ThetaEngineV7
+    from workspace.strategies.theta_engine.v8 import ThetaEngineV8
     from workspace.strategies.tudysho.eisbach import TuDyShoEisbach
     from workspace.strategies.tudysho.starnberg import TuDyShoStarnberg
     from workspace.strategies.tudysho.stradysho import StraDySho
@@ -85,6 +86,7 @@ def _build_specs() -> Dict[str, StrategySpec]:
         StrategySpec("theta_engine_v5", "theta_engine", ThetaEngineV5, status="frozen"),
         StrategySpec("theta_engine_v6", "theta_engine", ThetaEngineV6, status="active"),
         StrategySpec("theta_engine_v7", "theta_engine", ThetaEngineV7, status="active"),
+        StrategySpec("theta_engine_v8", "theta_engine", ThetaEngineV8, status="active"),
         StrategySpec("short_str_turb_dyn", "other", ShortStrTurbDyn),
         StrategySpec("cadysho", "other", Cadysho),
         StrategySpec("blueprint_howto", "other", BlueprintHowto),

@@ -4,6 +4,35 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-02: theta_engine_v8 (locked skew6 side)
+
+Ship a lean daily short-vol theta strategy that hardwires the v7 side-selection
+research, and lock v7 defaults to the best-Sharpe combo from that work.
+
+### theta_engine_v8
+
+- New strategy ID `theta_engine_v8` (catalog + shim
+  `backtester/strategies/theta_engine_v8.py`).
+- Side selection hardwired: **skew6 @ 14 DTE**, band 0 (`sign(S)` → put/call;
+  exact `S==0` skips the day). No `side_mode` / skew DTE / band knobs.
+- Keeps timed hold + optional launch accel; **drops** hedge wing and portfolio
+  open-PnL equity stop (`hedge_qty_mult` must stay 0).
+- Lean `PARAM_GRID`: book/exits + launch; Mon–Fri entry hardwired.
+- Module helpers: `compute_skew6`, `skew_zone`, neighbor RR listing.
+- Tests: `workspace/tests/test_theta_engine_v8.py`.
+
+```bash
+python -m backtester.run --strategy theta_engine_v8
+```
+
+### theta_engine_v7 research lock
+
+After skew A/B, DTE/band, and hold×SL×TP sweeps (DATE_RANGE 2025-04-11 →
+2026-07-29): default grid / experiment TOML lock to skew6, `skew_dte=14`,
+band=0/skip, hold=0, SL=3.0, TP=0.5. v7 remains the configurable A/B artifact.
+
+---
+
 ## Checkpoint — 2026-08-01: Research UI native desktop shell
 
 Ship the Research UI as a local one-window macOS app (pywebview / WKWebView)
