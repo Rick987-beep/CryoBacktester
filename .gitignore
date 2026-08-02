@@ -4,6 +4,7 @@ data/klines/
 data/runs/
 data/tardis_raw/
 data/archive/
+data/macro/
 
 # One-off analysis blobs (keep README/scripts only)
 analysis/deribit_btc_options_jul2026/data/

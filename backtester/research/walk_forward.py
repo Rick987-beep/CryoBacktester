@@ -150,6 +150,7 @@ def run_walk_forward(
     oos_days=15,            # type: int
     step_days=15,           # type: int
     account_size=10000.0,   # type: float
+    param_grid=None,        # type: Optional[Dict[str, List]]
 ):
     # type: (...) -> WFOResult
     """Run walk-forward validation.
@@ -166,10 +167,13 @@ def run_walk_forward(
         oos_days:      Out-of-sample window length in calendar days.
         step_days:     Window shift per step.
         account_size:  Virtual account size (for equity curve baseline).
+        param_grid:    Optional grid override (default: strategy_cls.PARAM_GRID).
 
     Returns:
         WFOResult with per-window stats and aggregate metrics.
     """
+    grid = param_grid if param_grid is not None else strategy_cls.PARAM_GRID
+
     # Determine full date range
     date_range_filter = getattr(strategy_cls, "DATE_RANGE", (None, None))
     if date_range_filter[0] and date_range_filter[1]:
@@ -212,11 +216,11 @@ def run_walk_forward(
         is_replay = MarketReplay(options_path, spot_path,
                                  start=is_start_s, end=is_end_s)
         df_is, keys_is, nav_daily_is, final_nav_is, _ = run_grid_full(
-            strategy_cls, strategy_cls.PARAM_GRID, is_replay
+            strategy_cls, grid, is_replay
         )
         is_result = GridResult(
             df_is, keys_is, nav_daily_is, final_nav_is,
-            param_grid=strategy_cls.PARAM_GRID,
+            param_grid=grid,
             account_size=account_size,
             date_range=(is_start_s, is_end_s),
         )

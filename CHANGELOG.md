@@ -4,6 +4,49 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-02: theta_engine_v8 smart entry (DVOL / VRP)
+
+Add vol-context features and named entry policies so short-vol v8 can sell when
+options look rich vs realized vol, with staged sensitivity + WFO research hooks.
+Risk budget (qty / max_concurrent) stays fixed across policies.
+
+### Data plane & indicators
+
+- `backtester.ingest.sync_dvol` — copy CryoQuant `BTC_DVOL` hive into
+  `data/macro/deribit/BTC_DVOL/` (env: `CRYOBT_DVOL` / `CRYOBT_MACRO`).
+- `backtester.indicators.vol_context` — daily panel `dvol`, Parkinson `rv30`
+  (causal shift +1), `vrp = dvol − rv30`, `dvol_rank_60`; registered in
+  `pipeline._BUILDERS` as `vol_context`.
+- Paths: `macro_dir()` / `dvol_dir()`; `data/macro/` gitignored like other blobs.
+
+### theta_engine_v8 entry policies
+
+- `indicator_deps` → `vol_context` (1d); entry metadata logs `entry_reason`
+  (`schedule` / `rich` / `forced`) plus dvol/rv30/vrp.
+- Named `entry_policy` axis (discovery): `daily_12`, `daily_1430`,
+  `sched_mon_thu_1430`, `rich{0,3,5}_force3_1430`, `rich3_force4_1430`.
+- Modes: `daily_clock`, `schedule_2x`, `rich_or_forced` (VRP gate + Mon/Thu
+  force after N days). Explicit knobs + `entry_schedule` for sensitivity.
+- UI favourites (not in discovery grid): Sharpe / PnL / mid / MWF shortlist
+  (`fav_*` policies).
+- `DATE_RANGE` extended through **2026-08-01**.
+
+### Research tooling
+
+- Experiment TOMLs: staged clock → schedule → VRP → force + WFO geometry
+  (`workspace/experiments/theta_engine_v8_entry_*.toml`).
+- `analysis/theta_engine_v8_entry_stages.py` — orchestrated A→B→C→WFO.
+- `analysis/theta_engine_v8_star_favourites.py` — 4-combo UI run + stars.
+- Experiment `type = "list"` deviations; WFO accepts optional `param_grid`.
+
+```bash
+python -m backtester.ingest.sync_dvol
+python -m backtester.run --strategy theta_engine_v8
+PYTHONPATH=. python analysis/theta_engine_v8_entry_stages.py
+```
+
+---
+
 ## Checkpoint — 2026-08-02: theta_engine_v8 (locked skew6 side)
 
 Ship a lean daily short-vol theta strategy that hardwires the v7 side-selection
