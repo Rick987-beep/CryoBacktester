@@ -11,6 +11,7 @@
 3. [The Strategy protocol](#3-the-strategy-protocol)
 4. [OpenPosition and the leg model](#4-openposition-and-the-leg-model)
 5. [Opening a position — the open Trade pattern](#5-opening-a-position)
+5a. [Portfolio cash-Greek risk (optional)](#5a-portfolio-cash-greek-risk)
 6. [Closing a position — `close_position`](#6-closing-a-position)
 7. [Partial closes and multi-leg mutations — `partial_close` / `add_legs`](#7-partial-closes-and-add_legs)
 8. [Exit condition helpers](#8-exit-condition-helpers)
@@ -287,6 +288,49 @@ def on_market_state(self, state):
         trades.append(open_trade)
     return trades
 ```
+
+---
+
+## 5a. Portfolio cash-Greek risk (optional)
+
+`backtester.core.portfolio_risk` measures open-book **cash Greeks as % of AUM**
+(`state.nav_usd`) and can **size or skip** new entries so the book stays inside
+investor-style bands.  Use it for overlapping short-vol books; it is **not**
+required for every strategy.
+
+**What it provides**
+- `portfolio_cash_greeks(positions, state)` → \(D\%, G\%, V\%, T\%\) of AUM
+- `limits_ok(greeks)` / `DEFAULT_INVESTOR_LIMITS` — band check
+- `max_qty_within_limits(...)` — largest qty ≤ ceiling that keeps post-trade
+  risk inside the bands (`None` → skip)
+
+**Minimal wire-up** (standard `OpenPosition.legs` with `side`, `qty`, `strike`,
+`is_call`, `expiry`, optional `entry_iv`):
+
+```python
+from backtester.core.portfolio_risk import (
+    DEFAULT_INVESTOR_LIMITS,
+    max_qty_within_limits,
+    portfolio_cash_greeks,
+    unit_cash_greeks,
+)
+
+greeks = portfolio_cash_greeks(self._positions, state)  # AUM = nav_usd
+unit = unit_cash_greeks(
+    state, strike=q.strike, is_call=q.is_call, expiry=expiry,
+    side="sell", mark_iv=q.mark_iv, delta=q.delta, qty=1.0,
+)
+qty = max_qty_within_limits(
+    greeks, unit, base_qty, DEFAULT_INVESTOR_LIMITS, aum=greeks.aum,
+)
+if qty is None:
+    return None  # would breach even at min size
+```
+
+**Notes**
+- Chain snapshots expose **delta + mark_iv** only; gamma / vega / theta are
+  Black-Scholes (r=0).  Formulas and default bands live in the module docstring.
+- Worked example: `theta_engine_v10` (`greek_limits_mode=off|size_to_budget`).
 
 ---
 

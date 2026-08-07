@@ -1,0 +1,5 @@
+entry,entry_policy,greek_limits_mode,qty_per_1btc_equity,max_concurrent,hold_days,perp_delta_hedge,option_hedge_mode,take_profit_pct,ann_return,max_dd_pct,sharpe,pnl,n_closes,bars,breach_any_pct,breach_d_pct,breach_g_pct,breach_v_pct,breach_t_pct,max_abs_v,min_g,skips,sized_opens,perp_trades,perp_fees,wing_adjusts
+RichForce16,fav_sharpe_rich4_f5_1600,scale,0.2,20,0,0,off,0.6,0.247473,3.6507,3.0639,33478.8,138,136787,72.194,60.384,0.0,33.743,0.0,0.4775,-4.4473,0,125,0,0.0,0
+Daily15,fav_pnl_daily_1500,scale,0.2,20,0,0,off,0.5,0.316534,5.1372,2.532,42981.59,244,136787,91.275,81.296,0.0,55.306,0.0,0.4848,-5.9692,0,235,0,0.0,0
+RichForce16,fav_sharpe_rich4_f5_1600,scale,0.2,20,0,1,off,0.6,0.131866,3.3414,2.8275,17558.39,138,136787,49.091,0.064,0.0,49.077,0.0,0.4731,-4.386,0,105,89,369.41,0
+Daily15,fav_pnl_daily_1500,scale,0.2,20,0,1,off,0.5,0.172212,3.4942,3.2582,22864.4,244,136787,79.453,0.108,0.0,79.433,0.0,0.5062,-6.5176,0,206,153,669.2,0

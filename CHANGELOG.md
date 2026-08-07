@@ -4,6 +4,71 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-07: theta_engine_v10 Greek risk + Mode C baselines
+
+Ship portfolio cash-Greek metering, Mode C locked baselines (RichForce16 /
+Daily15), and a phased research path (scale → perp → sticky wings) aimed at
+~20% ann / ≤5% DD **and** investor Greek bands. Product PnL and mandate risk
+remain in tension; artefacts under `analysis/theta_engine_v10_p*/`.
+
+### Baselines (locked)
+
+| Display | Policy ID | Rule |
+|---------|-----------|------|
+| **RichForce16** | `fav_sharpe_rich4_f5_1600` | rich-or-forced VRP≥4 else force 5d Mon/Thu @ 16:00; **TP 0.60** |
+| **Daily15** | `fav_pnl_daily_1500` | Mon–Fri clock @ 15:00; **TP 0.50** |
+
+Constants in `workspace/strategies/theta_engine/_common.py`. Combo keys now show
+**effective** TP after configure (engine merges `describe_params()`), so the UI
+no longer labels RichForce as 0.50 from a PARAM_GRID placeholder.
+
+### Core: `portfolio_risk` + pricing Greeks
+
+- `backtester/core/portfolio_risk.py` — cash D/G/V/T % of AUM (`nav_usd`);
+  `DEFAULT_INVESTOR_LIMITS`, `limits_ok`, `max_qty_within_limits`.
+- `pricing.py` — BS gamma / vega / theta helpers for risk metering.
+- Docs: `docs/strategy_howto.md` §5a; blueprint comments point at v10.
+
+### theta_engine_v9
+
+- Mode C book fork (trail/schedule research paths; catalog + shim).
+- Analysis helpers: `analysis/theta_engine_v9_trail_*.py`.
+
+### theta_engine_v10
+
+- Catalog ID `theta_engine_v10` + shim.
+- `greek_limits_mode`: `off` | `size_to_budget` (may skip) | `scale` (shrink to
+  residual, floor 0.1, never skip for budget).
+- Optional **BTC perp** delta overlay (`perp_delta_hedge`, deadband); mark PnL
+  in engine NAV via `perp_mark_pnl`.
+- **Sticky long wings** (`option_hedge_mode=none|sticky_budget`): breach-gated
+  inventory (triggers `dg` / `dgv` / `v`), Axis A `wing_expiry_mode` ×
+  `wing_delta`; real `Trade` open/close fills + UI `comment` (blueprint pattern);
+  longs exit at bid. Alias: `off` → `none`.
+- Engine: `_effective_params_for_key` for honest combo labels; overlay mark PnL
+  hook for perp/wing strategies.
+
+### Experiments (scorecards under `analysis/`)
+
+| Phase | Folder / script | Finding (short) |
+|-------|-----------------|-----------------|
+| P0 | `theta_engine_v10_p0/` | Breaches concentrate at high `n_open` |
+| P1 | `…_p1/` | `scale` can near 20%/5% DD with 0 skips; Greeks still bad |
+| P2 | `…_p2/` | Perp kills delta breach; return often &lt; 20% on P1 size |
+| P3 | `…_p3/` | Early sticky (bar-flip) failed — do not use |
+| P3b | `…_p3b/` | Breach-gated wings on naked Mode C; modest DG help, D still binding |
+
+Shared runner: `analysis/theta_engine_v10_phase_lib.py`. GUI bundles via
+`analysis/theta_engine_v10_p3b_gui_runs.py` → `data/runs/theta_engine_v10_*.bundle`.
+
+```bash
+python -m pytest workspace/tests/ tests/test_portfolio_risk.py -q
+python -m backtester.run --strategy theta_engine_v10
+PYTHONPATH=. python analysis/theta_engine_v10_p3b_gui_runs.py
+```
+
+---
+
 ## Checkpoint — 2026-08-02: theta_engine_v8 smart entry (DVOL / VRP)
 
 Add vol-context features and named entry policies so short-vol v8 can sell when

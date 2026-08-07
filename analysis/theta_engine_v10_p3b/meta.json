@@ -1,0 +1,49 @@
+{
+  "phase": "p3b",
+  "date_range": [
+    "2025-04-11",
+    "2026-08-01"
+  ],
+  "account_size": 100000.0,
+  "n_controls": 2,
+  "n_sticky": 24,
+  "champion": {
+    "entry": "RichForce16",
+    "wing_expiry_mode": "same",
+    "wing_delta": 0.15,
+    "wing_trigger": "dg",
+    "ann_return": 0.467442,
+    "max_dd_pct": 5.4407,
+    "pnl": 65014.13,
+    "breach_d_pct": 74.98,
+    "breach_g_pct": 0.0,
+    "breach_v_pct": 52.049,
+    "wing_opens": 86,
+    "dg_breach_delta": -4.743,
+    "ann_vs_ctrl": -0.0691,
+    "product_ok": true
+  },
+  "dg_improved": true,
+  "product_any": true,
+  "design": {
+    "wing_expiry_mode": [
+      "same",
+      "next_listed"
+    ],
+    "wing_delta": [
+      0.05,
+      0.1,
+      0.15
+    ],
+    "wing_trigger": [
+      "dg",
+      "dgv"
+    ],
+    "greek_limits_mode": "off",
+    "perp_delta_hedge": 0,
+    "episode": "open once / hold / close inside / reopen on fresh breach",
+    "theta": "ignored for wing open/size"
+  },
+  "written_at": "2026-08-07T11:53:26.353067+00:00",
+  "git_head": "420b544"
+}

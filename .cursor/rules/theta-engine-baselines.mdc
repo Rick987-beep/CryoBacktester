@@ -1,0 +1,16 @@
+---
+description: Theta Engine baseline entry display names (RichForce16 / Daily15)
+globs: workspace/strategies/theta_engine/**/*
+alwaysApply: false
+---
+
+# Theta Engine baseline naming
+
+When referring to the two locked research entry baselines, use these display names — **not** "Sharpe" / "PnL":
+
+| Display | Policy ID (stable — never rename) | Rule |
+|---------|-----------------------------------|------|
+| **RichForce16** | `fav_sharpe_rich4_f5_1600` | rich-or-forced, VRP≥4 else force after 5d Mon/Thu, 16:00 UTC; locked flat TP **0.60** |
+| **Daily15** | `fav_pnl_daily_1500` | daily Mon–Fri clock 15:00 UTC; locked flat TP **0.50** |
+
+Constants live in `workspace/strategies/theta_engine/_common.py` (`BASELINE_RICHFORCE16`, `BASELINE_DAILY15`, `BASELINE_DISPLAY`).

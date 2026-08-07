@@ -86,6 +86,29 @@ def _iter_open_positions(strategy):
     return []
 
 
+def _overlay_mark_pnl(strategy, state):
+    # type: (Any, Any) -> float
+    """Optional strategy overlays (perp / sticky wing) marked into NAV.
+
+    Strategies may expose ``perp_mark_pnl(spot)`` and/or ``wing_mark_pnl(state)``.
+    Missing methods are treated as zero so legacy strategies stay unchanged.
+    """
+    total = 0.0
+    perp = getattr(strategy, "perp_mark_pnl", None)
+    if callable(perp):
+        try:
+            total += float(perp(float(getattr(state, "spot", 0.0) or 0.0)))
+        except Exception:
+            pass
+    wing = getattr(strategy, "wing_mark_pnl", None)
+    if callable(wing):
+        try:
+            total += float(wing(state))
+        except Exception:
+            pass
+    return total
+
+
 def _open_unrealized_pnl(strategy, state, pos_cache):
     # type: (Any, Any, Dict[int, float]) -> float
     """Mark all open positions to market.
@@ -183,6 +206,30 @@ def _params_to_key(params):
     return tuple(sorted(params.items()))
 
 
+def _effective_params_for_key(params, strategy):
+    # type: (Dict[str, Any], Any) -> Dict[str, Any]
+    """Merge ``describe_params()`` over grid params for combo-key labeling.
+
+    Strategies may lock or rewrite knobs in ``configure()`` (e.g. Mode C
+    take-profit).  Combo keys / GUI labels should show the *effective* values,
+    not the raw PARAM_GRID placeholders.
+    """
+    out = dict(params)
+    describe = getattr(strategy, "describe_params", None)
+    if not callable(describe):
+        return out
+    try:
+        described = describe() or {}
+    except Exception:
+        return out
+    if not isinstance(described, dict):
+        return out
+    for key in list(out.keys()):
+        if key in described:
+            out[key] = described[key]
+    return out
+
+
 def _trade_to_tuple(trade):
     # type: (Trade) -> Tuple[float, bool, int, str]
     """Convert Trade to V1-compatible (pnl, triggered, exit_hour, entry_date)."""
@@ -206,7 +253,7 @@ def run_single(strategy_cls, params, replay):
     for state in replay:
         state.equity_usd = account_size + realized_pnl
         open_pnl = _open_unrealized_pnl(strategy, state, pos_pnl_cache)
-        state.nav_usd = state.equity_usd + open_pnl
+        state.nav_usd = state.equity_usd + open_pnl + _overlay_mark_pnl(strategy, state)
         result = strategy.on_market_state(state)
         for trade in result:
             trades.append(trade)
@@ -261,7 +308,7 @@ def run_grid(
         strategy = strategy_cls()
         strategy.configure(full_params)
         instances.append(strategy)
-        keys.append(_params_to_key(params))
+        keys.append(_params_to_key(_effective_params_for_key(params, strategy)))
 
     # Inject pre-computed indicators if strategy declares dependencies
     _inject_indicators(strategy_cls, instances, replay, progress)
@@ -360,7 +407,7 @@ def run_grid_full(
         strategy = strategy_cls()
         strategy.configure(full_params)
         instances.append(strategy)
-        keys.append(_params_to_key(params))
+        keys.append(_params_to_key(_effective_params_for_key(params, strategy)))
 
     # Inject pre-computed indicators if strategy declares dependencies
     _inject_indicators(strategy_cls, instances, replay, progress, status_cb=status_cb)
@@ -589,7 +636,8 @@ def run_grid_full(
         for i, strategy in enumerate(instances):
             state.equity_usd = account_size + realized_pnl[i]
             open_pnl = _open_unrealized_pnl(strategy, state, pos_pnl_cache[i])
-            state.nav_usd = state.equity_usd + open_pnl
+            overlay = _overlay_mark_pnl(strategy, state)
+            state.nav_usd = state.equity_usd + open_pnl + overlay
             for trade in strategy.on_market_state(state):
                 _append_fills(i, trade)
                 if getattr(trade, 'side', 'close') == 'close':
@@ -597,8 +645,9 @@ def run_grid_full(
                     realized_pnl[i] += float(trade.pnl)
 
             open_pnl = _open_unrealized_pnl(strategy, state, pos_pnl_cache[i])
-            last_open_pnl[i] = open_pnl
-            nav = account_size + realized_pnl[i] + open_pnl
+            overlay = _overlay_mark_pnl(strategy, state)
+            last_open_pnl[i] = open_pnl + overlay
+            nav = account_size + realized_pnl[i] + last_open_pnl[i]
 
             if current_day[i] != day_key:
                 if current_day[i] is not None:

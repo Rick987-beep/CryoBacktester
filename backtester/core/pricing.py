@@ -150,14 +150,65 @@ def deribit_perp_fee(notional_usd):
 
 # ── Greeks ────────────────────────────────────────────────────────
 
+def norm_pdf(x):
+    """Standard normal PDF."""
+    return math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
+
+
+def _bs_d1(S, K, T_years, sigma):
+    """BS d1 (r=0). Returns None when T or sigma is degenerate."""
+    if T_years <= 1e-12 or sigma <= 1e-12 or S <= 0 or K <= 0:
+        return None
+    return (math.log(S / K) + 0.5 * sigma * sigma * T_years) / (sigma * math.sqrt(T_years))
+
+
 def bs_call_delta(S, K, T_years, sigma):
     """BS call delta (r=0). Range [0, 1]."""
-    if T_years <= 1e-12 or sigma <= 1e-12:
+    d1 = _bs_d1(S, K, T_years, sigma)
+    if d1 is None:
         return 1.0 if S >= K else 0.0
-    d1 = (math.log(S / K) + 0.5 * sigma * sigma * T_years) / (sigma * math.sqrt(T_years))
     return norm_cdf(d1)
 
 
 def bs_put_delta(S, K, T_years, sigma):
     """BS put delta (r=0). Range [-1, 0]. Equal to bs_call_delta - 1."""
     return bs_call_delta(S, K, T_years, sigma) - 1.0
+
+
+def bs_gamma(S, K, T_years, sigma):
+    """BS gamma (call = put, r=0). Units: 1/USD (per $1 spot move)."""
+    d1 = _bs_d1(S, K, T_years, sigma)
+    if d1 is None:
+        return 0.0
+    return norm_pdf(d1) / (S * sigma * math.sqrt(T_years))
+
+
+def bs_vega(S, K, T_years, sigma):
+    """BS vega (call = put, r=0). USD premium change per +1.0 in sigma (100 vol pts)."""
+    d1 = _bs_d1(S, K, T_years, sigma)
+    if d1 is None:
+        return 0.0
+    return S * norm_pdf(d1) * math.sqrt(T_years)
+
+
+def bs_vega_1pt(S, K, T_years, sigma):
+    """BS vega for +1.00 volatility point (e.g. 50% → 51%)."""
+    return bs_vega(S, K, T_years, sigma) * 0.01
+
+
+def bs_theta(S, K, T_years, sigma, is_call=True):
+    """BS theta (r=0), USD premium change per year.
+
+    With r=0, call and put share the same leading term; ``is_call`` is kept
+    for API symmetry with delta helpers.
+    """
+    del is_call  # r=0: call θ == put θ
+    d1 = _bs_d1(S, K, T_years, sigma)
+    if d1 is None:
+        return 0.0
+    return -S * norm_pdf(d1) * sigma / (2.0 * math.sqrt(T_years))
+
+
+def bs_theta_per_day(S, K, T_years, sigma, is_call=True):
+    """BS theta as USD premium change per calendar day."""
+    return bs_theta(S, K, T_years, sigma, is_call=is_call) / 365.0

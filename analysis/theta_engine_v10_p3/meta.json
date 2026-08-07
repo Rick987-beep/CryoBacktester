@@ -1,0 +1,74 @@
+{
+  "phase": "p3",
+  "date_range": [
+    "2025-04-11",
+    "2026-08-01"
+  ],
+  "account_size": 100000.0,
+  "param_grid": {
+    "delta": [
+      0.25
+    ],
+    "min_dte": [
+      90
+    ],
+    "hedge_delta": [
+      0.0
+    ],
+    "hedge_qty_mult": [
+      0
+    ],
+    "hold_days": [
+      0
+    ],
+    "stop_loss_pct": [
+      3.0
+    ],
+    "take_profit_pct": [
+      0.5
+    ],
+    "max_concurrent": [
+      20
+    ],
+    "qty_per_1btc_equity": [
+      0.2
+    ],
+    "launch_accel": [
+      0
+    ],
+    "launch_size_mult": [
+      1.0
+    ],
+    "greek_limits_mode": [
+      "scale"
+    ],
+    "perp_delta_hedge": [
+      1
+    ],
+    "perp_deadband_pct": [
+      2.0
+    ],
+    "option_hedge_mode": [
+      "off",
+      "sticky_budget"
+    ],
+    "entry_policy": [
+      "fav_sharpe_rich4_f5_1600",
+      "fav_pnl_daily_1500"
+    ]
+  },
+  "champion_from_p1": {
+    "qty_per_1btc_equity": [
+      0.2
+    ],
+    "max_concurrent": [
+      20
+    ],
+    "greek_limits_mode": [
+      "scale"
+    ]
+  },
+  "vega_improved": false,
+  "written_at": "2026-08-06T14:42:32.341385+00:00",
+  "git_head": "420b544"
+}

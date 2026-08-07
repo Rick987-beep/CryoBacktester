@@ -1,0 +1,5 @@
+entry,perp_delta_hedge,perp_trades,perp_fees,breach_d_pct,breach_v_pct,ann_return,max_dd_pct,pnl
+RichForce16,0,0,0.0,60.384,33.743,0.247473,3.6507,33478.8
+Daily15,0,0,0.0,81.296,55.306,0.316534,5.1372,42981.59
+RichForce16,1,89,369.41,0.064,49.077,0.131866,3.3414,17558.39
+Daily15,1,153,669.2,0.108,79.433,0.172212,3.4942,22864.4
