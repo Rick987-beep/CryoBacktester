@@ -4,6 +4,61 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-13: theta_engine_v11 smarter sticky wing
+
+Fork Mode C (RichForce16 / Daily15) into `theta_engine_v11` and make the
+sticky long wing *smarter about how* it responds once the investor cash-Greek
+limits fire — not *whether* they fire. Limits remain `DEFAULT_INVESTOR_LIMITS`
+(`|Δ|<10%` γ<0 else 30%, `γ>−10%`, `|V|<0.2%` of AUM). Catalog ID
+`theta_engine_v11` + shim; canonical code under
+`workspace/strategies/theta_engine/v11.py`.
+
+### Wing response (vs v10)
+
+- Timing: `wing_close_margin_pct`, `wing_min_hold_minutes`,
+  `wing_cooldown_minutes`, `wing_cooldown_override_mult` (severity bypass).
+- Instrument: `wing_side_mode=greek|count`, always-on OTM strike floor,
+  `wing_delta_mode=fixed|relative`, breach-magnitude delta retry (step toward
+  ATM if qty alone cannot satisfy).
+- **Expiry:** sticky wings skip SL/TP but settle on `check_expiry`; cooldown
+  is cleared on roll so a replacement can open the same bar (v10/early-v11
+  left a zombie long that blocked new wings).
+- Open/close still use the **short book only** (one slot, no top-up) so the
+  wing cannot thrash off its own Greeks. That is the research state this
+  checkpoint freezes — accumulate/resize is the next v11 pass.
+
+### Perp overlay
+
+`perp_delta_hedge` now emits blueprint `Trade` / fill rows (`BTC-PERPETUAL`,
+open / adjust / flatten). Mark PnL stays on the engine overlay
+(`perp_mark_pnl`); close `pnl=0` so NAV is not double-counted. Favourites in
+the 704–708 grids still ran perp **off**.
+
+### Research grids (GUI-visible `data/runs/`)
+
+Locked from 704/706: `sticky_budget`, `wing_side_mode=greek`,
+`wing_delta_mode=fixed`, margin/hold/cooldown 3/60/60, SL=3, `max_concurrent=20`,
+`hold_days=0`. Date range `2025-04-11 → 2026-08-12`.
+
+| Script | What |
+|--------|------|
+| `analysis/theta_engine_v11_wing_grid.py` | 64-combo wing knobs (run 704) |
+| `analysis/theta_engine_v11_exit_grid*.py` | SL / max_concurrent / hold_days (705/706) |
+| `analysis/theta_engine_v11_compliance_grid.py` | 48-combo trigger × delta × expiry × perp × entry (708, post-expiry-fix) |
+| `analysis/theta_engine_v11_fav708_breach_audit.py` | Bar-by-bar short vs full-book limits on 708 favourites #1/#2/#13 |
+
+708 #1 (RichForce16 `dgv`/0.20/`next_listed`) is the compliance-shaped
+favourite on PnL/Sharpe, but full-book OK is only ~19% of live bars: the
+single 0.1–0.6 wing never resizes while shorts grow to 11–20.
+
+```bash
+python -m pytest workspace/tests/ -v
+python -m backtester.run --strategy theta_engine_v11
+PYTHONPATH=. python analysis/theta_engine_v11_compliance_grid.py
+```
+
+---
+
 ## Checkpoint — 2026-08-07: theta_engine_v10 Greek risk + Mode C baselines
 
 Ship portfolio cash-Greek metering, Mode C locked baselines (RichForce16 /
