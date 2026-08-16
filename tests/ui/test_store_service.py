@@ -108,6 +108,37 @@ def test_write_bundle_snapshots_strategy_source(sqlite_store, tiny_grid_result):
     assert meta["strategy_source"]["module"] == BlueprintHowto.__module__
 
 
+def test_write_bundle_extra_parquets(sqlite_store, tiny_grid_result):
+    import pandas as pd
+    from backtester.core.results import GridResult
+
+    df = tiny_grid_result.df.copy()
+    sidecar = pd.DataFrame(
+        [{"combo_idx": 0, "live_bars": 12, "recovered_pct": 4.0}]
+    )
+    df.attrs["extra_parquets"] = {"investor_greeks.parquet": sidecar}
+    result = GridResult(
+        df,
+        tiny_grid_result.keys,
+        tiny_grid_result.nav_daily_df,
+        tiny_grid_result.final_nav_df,
+        param_grid=tiny_grid_result.param_grid,
+        account_size=tiny_grid_result.account_size,
+        date_range=tiny_grid_result.date_range,
+        df_fills=tiny_grid_result.df_fills,
+    )
+    result.extra_parquets["../escape.parquet"] = pd.DataFrame([{"nope": 1}])
+    bundle_path = sqlite_store.write_bundle(
+        result, strategy="sidecar_test", runtime_s=0.2, source="test"
+    )
+    assert (bundle_path / "investor_greeks.parquet").exists()
+    assert not (bundle_path / "escape.parquet").exists()
+    meta = json.loads((bundle_path / "meta.json").read_text())
+    assert meta["sidecars"] == ["investor_greeks.parquet"]
+    loaded = pd.read_parquet(bundle_path / "investor_greeks.parquet")
+    assert int(loaded.iloc[0]["live_bars"]) == 12
+
+
 def test_list_runs_ordered_desc(sqlite_store, tiny_grid_result):
     """list_runs() returns newest run first."""
     for i in range(3):

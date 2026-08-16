@@ -318,6 +318,45 @@ def limits_ok(
     )
 
 
+def dg_limits_ok(
+    greeks: PortfolioGreeks,
+    limits: InvestorGreekLimits = DEFAULT_INVESTOR_LIMITS,
+) -> LimitsCheck:
+    """Like ``limits_ok`` but vega and theta are ignored (always treated as ok)."""
+    check = limits_ok(greeks, limits)
+    binding = tuple(b for b in check.binding if b in ("delta", "gamma"))
+    return LimitsCheck(
+        ok=not binding,
+        delta_ok=check.delta_ok,
+        gamma_ok=check.gamma_ok,
+        vega_ok=True,
+        theta_ok=True,
+        delta_band=check.delta_band,
+        binding=binding,
+    )
+
+
+def scaled_investor_limits(
+    fraction: float,
+    limits: InvestorGreekLimits = DEFAULT_INVESTOR_LIMITS,
+) -> InvestorGreekLimits:
+    """Tighten every band to ``fraction`` of itself (inner hysteresis).
+
+    ``fraction`` must be in (0, 1].  Negative floors (gamma, theta) move
+    toward zero — e.g. −10 with 0.7 → −7, a stricter “deeply inside” test.
+    """
+    f = float(fraction)
+    if not (0.0 < f <= 1.0):
+        raise ValueError("limits fraction must be in (0, 1], got %r" % fraction)
+    return InvestorGreekLimits(
+        delta_pct_when_gamma_pos=float(limits.delta_pct_when_gamma_pos) * f,
+        delta_pct_when_gamma_neg=float(limits.delta_pct_when_gamma_neg) * f,
+        gamma_pct_floor=float(limits.gamma_pct_floor) * f,
+        vega_pct_abs=float(limits.vega_pct_abs) * f,
+        theta_pct_floor=float(limits.theta_pct_floor) * f,
+    )
+
+
 def _portfolio_from_sum(cash: CashGreeks, aum: float) -> PortfolioGreeks:
     return PortfolioGreeks.from_cash(cash, aum)
 
@@ -361,3 +400,41 @@ def max_qty_within_limits(
         # mixed books, but for a single short add they usually tighten.
         # Still evaluate all steps so we return the max feasible.
     return best
+
+
+def min_qty_for_dg_limits(
+    current: CashGreeks | PortfolioGreeks,
+    unit_candidate: CashGreeks,
+    limits: InvestorGreekLimits = DEFAULT_INVESTOR_LIMITS,
+    aum: Optional[float] = None,
+    min_qty: float = _QTY_STEP,
+    qty_step: float = _QTY_STEP,
+    max_qty: float = 50.0,
+) -> Optional[float]:
+    """Smallest qty in ``[min_qty, max_qty]`` such that current + qty·unit is inside D/G bands.
+
+    Vega and theta are ignored.  ``unit_candidate`` is the cash Greeks of
+    qty=1 (side sign already applied).  Returns None if no size in the
+    search window works (empty window or search ceiling hit still in breach).
+    ``max_qty`` is a computational ceiling, not a strategy inventory cap.
+    """
+    if isinstance(current, PortfolioGreeks):
+        aum_val = float(aum) if aum is not None else current.aum
+        cur = current.as_cash()
+    else:
+        aum_val = float(aum) if aum is not None else _MIN_AUM
+        cur = current
+
+    if max_qty + 1e-12 < min_qty:
+        return None
+
+    qty = float(min_qty)
+    while qty <= max_qty + 1e-12:
+        post = _portfolio_from_sum(cur.plus(unit_candidate.scaled(qty)), aum_val)
+        if dg_limits_ok(post, limits).ok:
+            return round(qty, 10)
+        nxt = round(qty + qty_step, 10)
+        if nxt <= qty:
+            break
+        qty = nxt
+    return None

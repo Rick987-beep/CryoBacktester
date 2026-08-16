@@ -6,6 +6,7 @@ A "run bundle" is a directory under bundles_root containing:
   nav_daily.parquet   — engine's nav_daily_df
   final_nav.parquet   — engine's final_nav_df
   fills.parquet       — engine's df_fills (optional)
+  investor_greeks.parquet — optional strategy sidecar (see meta.sidecars)
   strategy/<name>.py  — byte copy of strategy module at run time (optional)
   meta.json           — strategy, param_grid, keys, date_range, repro fields
 
@@ -50,6 +51,7 @@ class RunRow(NamedTuple):
     git_sha: str | None
     git_dirty: bool | None
     config_hash: str | None
+    family: str | None
 
 
 class FavRow(NamedTuple):
@@ -86,7 +88,8 @@ CREATE TABLE IF NOT EXISTS runs (
     label            TEXT,
     git_sha          TEXT,
     git_dirty        INTEGER,
-    config_hash      TEXT
+    config_hash      TEXT,
+    family           TEXT
 );
 """
 
@@ -180,6 +183,39 @@ class StoreService:
         fav_cols = {row[1] for row in con.execute("PRAGMA table_info(favourites)")}
         if "ann_return" not in fav_cols:
             con.execute("ALTER TABLE favourites ADD COLUMN ann_return REAL")
+        run_cols = {row[1] for row in con.execute("PRAGMA table_info(runs)")}
+        if "family" not in run_cols:
+            con.execute("ALTER TABLE runs ADD COLUMN family TEXT")
+        self._backfill_run_families(con)
+
+    @staticmethod
+    def _family_for_strategy(strategy: str, meta_family: str | None = None) -> str:
+        if meta_family:
+            return str(meta_family)
+        try:
+            from workspace.catalog import family_for
+            return family_for(strategy or "")
+        except Exception:
+            return "other"
+
+    def _backfill_run_families(self, con: sqlite3.Connection) -> None:
+        rows = con.execute(
+            "SELECT id, strategy, family, bundle_path FROM runs"
+        ).fetchall()
+        for row in rows:
+            if row["family"]:
+                continue
+            meta_family = None
+            bundle = Path(row["bundle_path"] or "")
+            meta_file = bundle / "meta.json"
+            if meta_file.is_file():
+                try:
+                    meta = json.loads(meta_file.read_text())
+                    meta_family = meta.get("family")
+                except Exception:
+                    meta_family = None
+            fam = self._family_for_strategy(row["strategy"] or "", meta_family)
+            con.execute("UPDATE runs SET family = ? WHERE id = ?", (fam, row["id"]))
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self._db_path), check_same_thread=False)
@@ -210,6 +246,18 @@ class StoreService:
         grid_result.final_nav_df.to_parquet(bundle_dir / "final_nav.parquet", index=False)
         if grid_result.df_fills is not None and not grid_result.df_fills.empty:
             grid_result.df_fills.to_parquet(bundle_dir / "fills.parquet", index=False)
+
+        sidecars = []
+        extra = getattr(grid_result, "extra_parquets", None) or {}
+        for fname, frame in extra.items():
+            name = Path(str(fname)).name
+            if name != str(fname) or not name.endswith(".parquet"):
+                log.warning("Skipping extra parquet with unsafe name %r", fname)
+                continue
+            if frame is None:
+                continue
+            frame.to_parquet(bundle_dir / name, index=False)
+            sidecars.append(name)
 
         # --- meta.json ---
         # Keys: list of [[param, value], ...] lists (JSON-serialisable)
@@ -248,6 +296,8 @@ class StoreService:
                 meta["strategy_source"] = manifest
             else:
                 log.warning("Could not snapshot strategy source for %s", strategy)
+        if sidecars:
+            meta["sidecars"] = sidecars
         (bundle_dir / "meta.json").write_text(json.dumps(meta, indent=2))
 
         log.info("Bundle written: %s", bundle_dir)
@@ -278,16 +328,18 @@ class StoreService:
                     return int(row["id"])
 
                 dr = meta.get("date_range") or [None, None]
+                strategy = meta.get("strategy", "unknown")
+                family = self._family_for_strategy(strategy, meta.get("family"))
                 con.execute(
                     """INSERT INTO runs
                        (created_at, strategy, param_grid_json, date_from, date_to,
                         n_combos, n_trades, runtime_s, bundle_path,
-                        git_sha, git_dirty, config_hash)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        git_sha, git_dirty, config_hash, family)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         meta.get("created_at",
                                  datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
-                        meta.get("strategy", "unknown"),
+                        strategy,
                         json.dumps(meta.get("param_grid", {})),
                         dr[0] if dr else None,
                         dr[1] if len(dr) > 1 else None,
@@ -298,6 +350,7 @@ class StoreService:
                         meta.get("git_sha"),
                         1 if meta.get("git_dirty") else 0,
                         meta.get("config_hash"),
+                        family,
                     ),
                 )
                 con.commit()
@@ -667,6 +720,8 @@ class StoreService:
 
 
 def _row_to_run_row(row: sqlite3.Row) -> RunRow:
+    keys = row.keys()
+    family = row["family"] if "family" in keys else None
     return RunRow(
         id=int(row["id"]),
         created_at=row["created_at"],
@@ -683,6 +738,7 @@ def _row_to_run_row(row: sqlite3.Row) -> RunRow:
         git_sha=row["git_sha"],
         git_dirty=bool(row["git_dirty"]) if row["git_dirty"] is not None else None,
         config_hash=row["config_hash"],
+        family=family,
     )
 
 def _row_to_fav_row(row: sqlite3.Row) -> "FavRow":

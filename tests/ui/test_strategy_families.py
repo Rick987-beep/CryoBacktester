@@ -17,6 +17,17 @@ def test_write_bundle_includes_family(sqlite_store, tiny_grid_result):
     assert meta.get("family") == "theta_engine"
 
 
+def test_register_bundle_persists_family(sqlite_store, tiny_grid_result):
+    path = sqlite_store.write_bundle(
+        tiny_grid_result, strategy="theta_engine_v13", runtime_s=0.5,
+    )
+    run_id = sqlite_store.register_bundle(path)
+    rr = sqlite_store.get_run(run_id)
+    assert rr is not None
+    assert rr.strategy == "theta_engine_v13"
+    assert rr.family == "theta_engine"
+
+
 def test_old_bundle_without_family_loads(sqlite_store, tiny_grid_result, tmp_path):
     """Pre-family meta.json still scans and loads; Runs derives family."""
     from backtester.ui.services.store_service import StoreService

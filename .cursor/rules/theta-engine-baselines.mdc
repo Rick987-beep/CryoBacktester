@@ -1,16 +1,25 @@
 ---
-description: Theta Engine baseline entry display names (RichForce16 / Daily15)
-globs: workspace/strategies/theta_engine/**/*
-alwaysApply: false
+description: Theta Engine Mode C baselines — RichForce16 / Daily15 names, hashes, short-only lock
+alwaysApply: true
 ---
 
-# Theta Engine baseline naming
+# Theta Engine Mode C baselines
 
-When referring to the two locked research entry baselines, use these display names — **not** "Sharpe" / "PnL":
+Locked short-only book is **`theta_engine_base`** (`workspace/strategies/theta_engine/base.py`). No cover, no long wings, no perps. Use display names — **not** "Sharpe" / "PnL". Policy IDs are stable; never rename.
 
-| Display | Policy ID (stable — never rename) | Rule |
-|---------|-----------------------------------|------|
-| **RichForce16** | `fav_sharpe_rich4_f5_1600` | rich-or-forced, VRP≥4 else force after 5d Mon/Thu, 16:00 UTC; locked flat TP **0.60** |
-| **Daily15** | `fav_pnl_daily_1500` | daily Mon–Fri clock 15:00 UTC; locked flat TP **0.50** |
+Fork future versions from `base.py`. Do not start from v9 (still has trail/launch/`hedge_delta`) or from v12 (cover overlay).
 
-Constants live in `workspace/strategies/theta_engine/_common.py` (`BASELINE_RICHFORCE16`, `BASELINE_DAILY15`, `BASELINE_DISPLAY`).
+| Display | Policy ID | Combo hash (v9 run 692) | Entry | TP |
+|---------|-----------|-------------------------|-------|----|
+| **RichForce16** | `fav_sharpe_rich4_f5_1600` | `863976b083ad` | rich-or-forced, VRP≥4 else force after 5d Mon/Thu @ 16:00 UTC | **0.60** |
+| **Daily15** | `fav_pnl_daily_1500` | `0d32e43a12ab` | daily Mon–Fri clock @ 15:00 UTC (no VRP gate) | **0.50** |
+
+Shared lock: `delta=0.25`, `min_dte=90`, `hold_days=0`, `stop_loss_pct=3.0`, `max_concurrent=20`, `qty_per_1btc_equity=0.2`. Skew6@14. DATE_RANGE `2025-04-11` → `2026-08-01`.
+
+Constants: `workspace/strategies/theta_engine/_common.py` (`BASELINE_RICHFORCE16`, `BASELINE_DAILY15`, `BASELINE_DISPLAY`, `MODE_C_BOOK`, `MODE_C_TP`, `MODE_C_DATE_RANGE`).
+
+v10/v11 forked these entries then added Greeks / sticky wings / perps — do not treat those as the Mode C lock.
+
+`theta_engine_v12` is a `base` fork with a long-option **cover** overlay (`cover_*` knobs). No perps. Trigger = shorts-only D/G; size = full book D/G; vega is metered only.
+
+`theta_engine_v13` is a `base` fork with a **paired far-OTM wing** on every short (`wing_strike_pct` / `wing_debit_pct` / `wing_expiry`). Strike is % of the short strike (put K×(1−pct), call K×(1+pct)); qty is % of short credit, floored at 0.1 and capped at short qty — no budget skips. Short stays the boss; TP/SL are short-leg only. Default `track_investor_greeks=1` meters shorts-only vs full-book D/G (vega is a meter, not a gate) into `investor_greeks.parquet`. v9 remains the historical run-692 artefact.

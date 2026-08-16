@@ -35,8 +35,11 @@ Usage:
     )
 """
 import itertools
+import logging
 import time as _time
 from typing import Any, Dict, List, Optional, Tuple, Type
+
+_log = logging.getLogger(__name__)
 
 from backtester.core.config import cfg as _cfg
 from backtester.core.pricing import fee_btc_per_contract as _fee_btc
@@ -782,4 +785,36 @@ def run_grid_full(
             "status",
         ])
 
+    extra = _collect_extra_parquets(instances, keys)
+    if extra:
+        df.attrs["extra_parquets"] = extra
+
     return df, keys, nav_daily_df, final_nav_df, df_fills
+
+
+def _collect_extra_parquets(instances, keys):
+    """Duck-typed combo sidecars. Does not change the run_grid_full 5-tuple."""
+    rows = []
+    for i, strat in enumerate(instances):
+        fn = getattr(strat, "investor_greeks_sidecar", None)
+        if not callable(fn):
+            continue
+        try:
+            row = fn()
+        except Exception:
+            _log.warning(
+                "investor_greeks_sidecar failed for combo %s", i, exc_info=True,
+            )
+            continue
+        if not row:
+            continue
+        out = dict(row)
+        out["combo_idx"] = i
+        if i < len(keys):
+            for k, v in keys[i]:
+                out[k] = v
+        rows.append(out)
+    if not rows:
+        return {}
+    import pandas as pd
+    return {"investor_greeks.parquet": pd.DataFrame(rows)}

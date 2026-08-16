@@ -187,3 +187,88 @@ def test_degraded_fallback_uses_entry_iv():
     assert g.n_legs == 1
     assert g.n_degraded == 1
     assert g.vega_cash_1pt != 0.0
+
+
+def test_dg_limits_ok_ignores_vega_and_theta():
+    from backtester.core.portfolio_risk import PortfolioGreeks, dg_limits_ok
+
+    aum = 100_000.0
+    # Inside D/G, wildly outside V/T.
+    pg = PortfolioGreeks.from_cash(
+        CashGreeks(
+            delta_cash=-1_000.0,      # D% = -1
+            gamma_cash_1pct=-1_000.0,  # G% = -1 > -10
+            vega_cash_1pt=-5_000.0,    # V% = -5 (would fail |V|<0.2)
+            theta_cash_day=-5_000.0,   # T% = -5 (would fail T>-1)
+        ),
+        aum,
+    )
+    full = limits_ok(pg)
+    assert not full.ok
+    assert "vega" in full.binding
+    dg = dg_limits_ok(pg)
+    assert dg.ok
+    assert dg.vega_ok and dg.theta_ok
+    assert dg.binding == ()
+
+
+def test_scaled_investor_limits_tightens_dg():
+    from backtester.core.portfolio_risk import (
+        DEFAULT_INVESTOR_LIMITS,
+        scaled_investor_limits,
+    )
+
+    inner = scaled_investor_limits(0.70)
+    assert abs(inner.delta_pct_when_gamma_neg - 7.0) < 1e-9
+    assert abs(inner.gamma_pct_floor - (-7.0)) < 1e-9
+    assert inner.delta_pct_when_gamma_pos == DEFAULT_INVESTOR_LIMITS.delta_pct_when_gamma_pos * 0.70
+
+
+def test_min_qty_for_dg_ignores_vega_and_takes_smallest():
+    from backtester.core.portfolio_risk import PortfolioGreeks, dg_limits_ok, min_qty_for_dg_limits
+
+    aum = 100_000.0
+    # Short book: D% = -15 (breaches 10), G% = -12 (breaches -10), huge vega.
+    current = CashGreeks(
+        delta_cash=-15_000.0,
+        gamma_cash_1pct=-12_000.0,
+        vega_cash_1pt=-50_000.0,
+        theta_cash_day=0.0,
+    )
+    # Long unit: +D and +G enough that 0.2 contracts fix D/G (0.1 is not enough for G).
+    # 0.1: D=-14, G=-11 still breach; 0.2: D=-13, G=-10 still not > -10;
+    # wait G: -12 + 0.2*10 = -10, need G > -10 so need more.
+    # Use unit G$ = +20_000 per contract → 0.1: G% = -10, not > -10; 0.2: G% = -8 OK.
+    # D: -15 + 0.1*20 = -13 still out; 0.2: -11 still out; 0.3: -9 OK.
+    unit = CashGreeks(
+        delta_cash=20_000.0,
+        gamma_cash_1pct=20_000.0,
+        vega_cash_1pt=0.0,
+        theta_cash_day=0.0,
+    )
+    qty = min_qty_for_dg_limits(current, unit, aum=aum, min_qty=0.1, max_qty=5.0)
+    assert qty == 0.3
+    post = PortfolioGreeks.from_cash(current.plus(unit.scaled(qty)), aum)
+    assert dg_limits_ok(post).ok
+    # vega still wrecked — that is the point
+    assert abs(post.vega_pct) > 0.2
+
+
+def test_min_qty_for_dg_none_when_unit_wrong_sign():
+    from backtester.core.portfolio_risk import min_qty_for_dg_limits
+
+    aum = 100_000.0
+    current = CashGreeks(
+        delta_cash=-15_000.0,
+        gamma_cash_1pct=-12_000.0,
+        vega_cash_1pt=0.0,
+        theta_cash_day=0.0,
+    )
+    unit = CashGreeks(
+        delta_cash=-5_000.0,  # more short delta — never helps
+        gamma_cash_1pct=-1_000.0,
+        vega_cash_1pt=0.0,
+        theta_cash_day=0.0,
+    )
+    assert min_qty_for_dg_limits(current, unit, aum=aum, max_qty=2.0) is None
+

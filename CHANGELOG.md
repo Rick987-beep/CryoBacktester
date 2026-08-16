@@ -4,6 +4,114 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-16: v13 always-on strike-% / debit-% wing
+
+Replace `wing_budget_usd` / `wing_delta` with `wing_strike_pct` (distance
+from the short strike) and `wing_debit_pct` (fraction of short credit).
+Long strike is always strictly further OTM; qty is 0.1–short qty (no
+budget skip). 36-combo grid. Do not treat run 716/717 as this spec.
+
+```bash
+python -m pytest workspace/tests/ -v
+```
+
+---
+
+## Checkpoint — 2026-08-15: v13 investor D/G sidecar
+
+`theta_engine_v13` meters shorts-only vs full-book delta/gamma after each
+bar (`track_investor_greeks`, default on). Vega is recorded, not gated.
+`run_grid_full` collects `investor_greeks_sidecar()` into `df.attrs` (5-tuple
+unchanged); `write_bundle` stores `investor_greeks.parquet` and
+`meta.sidecars`. Scorecard: `analysis/theta_engine_v13_investor_greeks.py`.
+
+```bash
+python -m pytest workspace/tests/ tests/test_engine_sidecars.py tests/ui/test_store_service.py -v
+python -m backtester.run --strategy theta_engine_v13
+python analysis/theta_engine_v13_investor_greeks.py
+```
+
+---
+
+## Checkpoint — 2026-08-15: theta_engine_v13 paired wing
+
+Fork `theta_engine_base` into `theta_engine_v13`: whenever a Mode C short
+opens, buy a same-right further-OTM long sized to `wing_budget_usd`
+(0–250, never above). Knobs: `wing_delta` (0.01–0.10), `wing_expiry`
+(`same` | `next_listed`). Short remains the boss (entry/size/TP/SL);
+TP/SL use short-leg credit and MTM only. Budget 0 is the naked control.
+
+```bash
+python -m pytest workspace/tests/ -v
+python -m backtester.run --strategy theta_engine_v13
+```
+
+---
+
+## Checkpoint — 2026-08-15: theta_engine base / _common cleanup
+
+Shared Mode C helpers (entry policies, skew6, net-credit SL/TP, weekday
+clocks) live in `_common.py`. `base.py` is the strategy class only;
+`v12.py` imports the same helpers and keeps the cover overlay. Dropped
+dead discovery policies and the unused launch open-path
+(`_do_open_with_min_dte` / `fictional_entry_date`). Equity fallback uses
+`cfg.simulation.account_size_usd`. Historical v1–v11 are untouched.
+
+```bash
+python -m pytest workspace/tests/ -v
+```
+
+---
+
+## Checkpoint — 2026-08-15: freeze Mode C as theta_engine_base
+
+Canonical short-only lock is now `theta_engine_base`
+(`workspace/strategies/theta_engine/base.py`): RichForce16 / Daily15, Mode C
+book and TPs, no cover / perps / v9 trail-launch knobs. PARAM_GRID is the two
+entry policies. Catalog ID `theta_engine_base` (frozen). Shared constants live
+in `_common.py` (`MODE_C_BOOK`, `MODE_C_TP`, `MODE_C_DATE_RANGE`). Fork later
+versions from `base.py`, not from v9 or v12.
+
+```bash
+python -m pytest workspace/tests/ -v
+python -m backtester.run --strategy theta_engine_base
+```
+
+---
+
+## Checkpoint — 2026-08-14: theta_engine_v12 long-option cover
+
+Fork the v9 Mode C short-only book into `theta_engine_v12` and add a
+**long-option cover** overlay. This is a clean start — not a continuation of
+v10/v11 sticky wings or perps. Catalog ID `theta_engine_v12` + shim;
+canonical code under `workspace/strategies/theta_engine/v12.py`.
+
+### Short book (unchanged from v9)
+
+RichForce16 / Daily15, Mode C fixed TP 0.60 / 0.50, SL=3, hold=0. Leftover
+`hedge_delta` / `hedge_qty_mult` knobs removed.
+
+### Cover overlay (`cover_*`)
+
+- Trigger: shorts-only cash D/G vs `DEFAULT_INVESTOR_LIMITS`. Vega and theta
+  are metered, not used.
+- Size: smallest long qty (0.1 steps, search ceiling 50) so **full book**
+  D/G is inside the bands. Skip the bar if no size works.
+- Close: shorts inside `cover_inner_pct` (default 0.70) of the D/G limits,
+  after `cover_min_hold_minutes` (default 60). Cooldown 60 minutes;
+  `cover_severe_mult=1.5` bypasses it.
+- Instrument: majority-qty short expiry or next listed; same type as the
+  net short delta; strictly more OTM than the shorts, target 10Δ.
+- Shorts keep entering on the v9 schedule. Cover is excluded from
+  `max_concurrent`. Longs buy ask / sell bid; no SL/TP on the cover.
+
+```bash
+python -m pytest workspace/tests/ -v
+python -m backtester.run --strategy theta_engine_v12
+```
+
+---
+
 ## Checkpoint — 2026-08-13: theta_engine_v11 smarter sticky wing
 
 Fork Mode C (RichForce16 / Daily15) into `theta_engine_v11` and make the
@@ -50,6 +158,16 @@ Locked from 704/706: `sticky_budget`, `wing_side_mode=greek`,
 708 #1 (RichForce16 `dgv`/0.20/`next_listed`) is the compliance-shaped
 favourite on PnL/Sharpe, but full-book OK is only ~19% of live bars: the
 single 0.1–0.6 wing never resizes while shorts grow to 11–20.
+
+### Wing accumulate (same checkpoint, follow-on)
+
+`wing_resize_mode=once|accumulate` + `wing_max_qty` (default 5.0). Accumulate
+keeps one contract and **adds qty** (engine `add_legs` vintages) while the
+*full* book is still in trigger-breach; min-hold spaces top-ups; flatten
+still uses shorts + hysteresis. Same strike/expiry until expiry or shorts
+recover — no call/put flip (that thrashed). `once` is the 708 slot
+behaviour. Discovery PARAM_GRID and the 48-combo compliance grid lock
+`accumulate`.
 
 ```bash
 python -m pytest workspace/tests/ -v

@@ -184,7 +184,7 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
                 label = rr.label or rr.strategy
                 try:
                     from workspace.catalog import family_for, family_label
-                    fam = family_label(family_for(rr.strategy or ""))
+                    fam = family_label(rr.family or family_for(rr.strategy or ""))
                     run_txt = (
                         f"#{rr.id} · {label} · {fam} · {ts} · "
                         f"{rr.n_combos or '—'} combos"

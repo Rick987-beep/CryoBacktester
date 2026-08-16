@@ -623,6 +623,10 @@ class GridResult:
         self.param_grid = param_grid
         self.account_size = float(account_size)
         self.date_range = date_range  # (date_from_str, date_to_str)
+        attrs = getattr(df, "attrs", None) or {}
+        self.extra_parquets = dict(attrs.get("extra_parquets") or {})
+        if getattr(df, "attrs", None) is not None:
+            df.attrs.pop("extra_parquets", None)
 
         # Derived metadata
         self.param_names = sorted(param_grid.keys())

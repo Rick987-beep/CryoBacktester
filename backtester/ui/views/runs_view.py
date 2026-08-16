@@ -77,7 +77,7 @@ def build_runs_view(state, store, cache) -> pn.Column:
             return pd.DataFrame(columns=_COLS)
         records = []
         for rr in rows:
-            fam_id = family_for(rr.strategy or "")
+            fam_id = rr.family or family_for(rr.strategy or "")
             records.append({
                 "id": rr.id,
                 "favourite": "★" if rr.pinned else "☆",
