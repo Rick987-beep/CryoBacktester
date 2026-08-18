@@ -42,6 +42,7 @@ def test_family_for_known_and_unknown():
     assert family_for("theta_engine_v6") == "theta_engine"
     assert family_for("theta_engine_v13") == "theta_engine"
     assert family_for("theta_engine_base") == "theta_engine"
+    assert family_for("theta_spreads") == "theta_spreads"
     assert family_for("tudysho_eisbach") == "tudysho"
     assert family_for("blueprint_howto") == "other"
     assert family_for("unknown_legacy_strategy") == "other"
