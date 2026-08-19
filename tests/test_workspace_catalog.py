@@ -13,6 +13,7 @@ _STABLE_IDS = frozenset({
     "stradysho",
     "tudysho_v1",
     "tudysho_v2",
+    "tudysho_v3",
     "cadysho",
     "blueprint_howto",
     "long_gamma_move",

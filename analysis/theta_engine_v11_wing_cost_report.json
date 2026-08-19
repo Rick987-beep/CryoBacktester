@@ -1,0 +1,54 @@
+[
+  {
+    "regime": "v10_legacy",
+    "entry": "Daily15",
+    "n_wing_opens": 190,
+    "n_wing_closes": 190,
+    "n_round_trips": 190,
+    "total_wing_fees_usd": 17801.27,
+    "total_wing_cost_usd": 53843.5,
+    "avg_hold_minutes": 3236.3,
+    "median_hold_minutes": 30.0,
+    "pct_holds_under_15min": 40.0,
+    "total_book_pnl_usd": 18728.52
+  },
+  {
+    "regime": "v11_new",
+    "entry": "Daily15",
+    "n_wing_opens": 44,
+    "n_wing_closes": 44,
+    "n_round_trips": 44,
+    "total_wing_fees_usd": 338.82,
+    "total_wing_cost_usd": 2906.47,
+    "avg_hold_minutes": 14203.9,
+    "median_hold_minutes": 600.0,
+    "pct_holds_under_15min": 0.0,
+    "total_book_pnl_usd": 116571.89
+  },
+  {
+    "regime": "v10_legacy",
+    "entry": "RichForce16",
+    "n_wing_opens": 198,
+    "n_wing_closes": 198,
+    "n_round_trips": 198,
+    "total_wing_fees_usd": 11944.12,
+    "total_wing_cost_usd": 31517.0,
+    "avg_hold_minutes": 2763.2,
+    "median_hold_minutes": 22.5,
+    "pct_holds_under_15min": 43.9,
+    "total_book_pnl_usd": 31868.94
+  },
+  {
+    "regime": "v11_new",
+    "entry": "RichForce16",
+    "n_wing_opens": 27,
+    "n_wing_closes": 27,
+    "n_round_trips": 27,
+    "total_wing_fees_usd": 209.38,
+    "total_wing_cost_usd": 1843.87,
+    "avg_hold_minutes": 20919.3,
+    "median_hold_minutes": 1045.0,
+    "pct_holds_under_15min": 0.0,
+    "total_book_pnl_usd": 72599.88
+  }
+]

@@ -268,6 +268,26 @@ so old `from backtester.strategies.my_strategy import …` imports keep working.
 
 ---
 
+## Research learnings (not locks)
+
+These are results, not bans. New experiments are always allowed — including
+revisiting the same region with a different idea.
+
+**TuDySho 98% WR cells** sell very low delta, 1DTE, late NYC, often with
+`min_otm` — they do not size (6 contracts per 1 BTC equity nightly).
+
+**`tudysho_v4`** (bundle `tudysho_v4_20260819_123515`, 2025-04-11 → 2026-08-18):
+honest 1DTE strangle at delta 0.15–0.25, morning–noon entry, 2–3× mark SL +
+% proximity. Loss-rate floor worked (every cell ≥17% losers) but the book did
+not pay: 11/324 profitable, median −$25k / −31% DD on $100k, median PF 0.79.
+Best cell +16% / −13% DD sat at 0.15 / 12:00 NYC / turbulence 100. Stops
+(~23% of trades) cost ~3× a typical win; open fees hit the Deribit 10.42%
+cap of credit. Earlier entry was worse. This *grid* is closed; the version
+is frozen as the artefact. Related ideas (defined-risk, longer DTE, other
+tenors) are still open.
+
+---
+
 ## Key documents
 
 | File | Content |

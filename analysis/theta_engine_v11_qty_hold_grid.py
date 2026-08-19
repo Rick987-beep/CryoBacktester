@@ -1,28 +1,21 @@
 #!/usr/bin/env python3
-"""Greek-compliance discovery grid: wing instrument + perp delta overlay.
+"""v11 accumulate discovery: wing budget × add pacing × instrument × entry.
 
-Answers whether a better *compliance* recipe exists than the PnL-locked
-v11-new defaults (trigger=dg, delta=0.10, expiry=same, perp off), before
-those knobs get frozen into v12.
+72 combos (dg only — vega trigger is a later pass):
 
-Axes:
-* wing_trigger:       dg | dgv          — does targeting vega matter?
-* wing_delta:         0.10 | 0.15 | 0.20 — how much hedge we buy
-* wing_expiry_mode:   same | next_listed — longer-dated wing = more vega/contract
-* perp_delta_hedge:   0 | 1             — cheap delta overlay (now blotter-logged)
-* entry_policy:       RichForce16 | Daily15
+* wing_max_qty:          5 | 10 | 199     — 5 = current cap; 199 ≈ size-to-unbreach
+* wing_min_hold_minutes: 0 | 60 | 240     — add immediately vs 1h vs 4h
+* wing_delta:            0.10 | 0.20
+* wing_expiry_mode:      same | next_listed
+* entry_policy:          RichForce16 | Daily15
 
-2*3*2*2*2 = 48 combos.
+3*3*2*2*2 = 72.
 
-Locked (already decided from run 704 / 706):
-sticky_budget, wing_side_mode=greek, wing_delta_mode=fixed, margin=3,
-hold/cooldown=60min, override=1.5, SL=3, max_concurrent=20, hold_days=0,
-perp_deadband_pct=2.0, wing_resize_mode=accumulate, wing_max_qty=5.0.
+Locked: sticky_budget, accumulate, trigger=dg, side=greek, delta_mode=fixed,
+margin=3, cooldown=60, override=1.5, perp=0, SL=3, max_concurrent=20,
+hold_days=0, greek_limits_mode=off.
 
-Date range matches the latest full package (through 2026-08-12).
-
-Uses ``backtester.run.run_backtest`` so the artefact lands in ``data/runs/``
-and shows up in the Research UI Runs view.
+Date range 2025-04-11 → 2026-08-12.  GUI-visible via run_backtest.
 """
 
 from __future__ import annotations
@@ -56,21 +49,21 @@ def _grid(**overrides: Any) -> Dict[str, List]:
         "launch_accel": [0],
         "launch_size_mult": [1.0],
         "greek_limits_mode": ["off"],
-        "perp_delta_hedge": [0, 1],
+        "perp_delta_hedge": [0],
         "perp_deadband_pct": [2.0],
         "option_hedge_mode": ["sticky_budget"],
         "wing_expiry_mode": ["same", "next_listed"],
-        "wing_delta": [0.10, 0.15, 0.20],
-        "wing_trigger": ["dg", "dgv"],
+        "wing_delta": [0.10, 0.20],
+        "wing_trigger": ["dg"],
         "wing_close_margin_pct": [3.0],
-        "wing_min_hold_minutes": [60.0],
+        "wing_min_hold_minutes": [0.0, 60.0, 240.0],
         "wing_cooldown_minutes": [60.0],
         "wing_cooldown_override_mult": [1.5],
         "wing_side_mode": ["greek"],
         "wing_delta_mode": ["fixed"],
         "wing_delta_ratio": [0.5],
         "wing_resize_mode": ["accumulate"],
-        "wing_max_qty": [5.0],
+        "wing_max_qty": [5.0, 10.0, 199.0],
         "entry_policy": list(_ENTRIES),
     }
     g.update(overrides)
@@ -85,7 +78,7 @@ def main() -> None:
     for v in grid.values():
         n_combos *= len(v)
 
-    print(f"=== v11 compliance grid {DATE_RANGE}: {n_combos} combos ===")
+    print(f"=== v11 qty/hold discovery {DATE_RANGE}: {n_combos} combos ===")
     bundle = run_backtest("theta_engine_v11", grid, DATE_RANGE, account, root, source="cli")
     print(f"Bundle: {bundle}")
     print("Open Research UI -> Runs and select the newest theta_engine_v11 bundle.")

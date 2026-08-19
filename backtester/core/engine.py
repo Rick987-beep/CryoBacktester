@@ -46,30 +46,88 @@ from backtester.core.pricing import fee_btc_per_contract as _fee_btc
 from backtester.core.strategy_base import Trade, _reprice_legs
 
 
+def _freeze_indicator_params(params):
+    # type: (Any) -> Tuple
+    """Stable cache key for IndicatorDep.params (scalars only)."""
+    if not params:
+        return ()
+    return tuple(sorted((str(k), params[k]) for k in params))
+
+
+def _indicator_deps_for_instance(strategy_cls, instance):
+    # type: (Type, Any) -> List[Any]
+    """Prefer instance ``resolved_indicator_deps()`` after ``configure()``.
+
+    Returns an empty list when the strategy has no indicator dependencies.
+    ``resolved_indicator_deps`` returning ``None`` falls back to class-level
+    ``indicator_deps`` (existing strategies).
+    """
+    resolver = getattr(instance, "resolved_indicator_deps", None)
+    if callable(resolver):
+        resolved = resolver()
+        if resolved is not None:
+            return list(resolved)
+    deps = getattr(instance, "indicator_deps", None) or getattr(
+        strategy_cls, "indicator_deps", None
+    )
+    return list(deps) if deps else []
+
+
+def _dep_cache_key(dep):
+    # type: (Any) -> Tuple
+    return (
+        dep.name,
+        dep.symbol,
+        dep.interval,
+        int(getattr(dep, "warmup_days", 30)),
+        _freeze_indicator_params(getattr(dep, "params", None)),
+    )
+
+
 def _inject_indicators(strategy_cls, instances, replay, progress, status_cb=None):
     # type: (Type, List[Any], Any, bool, Any) -> None
-    """Pre-compute indicators declared by the strategy and inject into all instances."""
-    deps = getattr(strategy_cls, "indicator_deps", None)
-    if not deps:
+    """Pre-compute indicators and inject into each instance.
+
+    Unique ``(name, symbol, interval, warmup, params)`` tuples are built once
+    so PARAM_GRID can vary indicator knobs without recomputing identical
+    series. Each instance still receives a dict keyed by indicator name.
+    """
+    per_instance = [_indicator_deps_for_instance(strategy_cls, inst) for inst in instances]
+    if not any(per_instance):
         return
 
-    from datetime import timezone
     from backtester.indicators import build_indicators
 
     start_dt, end_dt = replay.date_range()
+    cache = {}  # type: Dict[Tuple, Any]
+    build_order = []  # type: List[Any]
+    for deps in per_instance:
+        for dep in deps:
+            key = _dep_cache_key(dep)
+            if key not in cache:
+                cache[key] = None
+                build_order.append(dep)
 
     if progress:
-        names = [d.name for d in deps]
-        print(f"Building indicators {names} ({start_dt.date()} → {end_dt.date()})...")
+        names = sorted({d.name for deps in per_instance for d in deps})
+        print(
+            f"Building indicators {names} "
+            f"({len(build_order)} unique, {start_dt.date()} → {end_dt.date()})..."
+        )
 
-    ind = build_indicators(deps, start_dt, end_dt, status_cb=status_cb)
+    for dep in build_order:
+        key = _dep_cache_key(dep)
+        built = build_indicators([dep], start_dt, end_dt, status_cb=status_cb)
+        cache[key] = built[dep.name]
 
-    for strategy in instances:
-        if hasattr(strategy, "set_indicators"):
-            strategy.set_indicators(ind)
+    for strategy, deps in zip(instances, per_instance):
+        if not deps or not hasattr(strategy, "set_indicators"):
+            continue
+        ind = {dep.name: cache[_dep_cache_key(dep)] for dep in deps}
+        strategy.set_indicators(ind)
 
     if progress:
-        print(f"  Indicators ready: {sorted(ind.keys())}")
+        print(f"  Indicators ready: {len(cache)} unique series")
 
 _progress_interval = _cfg.simulation.progress_interval
 

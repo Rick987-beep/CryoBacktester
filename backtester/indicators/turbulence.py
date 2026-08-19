@@ -135,6 +135,13 @@ def _burst_per_hour(
     return pd.Series(scores).reindex(df_1h.index)
 
 
+def _kaufman_er(arr: np.ndarray) -> float:
+    """ER = |close_now - close_N_ago| / sum(|step changes|) × 100."""
+    direction = abs(arr[-1] - arr[0])
+    path = float(np.abs(np.diff(arr)).sum())
+    return (direction / path * 100.0) if path > 0 else 0.0
+
+
 def _calm_streak(is_active: np.ndarray, is_calm: np.ndarray) -> np.ndarray:
     """
     Consecutive calm bar streak, weekday-only. Weekend bars preserve streak
@@ -246,13 +253,8 @@ def turbulence(
     # Window of er_period + 1 active closes covers er_period steps.
     close_active = df_1h.loc[is_active, "close"]
 
-    def _er(arr: np.ndarray) -> float:
-        direction = abs(arr[-1] - arr[0])
-        path = float(np.abs(np.diff(arr)).sum())
-        return (direction / path * 100.0) if path > 0 else 0.0
-
     trend_score_active = close_active.rolling(er_period + 1, min_periods=er_period + 1).apply(
-        _er, raw=True
+        _kaufman_er, raw=True
     )
     trend_score = trend_score_active.reindex(df_1h.index)
 
@@ -347,6 +349,180 @@ def turbulence(
             "signal":      signal,
         },
         index=df_1h.index,
+    )
+
+
+# Sliding 60-minute windows on 15m bars (same A–D math as calendar 1H).
+_STEPS_PER_HOUR = 4  # 15m bars in a 60-minute window
+
+
+def _memory_windows(memory: str, cfg: dict) -> dict:
+    """Translate hour-unit _DEFAULTS into rolling step counts."""
+    memory = str(memory)
+    if memory not in ("time", "bars"):
+        raise ValueError("turbulence_rolling memory must be 'time' or 'bars'")
+    scale = _STEPS_PER_HOUR if memory == "time" else 1
+    return {
+        "vol_smooth": int(cfg["vol_smooth"]) * scale,
+        "er_period": int(cfg["er_period"]) * scale,
+        "decay_short": int(cfg["decay_short"]) * scale,
+        "decay_long": int(cfg["decay_long"]) * scale,
+        "calm_bars_needed": int(cfg["calm_bars_needed"]) * scale,
+        # Percentile history stays elapsed-time (14 weekday-days of hours).
+        "vol_lookback": int(cfg["vol_lookback"]) * _STEPS_PER_HOUR,
+    }
+
+
+def turbulence_rolling(
+    df_15m: pd.DataFrame,
+    exclude_weekends: bool = True,
+    memory: str = "time",
+    window_bars: int = 4,
+    **params,
+) -> pd.DataFrame:
+    """
+    Turbulence composite on trailing ``window_bars`` closed 15m bars.
+
+    Indexed by the **open** timestamp of the last 15m bar in the window.
+    Same columns as ``turbulence()``. Weekend windows (any sub-bar on Sat/Sun)
+    are NaN when ``exclude_weekends`` is True.
+
+    ``memory='time'`` scales vol/ER/decay/calm windows by 4 (elapsed hours).
+    ``memory='bars'`` uses those params as overlapping-window step counts.
+    ``vol_lookback`` is always scaled by 4 so the percentile span stays ~14d.
+    """
+    cfg = {**_DEFAULTS, **params}
+    memory = str(params.get("memory", memory))
+    win = int(params.get("window_bars", window_bars))
+    if win < 2:
+        raise ValueError("window_bars must be >= 2")
+    steps = _memory_windows(memory, cfg)
+
+    w_vol = cfg["w_vol"]
+    w_trend = cfg["w_trend"]
+    w_burst = cfg["w_burst"]
+    w_decay = cfg["w_decay"]
+    thresh_green = cfg["thresh_green"]
+    thresh_red = cfg["thresh_red"]
+    burst_atr_pct = cfg["burst_atr_pct"]
+    burst_max_ratio = cfg["burst_max_ratio"]
+    vol_smooth = steps["vol_smooth"]
+    vol_lookback = steps["vol_lookback"]
+    er_period = steps["er_period"]
+    decay_short = steps["decay_short"]
+    decay_long = steps["decay_long"]
+    calm_bars_needed = steps["calm_bars_needed"]
+
+    df = df_15m.sort_index()
+    ohlc = {"open": "first", "high": "max", "low": "min", "close": "last"}
+    if "volume" in df.columns:
+        ohlc["volume"] = "sum"
+    df = df.resample("15min").agg(ohlc).dropna(how="any")
+
+    valid = (df["high"] > 0) & (df["low"] > 0) & (df["high"] >= df["low"])
+    park_bar = pd.Series(np.nan, index=df.index)
+    park_bar.loc[valid] = np.log(df.loc[valid, "high"] / df.loc[valid, "low"]) ** 2
+    park_bar = park_bar.fillna(0.0)
+    invalid_count = (~valid).astype(float).rolling(win, min_periods=win).sum()
+    park_raw = park_bar.rolling(win, min_periods=win).sum()
+    park_raw = park_raw.where(invalid_count < win)
+
+    we_bar = pd.Series((df.index.dayofweek >= 5).astype(float), index=df.index)
+    window_has_weekend = we_bar.rolling(win, min_periods=win).max() >= 1.0
+    complete = park_raw.notna()
+    if exclude_weekends:
+        is_active = complete & ~window_has_weekend
+    else:
+        is_active = complete
+
+    win_high = df["high"].rolling(win, min_periods=win).max()
+    win_low = df["low"].rolling(win, min_periods=win).min()
+    win_close = df["close"]
+    bar_range = win_high - win_low
+
+    daily_atr_series = _daily_atr(df, period=14)
+    daily_atr = daily_atr_series.reindex(df.index, method="ffill")
+
+    ranges = df["high"] - df["low"]
+    atr_ok = daily_atr.notna() & (daily_atr > 0)
+    threshold = daily_atr * burst_atr_pct / 100.0
+    oversized = ((ranges > threshold) & atr_ok).astype(float)
+    burst_count = oversized.rolling(win, min_periods=win).sum()
+    count_score = (burst_count / 3.0).clip(upper=1.0) * 100.0
+    max_r = ranges.rolling(win, min_periods=win).max()
+    med_r = ranges.rolling(win, min_periods=win).median()
+    ratio = max_r / med_r.replace(0.0, np.nan)
+    ratio_score = ((ratio - 1.0) / (burst_max_ratio - 1.0)).clip(lower=0.0, upper=1.0) * 100.0
+    ratio_score = ratio_score.fillna(0.0)
+    burst_score = 0.6 * count_score + 0.4 * ratio_score
+    burst_score = burst_score.where(complete & atr_ok)
+    if exclude_weekends:
+        burst_score = burst_score.where(~window_has_weekend)
+
+    park_active = park_raw[is_active]
+    park_smooth = park_active.rolling(vol_smooth, min_periods=1).mean()
+    vol_score_active = park_smooth.rolling(vol_lookback, min_periods=2).apply(
+        lambda arr: (arr <= arr[-1]).sum() / len(arr) * 100.0,
+        raw=True,
+    )
+    vol_score = vol_score_active.reindex(df.index)
+
+    close_active = win_close[is_active]
+    trend_score_active = close_active.rolling(
+        er_period + 1, min_periods=er_period + 1
+    ).apply(_kaufman_er, raw=True)
+    trend_score = trend_score_active.reindex(df.index)
+
+    park_short_sma = park_active.rolling(decay_short, min_periods=1).mean()
+    park_long_sma = park_active.rolling(decay_long, min_periods=1).mean()
+    vol_ratio = park_short_sma / park_long_sma.replace(0.0, np.nan)
+    vol_ratio = vol_ratio.fillna(1.0)
+    ratio_decay_score = np.clip((vol_ratio - 0.5) / 1.0, 0.0, 1.0) * 100.0
+    ratio_decay_score = ratio_decay_score.reindex(df.index)
+
+    range_active = bar_range[is_active]
+    median_range = range_active.rolling(vol_lookback, min_periods=1).median()
+    median_range_full = median_range.reindex(df.index, method="ffill")
+    is_calm_full = (bar_range < median_range_full).fillna(False).values
+    streak_arr = _calm_streak(is_active.fillna(False).values, is_calm_full)
+    calm_streak_series = pd.Series(streak_arr, index=df.index)
+    calm_score_full = np.maximum(1.0 - (calm_streak_series / calm_bars_needed), 0.0) * 100.0
+    if exclude_weekends:
+        calm_score_full = calm_score_full.where(~window_has_weekend)
+
+    decay_score = 0.5 * ratio_decay_score + 0.5 * calm_score_full
+
+    composite = (
+        w_vol * vol_score.fillna(0.0)
+        + w_trend * trend_score.fillna(0.0)
+        + w_burst * burst_score.fillna(0.0)
+        + w_decay * decay_score.fillna(0.0)
+    )
+    if exclude_weekends:
+        composite = composite.where(~window_has_weekend)
+    composite = composite.where(complete)
+
+    def _signal(v: float):
+        if pd.isna(v):
+            return None
+        if v >= thresh_red:
+            return "red"
+        if v >= thresh_green:
+            return "yellow"
+        return "green"
+
+    signal = composite.map(_signal)
+
+    return pd.DataFrame(
+        {
+            "composite": composite,
+            "vol_score": vol_score,
+            "trend_score": trend_score,
+            "burst_score": burst_score,
+            "decay_score": decay_score,
+            "signal": signal,
+        },
+        index=df.index,
     )
 
 

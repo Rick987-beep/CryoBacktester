@@ -49,6 +49,7 @@ import pandas as pd
 from backtester.indicators.hist_data import load_klines
 from backtester.indicators.supertrend import supertrend as _supertrend
 from backtester.indicators.turbulence import turbulence as _turbulence
+from backtester.indicators.turbulence import turbulence_rolling as _turbulence_rolling
 from backtester.indicators.trend_regime import compute_trend_regime as _compute_trend_regime
 
 logger = logging.getLogger(__name__)
@@ -329,6 +330,13 @@ def _build_turbulence(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return result.shift(1)
 
 
+def _build_turbulence_rolling(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
+    result = _turbulence_rolling(df_raw, **params)
+    # Indexed by last 15m bar *open*. That bar closes 15m later, so shift(1)
+    # makes loc[T] the window that ended on the previous closed 15m bar.
+    return result.shift(1)
+
+
 def _build_supertrend(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return _supertrend(df_raw, **params)
 
@@ -468,6 +476,7 @@ def _build_vol_context(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
 # Registry: indicator name → builder function
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
+    "turbulence_rolling": _build_turbulence_rolling,
     "supertrend": _build_supertrend,
     "trend_regime": _build_trend_regime,
     "long_gamma_regime": _build_long_gamma_regime,
