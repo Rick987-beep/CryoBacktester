@@ -1,0 +1,14 @@
+---
+description: Auto-commit each named research step in the worktree; never push without asking
+alwaysApply: true
+---
+
+# Step commits
+
+After a **named research step** lands and tests pass, create a git commit in the current worktree. Do not wait for “please commit”. Never `git push` unless the user asks.
+
+A step is: a new strategy version registered; experiment A/B/C (or similar) implemented and run; a selector/grid closed as “didn’t work”; a baseline set locked. Not a step: PARAM_GRID tweaks mid-grid, analysis-only chat, a spotted bug you have not been told to fix, failing tests.
+
+If the session starts on `main` and the arc will be several steps, create/use a topic branch (`wip/<topic>`) before the first commit. Do not rewrite `main` history. Do not commit `data/runs/`, secrets, or one-off analysis blobs.
+
+Commit message: 1–2 sentences on why (what the step decided), same HEREDOC style as the repo. Run `git status` / `git diff` / `git log` first. Leave the tree committable; say that you committed and on which branch.

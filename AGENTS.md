@@ -11,7 +11,7 @@ Read fully before touching any code.
 
 ## ⚠️ Hard Rules for AI Agents
 
-1. **Never `git commit` or `git push`** without explicit user approval.
+1. **Never `git push`** without explicit user approval. **Do commit** after each named research step (new strategy version, experiment A/B/C run, a selector/grid closed) once tests pass — current worktree / topic branch, do not wait for “please commit”. Prefer `wip/<topic>` if still on `main` at the start of a multi-step arc. Never commit secrets, `data/runs/`, or one-off analysis blobs. See `.cursor/rules/step-commits.mdc`.
 2. **For any task bigger than a small edit: present a plan first.** Wait for the user to say "CODE" before writing code.
 3. **Bug spotted? Describe it, do NOT fix it.** Report the problem and stop. Wait for "CODE".
 4. **Run tests before and after any code change:** `python -m pytest workspace/tests/ -v`
