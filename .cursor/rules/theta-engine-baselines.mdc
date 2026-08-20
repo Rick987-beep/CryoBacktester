@@ -23,3 +23,9 @@ v10/v11 forked these entries then added Greeks / sticky wings / perps — do not
 `theta_engine_v12` is a `base` fork with a long-option **cover** overlay (`cover_*` knobs). No perps. Trigger = shorts-only D/G; size = full book D/G; vega is metered only.
 
 `theta_engine_v13` is a `base` fork with a **paired far-OTM wing** on every short (`wing_strike_pct` / `wing_debit_pct` / `wing_expiry`). Strike is % of the short strike (put K×(1−pct), call K×(1+pct)); qty is % of short credit, floored at 0.1 and capped at short qty — no budget skips. Short stays the boss; TP/SL are short-leg only. Default `track_investor_greeks=1` meters shorts-only vs full-book D/G (vega is a meter, not a gate) into `investor_greeks.parquet`. v9 remains the historical run-692 artefact.
+
+# Theta Engine v14 short-DTE
+
+**#1 book:** **RichForce2 15 skew6** — run 727 hash `eff2523b17b8`. VRP≥4 else force-2d @ 15:00 UTC, skew6, 1 DTE, 25Δ cheaper, qty 2, hold, no SL/TP. Do not treat the other three as co-equal defaults.
+
+Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c01`), RichForce2 16 front (`c8573c839903`), RichDay15 (`760386167875`). Constants: `V14_FAVOURITE_*` / `V14_FANOUT_BOOKS` in `workspace/strategies/theta_engine/v14.py`.

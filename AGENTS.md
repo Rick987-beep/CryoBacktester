@@ -289,8 +289,10 @@ tenors) are still open.
 **`theta_engine_v14` `dte123`** (run 730, 2025-08-17 → 2026-08-18):
 equal-weight 25Δ RR on exact 1/2/3 DTE never beat `front` (1 DTE) or
 `skew6` (~14d) on the four baseline books. Front or skew6 is enough;
-`dte123` stays in code as a closed selector. The working books remain
-Daily16 / RichForce2-15-skew6 / RichForce2-16-front / RichDay15.
+`dte123` stays in code as a closed selector.
+
+**v14 #1 book:** RichForce2 15 skew6 (`eff2523b17b8`, run 727). Fan-out
+only: Daily16, RichForce2 16 front, RichDay15.
 
 ---
 
