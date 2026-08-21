@@ -294,8 +294,12 @@ equal-weight 25Δ RR on exact 1/2/3 DTE never beat `front` (1 DTE) or
 **v14 #1 book:** RichForce2 15 skew6 (`eff2523b17b8`, run 727). Fan-out
 only: Daily16, RichForce2 16 front, RichDay15.
 
-**`theta_engine_v15`:** v14 plus investor D/G sidecar, locked to RichForce2
-16 front (`c8573c839903`). Meter first; overlays later.
+**`theta_engine_v16`:** Mode C shorts + premium-match paired wing
+(`wing_price_div` / `wing_budget_pct`).
+
+**`theta_engine_v17`:** v14 plus investor D/G sidecar, locked to RichForce2
+16 front (`c8573c839903`). Meter first; overlays later. (`theta_engine_v15`
+was never a shipped ID — do not reuse.)
 
 ---
 

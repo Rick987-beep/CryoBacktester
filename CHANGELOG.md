@@ -4,17 +4,20 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
-## Checkpoint — 2026-08-21: v15 investor D/G sidecar on short-DTE
+## Checkpoint — 2026-08-21: v17 investor D/G sidecar on short-DTE
 
-`theta_engine_v15` forks `v14` with `track_investor_greeks` (default on).
+`theta_engine_v17` forks `v14` with `track_investor_greeks` (default on).
 Working grid is the run-727 RichForce2 16 front cell (`c8573c839903`).
 Shorts-only vs full-book D/G after each live bar; vega is a meter.
-Scorecard: `analysis/theta_engine_v15_investor_greeks.py`.
+Scorecard: `analysis/theta_engine_v17_investor_greeks.py`.
+(`theta_engine_v15` was briefly misallocated to this work and removed —
+stable ID is `theta_engine_v17`. `theta_engine_v16` remains the Mode C
+premium-match wing.)
 
 ```bash
 python -m pytest workspace/tests/ -v
-python -m backtester.run --strategy theta_engine_v15
-python analysis/theta_engine_v15_investor_greeks.py
+python -m backtester.run --strategy theta_engine_v17
+python analysis/theta_engine_v17_investor_greeks.py
 ```
 
 ---

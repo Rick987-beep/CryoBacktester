@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Scorecard: v15 shorts-only vs full-book D/G.
+"""Scorecard: v17 shorts-only vs full-book D/G.
 
-Reads the latest ``theta_engine_v15_*.bundle`` that contains
+Reads the latest ``theta_engine_v17_*.bundle`` that contains
 ``investor_greeks.parquet``. Vega is a meter, not a gate.
 
 Usage::
 
-    PYTHONPATH=. .venv/bin/python analysis/theta_engine_v15_investor_greeks.py
+    PYTHONPATH=. .venv/bin/python analysis/theta_engine_v17_investor_greeks.py
 """
 from __future__ import annotations
 
@@ -22,18 +22,18 @@ if str(ROOT) not in sys.path:
 
 from backtester.core.paths import runs_dir
 
-OUT = ROOT / "analysis" / "theta_engine_v15_investor_greeks.json"
+OUT = ROOT / "analysis" / "theta_engine_v17_investor_greeks.json"
 
 
 def _latest_v15_bundle() -> Path:
     bundles = sorted(
-        runs_dir().glob("theta_engine_v15_*.bundle"),
+        runs_dir().glob("theta_engine_v17_*.bundle"),
         key=lambda p: p.stat().st_mtime,
     )
     with_sidecar = [p for p in bundles if (p / "investor_greeks.parquet").exists()]
     if not with_sidecar:
         raise SystemExit(
-            "No theta_engine_v15 bundle with investor_greeks.parquet under %s"
+            "No theta_engine_v17 bundle with investor_greeks.parquet under %s"
             % runs_dir()
         )
     return with_sidecar[-1]
