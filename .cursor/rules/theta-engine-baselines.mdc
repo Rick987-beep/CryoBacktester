@@ -29,3 +29,5 @@ v10/v11 forked these entries then added Greeks / sticky wings / perps — do not
 **#1 book:** **RichForce2 15 skew6** — run 727 hash `eff2523b17b8`. VRP≥4 else force-2d @ 15:00 UTC, skew6, 1 DTE, 25Δ cheaper, qty 2, hold, no SL/TP. Do not treat the other three as co-equal defaults.
 
 Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c01`), RichForce2 16 front (`c8573c839903`), RichDay15 (`760386167875`). Constants: `V14_FAVOURITE_*` / `V14_FANOUT_BOOKS` in `workspace/strategies/theta_engine/v14.py`.
+
+`theta_engine_v15` is a `v14` fork that meters investor D/G (`track_investor_greeks`, default on) into `investor_greeks.parquet`. Working grid is the run-727 **RichForce2 16 front** cell (`c8573c839903` / `rf2_1600` × `front`). Vega is a meter, not a gate. No overlay yet.
