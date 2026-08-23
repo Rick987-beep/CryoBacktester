@@ -4,6 +4,22 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-22: v17 rich qty sizing closed (run 741)
+
+Discovery on RichForce2 16 front: scale base qty down when the sold leg
+looks expensive (`front_vrp` × `iv_rank_60`, multiplicative factor). Run
+741 (`theta_engine_v17_20260822_090110`, 216 combos) — every `rich_mode=on`
+cell lost PnL / Sharpe / Calmar to naked; WR unchanged; winners cut harder
+than losers. **Closed** for performance. Default grid is `rich_mode=none`;
+`V17_RICH_DISCOVERY_GRID` kept as artefact. Indicator
+`front_25d_iv_rank` stays available.
+
+```bash
+python -m pytest workspace/tests/test_theta_engine_v17.py workspace/tests/test_front_25d_iv_rank.py -v
+```
+
+---
+
 ## Checkpoint — 2026-08-21: v17 investor D/G sidecar on short-DTE
 
 `theta_engine_v17` forks `v14` with `track_investor_greeks` (default on).

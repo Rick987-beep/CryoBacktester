@@ -33,3 +33,5 @@ Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c
 `theta_engine_v16` is a `base` fork with a paired premium-match wing (`wing_price_div` / `wing_budget_pct` / `wing_expiry`). Short stays the boss.
 
 `theta_engine_v17` is a `v14` fork that meters investor D/G (`track_investor_greeks`, default on) into `investor_greeks.parquet`. Working grid is the run-727 **RichForce2 16 front** cell (`c8573c839903` / `rf2_1600` × `front`). Vega is a meter, not a gate. No overlay yet. Do not reuse `theta_engine_v15` — that ID was never a shipped book.
+
+**v17 rich qty closed (run 741):** `front_vrp` × `iv_rank_60` size-down (`rich_mode=on`) did not beat naked on PnL / Sharpe / Calmar. Default `rich_mode=none`. Discovery artefact: `V17_RICH_DISCOVERY_GRID` in `v17.py` — do not re-open as a performance search without a new hypothesis.

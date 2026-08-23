@@ -301,6 +301,15 @@ only: Daily16, RichForce2 16 front, RichDay15.
 16 front (`c8573c839903`). Meter first; overlays later. (`theta_engine_v15`
 was never a shipped ID — do not reuse.)
 
+**`theta_engine_v17` rich qty sizing** (run 741,
+`theta_engine_v17_20260822_090110`, 2025-08-17 → 2026-08-18): size-down when
+expensive via `front_vrp` × `iv_rank_60` (`rich_mode=on`, 108 cells vs naked
+baseline). Goal was better PnL / DD / Sharpe — not Greek compliance. Every
+`on` cell lost on PnL, Sharpe, and Calmar; WR and trade count unchanged;
+cuts hit winners harder than losers. Mild DD / breach relief only. **Grid
+closed**; default stays `rich_mode=none`. Logic + `V17_RICH_DISCOVERY_GRID`
+kept in `v17.py` as the artefact.
+
 ---
 
 ## Key documents

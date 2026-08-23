@@ -473,6 +473,12 @@ def _build_vol_context(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return build_vol_context(df_raw, **params)
 
 
+def _build_front_25d_iv_rank(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
+    from backtester.indicators.front_25d_iv_rank import build_front_25d_iv_rank
+
+    return build_front_25d_iv_rank(df_raw, **params)
+
+
 # Registry: indicator name → builder function
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
@@ -485,6 +491,7 @@ _BUILDERS: Dict[str, Callable[..., Any]] = {
     "vol_burst_pullback": _build_vol_burst_pullback,
     "calm_nights": _build_calm_nights,
     "vol_context": _build_vol_context,
+    "front_25d_iv_rank": _build_front_25d_iv_rank,
 }
 
 
