@@ -314,8 +314,8 @@ kept in `v17.py` as the artefact.
 Run 742 closed credit SL / tight stops. Working stop baselines:
 **Late1Eq5** (`d550e3296f17`) and **Full2Eq8** (`731b1d03b15d`).
 `wing_pct` (0 = naked) adds equal-qty further-OTM long, same expiry,
-width = pct × short strike — no USD clamps. Design-A stop grid kept as
-`V18_STOP_DISCOVERY_GRID`.
+width = pct × short strike; `min_width_usd` floors listed width (0 = off).
+No `max_width_usd`. Design-A stop grid kept as `V18_STOP_DISCOVERY_GRID`.
 
 ---
 
