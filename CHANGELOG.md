@@ -4,14 +4,14 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
-## Checkpoint — 2026-08-24: v18 stop discovery on RichForce2 16 front
+## Checkpoint — 2026-08-24: v18 Late1Eq5 / Full2Eq8 baselines (run 742)
 
-`theta_engine_v18` forks `v17` with three stop axes on the locked
-RichForce2 16 front book: `stop_loss_pct` (full-session credit multiple),
-packed `prox_stop` (`none` / `pct@4` / `pct@16`), and
-`open_pnl_equity_stop_pct` (v2–v7 equity% open-loss). Design-A PARAM_GRID
-is 252 combos including naked baseline. Investor D/G sidecar retained.
-Do not run until asked.
+Stop discovery on RichForce2 16 front (design A, 252 combos) in run 742
+(`theta_engine_v18_20260824_072920`, 2025-08-18 → 2026-08-20). Credit SL
+never beat naked; tight prox / tight equity hurt. Locked working
+baselines via `stop_book`: **Late1Eq5** (`d550e3296f17` — prox 1@4 + eq
+5%) and **Full2Eq8** (`731b1d03b15d` — prox 2@16 + eq 8%). Design-A grid
+kept as `V18_STOP_DISCOVERY_GRID`. Investor D/G sidecar retained.
 
 ```bash
 python -m pytest workspace/tests/test_theta_engine_v18.py -v

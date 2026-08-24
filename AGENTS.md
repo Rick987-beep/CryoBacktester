@@ -310,9 +310,11 @@ cuts hit winners harder than losers. Mild DD / breach relief only. **Grid
 closed**; default stays `rich_mode=none`. Logic + `V17_RICH_DISCOVERY_GRID`
 kept in `v17.py` as the artefact.
 
-**`theta_engine_v18`:** RichForce2 16 front + stop discovery (credit
-`stop_loss_pct`, packed `prox_stop`, `open_pnl_equity_stop_pct`). Design-A
-grid 252 combos including naked baseline. Goal: cut rare blow-ups.
+**`theta_engine_v18`:** RichForce2 16 front + stops. Run 742
+(`theta_engine_v18_20260824_072920`) closed credit SL and tight stops.
+Working baselines: **Late1Eq5** (`d550e3296f17`, prox 1@4 + eq 5%) and
+**Full2Eq8** (`731b1d03b15d`, prox 2@16 + eq 8%). Design-A 252 grid kept
+as `V18_STOP_DISCOVERY_GRID`.
 
 ---
 
