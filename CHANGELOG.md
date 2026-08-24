@@ -4,6 +4,49 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-24: v18 min_width_usd on 1:1 wings
+
+Add `min_width_usd` floor for listed outer width (0 = off; no
+`max_width_usd`). Exploratory grid `0 / 1000 / 2500 / 5000` × existing
+`wing_pct` × Late1Eq5/Full2Eq8 → 48 combos.
+
+```bash
+python -m pytest workspace/tests/test_theta_engine_v18.py -v
+```
+
+---
+
+## Checkpoint — 2026-08-24: v18 optional 1:1 wing_pct on stop baselines
+
+Add theta_spreads-style further-OTM hedge to `theta_engine_v18`: equal qty,
+same expiry, target width = `wing_pct × short strike`. No `max_width_usd`.
+`wing_pct=0` keeps the run-742 naked stop baselines (Late1Eq5 / Full2Eq8).
+If `wing_pct>0` and no outer is listed, the short is rolled back (no naked
+fill). Working grid later gained `min_width_usd` (see checkpoint above).
+
+```bash
+python -m pytest workspace/tests/test_theta_engine_v18.py -v
+python -m backtester.run --strategy theta_engine_v18
+```
+
+---
+
+## Checkpoint — 2026-08-24: v18 Late1Eq5 / Full2Eq8 baselines (run 742)
+
+Stop discovery on RichForce2 16 front (design A, 252 combos) in run 742
+(`theta_engine_v18_20260824_072920`, 2025-08-18 → 2026-08-20). Credit SL
+never beat naked; tight prox / tight equity hurt. Locked working
+baselines via `stop_book`: **Late1Eq5** (`d550e3296f17` — prox 1@4 + eq
+5%) and **Full2Eq8** (`731b1d03b15d` — prox 2@16 + eq 8%). Design-A grid
+kept as `V18_STOP_DISCOVERY_GRID`. Investor D/G sidecar retained.
+
+```bash
+python -m pytest workspace/tests/test_theta_engine_v18.py -v
+python -m backtester.run --strategy theta_engine_v18
+```
+
+---
+
 ## Checkpoint — 2026-08-22: v17 rich qty sizing closed (run 741)
 
 Discovery on RichForce2 16 front: scale base qty down when the sold leg

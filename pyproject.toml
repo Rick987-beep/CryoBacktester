@@ -6,3 +6,9 @@ markers = [
 addopts = "-m 'not live and not slow_ui'"
 testpaths = ["workspace/tests", "backtester/calm_nights/tests", "tests"]
 norecursedirs = ["backtester/data", "backtester/data_archive", "backtester/data_spot_rebuilt", "backtester/reports", "backtester/newstrategy", "data"]
+
+# Pylance / Pyright: same interpreter as AGENTS.md (Python 3.12, .venv).
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
