@@ -16,18 +16,6 @@ python -m pytest workspace/tests/test_theta_engine_v18.py -v
 
 ---
 
-## Checkpoint — 2026-08-24: v18 min_width_usd on 1:1 wings
-
-Add ``min_width_usd`` floor for listed outer width (0 = off). No
-``max_width_usd``. Exploratory grid ``0 / 1000 / 2500 / 5000`` × existing
-``wing_pct`` × Late1Eq5/Full2Eq8 (48 combos).
-
-```bash
-python -m pytest workspace/tests/test_theta_engine_v18.py -v
-```
-
----
-
 ## Checkpoint — 2026-08-24: v18 optional 1:1 wing_pct on stop baselines
 
 Add theta_spreads-style further-OTM hedge to `theta_engine_v18`: equal qty,
