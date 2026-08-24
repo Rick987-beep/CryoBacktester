@@ -4,6 +4,22 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-24: v18 optional 1:1 wing_pct on stop baselines
+
+Add theta_spreads-style further-OTM hedge to `theta_engine_v18`: equal qty,
+same expiry, target width = `wing_pct × short strike`. No `max_width_usd` /
+`min_width_usd`. `wing_pct=0` keeps the run-742 naked stop baselines
+(Late1Eq5 / Full2Eq8). If `wing_pct>0` and no outer is listed, the short
+is rolled back (no naked fill). Working grid = 2 stop books × 6 wing_pct
+values (incl. 0).
+
+```bash
+python -m pytest workspace/tests/test_theta_engine_v18.py -v
+python -m backtester.run --strategy theta_engine_v18
+```
+
+---
+
 ## Checkpoint — 2026-08-24: v18 Late1Eq5 / Full2Eq8 baselines (run 742)
 
 Stop discovery on RichForce2 16 front (design A, 252 combos) in run 742
