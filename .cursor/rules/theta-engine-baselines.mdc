@@ -34,6 +34,14 @@ Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c
 
 `theta_engine_v18` forks `v17` / RichForce2 16 front with stop exits and an optional 1:1 further-OTM wing. **Run 742** closed the wide stop search: credit SL never beat naked; tight prox / tight equity hurt. Working stop baselines (packed `stop_book`): **Late1Eq5** (`late1_eq5` / `d550e3296f17` — prox 1@4 + eq 5%) and **Full2Eq8** (`full2_eq8` / `731b1d03b15d` — prox 2@16 + eq 8%). `wing_pct` = target width as fraction of short strike (same expiry, equal qty); **0 = naked**. `min_width_usd` floors listed outer width (**0 = no floor**); no `max_width_usd`. Design-A 252 stop grid kept as `V18_STOP_DISCOVERY_GRID`. Investor D/G sidecar retained.
 
+# Defined Theta (v18 marketing lock)
+
+**Product name:** **Defined Theta** (≤3 words; use in marketing / investor copy). Strategy ID stays `theta_engine_v18`.
+
+**Favourite cell (run 746):** combo `a1d621a81904` — `stop_book=full2_eq8` (Full2Eq8), `wing_pct=0.07`, `min_width_usd=2500`, RichForce2 16 front. ~182 trades, ~90% WR, Sharpe ~4.0 (range ~2025-08-18 → 2026-08-22). Star note: “1DTE perfection: with long wings, high sharpe, 90% win rate but not higher.”
+
+**Pitch lock:** short-gamma / theta income, smart RichForce entries, managed losses (Full2Eq8 prox+equity), excellent Sharpe, **always hedged** (every open is short + equal-qty further-OTM long wing — never naked for the marketed book). Wings are a *principled* investor constraint, not a PnL edge: they attach 100% correctly; they barely cut loser dollars or D/G breach rates; they cost ~premium drag. Do not sell them as a loss hedge that “saves” blow-ups.
+
 `theta_engine_v17` is a `v14` fork that meters investor D/G (`track_investor_greeks`, default on) into `investor_greeks.parquet`. Working grid is the run-727 **RichForce2 16 front** cell (`c8573c839903` / `rf2_1600` × `front`). Vega is a meter, not a gate. No overlay yet. Do not reuse `theta_engine_v15` — that ID was never a shipped book.
 
 **v17 rich qty closed (run 741):** `front_vrp` × `iv_rank_60` size-down (`rich_mode=on`) did not beat naked on PnL / Sharpe / Calmar. Default `rich_mode=none`. Discovery artefact: `V17_RICH_DISCOVERY_GRID` in `v17.py` — do not re-open as a performance search without a new hypothesis.
