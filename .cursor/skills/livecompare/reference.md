@@ -26,3 +26,11 @@ analysis/livecompare/          # config + runs output
 backtester/compare/            # Python package
 .cursor/skills/livecompare/    # agent skill
 ```
+
+## Related
+
+To locate an existing backtester run / combo / trade log (not live parity), use
+`python -m backtester.inspect` and `.cursor/skills/run-lookup/` — do not glob
+`data/runs/` or call `StoreService.load_run()` for lookup. For grid-quality
+autopsy (influence / danger / curve-fit / live picks), use **run-audit**
+(`.cursor/skills/run-audit/` / `python -m backtester.research.run_audit`).

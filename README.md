@@ -80,10 +80,12 @@ CryoBacktester/
 │   │   ├── expiry_utils.py        # Expiry date utilities
 │   │   ├── market_hours.py        # US market hours / NYSE calendar
 │   │   ├── config.py / config.toml
-│   ├── research/                  # Sensitivity, WFO, robustness
+│   ├── research/                  # Sensitivity, WFO, robustness, run audit
 │   │   ├── experiment.py
 │   │   ├── walk_forward.py
-│   │   └── robustness.py          # Deflated Sharpe Ratio
+│   │   ├── robustness.py          # Deflated Sharpe Ratio
+│   │   └── run_audit/             # Grid quality autopsy (η², danger, curve-fit, live picks)
+│   ├── inspect/                   # Fast run/combo lookup CLI (python -m backtester.inspect)
 │   ├── reporting/                 # Self-contained HTML reports
 │   │   ├── html_report.py
 │   │   └── charts.py              # SVG chart primitives
@@ -357,6 +359,17 @@ In-sample (IS) uses the wide `PARAM_GRID` (honest search space). Out-of-sample (
 - `PARAM_GRID` in each strategy file is the wide, unbiased discovery grid. **Never narrow it post-hoc.**
 - Experiment TOMLs in `backtester/experiments/` capture "what we think is good and why" — separately from the strategy definition.
 - WFO uses the wide grid for its IS runs, so the IS optimiser has a real search problem, not a trivially narrow space around a known-good point.
+
+### After a discovery run lands
+Use the fast lookup + grid autopsy CLIs (do **not** reload the full `GridResult` in agents):
+
+```bash
+python -m backtester.inspect show 748
+python -m backtester.research.run_audit 748 --html
+# → analysis/run_audit/<bundle_stem>/audit.json (+ report.html)
+```
+
+Agent skills: `.cursor/skills/run-lookup/`, `.cursor/skills/run-audit/` (see `AGENTS.md`).
 
 ---
 

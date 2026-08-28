@@ -37,8 +37,10 @@ CryoBacktester/
 ├── backtester/          # PRODUCT — engine, UI, indicators code, ingest, compare
 │   ├── core/            # includes paths.py data-plane resolver
 │   ├── strategies/      # compatibility shims → workspace.strategies
-│   ├── ui/  reporting/  research/  indicators/  ingest/  compare/
+│   ├── ui/  reporting/  research/  indicators/  ingest/  compare/  inspect/
 │   │         # ui: desktop.py (native) + app.py (browser)
+│   │         # research/run_audit/: grid autopsy CLI
+│   │         # inspect/: python -m backtester.inspect
 │   └── run.py           # CLI; STRATEGIES façade from workspace.catalog
 ├── scripts/macos/CryoBacktester.app   # thin local Dock launcher → .venv desktop
 ├── workspace/           # USE — strategies by family, experiments, strategy tests
@@ -47,6 +49,8 @@ CryoBacktester/
 │   ├── experiments/
 │   └── tests/
 ├── data/                # DATA PLANE — market, klines, runs (gitignored blobs)
+├── analysis/            # Research artefacts (run_audit/, livecompare/, …)
+├── .cursor/skills/      # Agent skills: run-lookup, run-audit, livecompare
 ├── tests/               # Product / UI / integration tests
 ├── analysis/
 └── docs/
@@ -75,11 +79,34 @@ python -m backtester.ui.desktop
 
 # Research UI — browser / Terminal (dev)
 python -m backtester.ui.app --no-browser
+
+# Look up a past run / combo (fast path — do not load full grids)
+python -m backtester.inspect show 748
+python -m backtester.inspect combo 748 f8a7e1d9ecec
+
+# Grid quality audit (influence / danger / curve-fit / live picks)
+python -m backtester.research.run_audit 748 --html
+# alias: python -m backtester.inspect audit 748 --html
 ```
 
 Strategy IDs: see `workspace/catalog.py` (tudysho*, theta_engine_v*, blueprint_howto, …)
 
 All other strategies are in `backtester/archive/strategies_to_be_fixed/` — not in the CLI registry.
+
+---
+
+## Agent skills (Cursor)
+
+Project skills live under `.cursor/skills/`. Read the matching `SKILL.md` before
+improvising lookup, grid autopsy, or live-vs-BT work.
+
+| Skill | When | Entry |
+|-------|------|-------|
+| **run-lookup** | Run id / bundle / combo hash / trades / fills / metrics | `python -m backtester.inspect …` |
+| **run-audit** | Analyse an existing grid: what drives results, danger, overfitting, diverse live picks | `python -m backtester.research.run_audit RUN [--html]` |
+| **livecompare** | CryoTrader live slot vs backtest parity | `python -m backtester.compare run --slot …` |
+
+Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `analysis/livecompare/`.
 
 ---
 
@@ -98,6 +125,8 @@ All other strategies are in `backtester/archive/strategies_to_be_fixed/` — not
 Step 1 — Discovery
   Wide PARAM_GRID (hundreds of combos), full date range.
   Goal: find which region of parameter space is profitable at all.
+  Then: python -m backtester.research.run_audit <run> --html
+        (influence / danger / curve-fit / diverse live picks)
 
 Step 2 — Sensitivity
   --experiment <name> --mode sensitivity
@@ -112,6 +141,7 @@ Step 3 — Walk-Forward Validation
 
 **PARAM_GRID in each strategy file is the wide, unbiased discovery grid — never narrow it post-hoc.**
 Experiment TOMLs in `backtester/experiments/` capture candidates separately.
+Past-run lookup: `.cursor/skills/run-lookup/` · grid autopsy: `.cursor/skills/run-audit/`.
 
 ---
 
@@ -328,6 +358,11 @@ Wings = investor principle (never naked), not a PnL/greek silver bullet.
 |------|---------|
 | `README.md` | Full backtester workflow, research pipeline, all sections |
 | `CHANGELOG.md` | Checkpoint history of notable product changes |
+| `.cursor/skills/run-lookup/SKILL.md` | Locate runs/combos via `backtester.inspect` |
+| `.cursor/skills/run-audit/SKILL.md` | Grid quality autopsy (influence / danger / curve-fit / live picks) |
+| `.cursor/skills/livecompare/SKILL.md` | Live CryoTrader vs backtest comparison |
+| `analysis/run_audit/README.md` | Run-audit CLI outputs |
+| `analysis/livecompare/README.md` | Livecompare CLI outputs |
 | `scripts/macos/brand/DESIGN.md` | Cryo product-family visual language (icons / palette) |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
 | `workspace/strategies/other/blueprint_howto.py` | Canonical working strategy implementation |

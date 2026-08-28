@@ -4,6 +4,22 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-28: run-audit skill + grid autopsy CLI
+
+Deterministic grid-quality autopsy for existing runs (parameter η², danger,
+curve-fit / multiplicity, diverse live picks). Product code under
+`backtester/research/run_audit/`; Cursor skill `.cursor/skills/run-audit/`.
+Wired into `inspect audit` and agent docs (`AGENTS.md`, README research
+pipeline).
+
+```bash
+python -m pytest tests/ui/test_run_audit.py tests/ui/test_inspect.py -v
+python -m backtester.research.run_audit 748 --html
+# alias: python -m backtester.inspect audit 748 --html
+```
+
+---
+
 ## Checkpoint — 2026-08-24: v18 min_width_usd on 1:1 wings
 
 Add `min_width_usd` floor for listed outer width (0 = off; no

@@ -40,3 +40,6 @@ Latest run path: `analysis/livecompare/LATEST`
 ## Skill
 
 Agent instructions: `.cursor/skills/livecompare/SKILL.md`
+
+Related: **run-lookup** (find BT runs/combos), **run-audit** (grid quality before
+choosing a live candidate).

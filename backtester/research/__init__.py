@@ -1,1 +1,1 @@
-"""Research helpers: experiments, walk-forward, and robustness."""
+"""Research helpers: experiments, walk-forward, robustness, and run audit."""
