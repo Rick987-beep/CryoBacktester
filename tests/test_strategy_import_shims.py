@@ -7,9 +7,10 @@ from pathlib import Path
 from backtester.strategies.blueprint_howto import BlueprintHowto
 from backtester.strategies.theta_engine_v6 import ThetaEngineV6
 from backtester.strategies.tudysho_eisbach import TuDyShoEisbach
+from backtester.strategies.tudysho_monopteros import TuDyShoMonopteros
 
 
 def test_shim_classes_live_under_workspace():
-    for cls in (ThetaEngineV6, TuDyShoEisbach, BlueprintHowto):
+    for cls in (ThetaEngineV6, TuDyShoEisbach, TuDyShoMonopteros, BlueprintHowto):
         path = Path(inspect.getfile(cls))
         assert "workspace" in path.parts, path

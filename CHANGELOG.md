@@ -4,6 +4,27 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-08-28: TuDySho Monopteros + investor report
+
+New catalog ID **`tudysho_monopteros`** (display **Monopteros**): one strategy
+that runs all three NYC entry schedules (`mon_thu` / `mon_early` / `fri`) with
+current CryoTrader slot-02 trade params (2026-08-28 lock) and product sizing
+`nav_premium_pct=0.4` / `max_qty_per_1btc_equity=12`. Window
+`2025-08-27` → `2026-08-27`. Eisbach stays frozen as the Jul-2026 live-parity
+artefact — do not sync it to live.
+
+Favourite lock (UI): run **750**, combo `812903ec6cc9`
+(bundle `tudysho_monopteros_20260828_155923`). Investor HTML:
+`analysis/marketing/monopteros_strategy_report.html` (7-chapter Aureas shell;
+rebuild via `analysis/marketing/monopteros_strategy_report/build_report.py`).
+
+```bash
+python -m pytest workspace/tests/test_tudysho_monopteros.py workspace/tests/test_tudysho_eisbach.py -v
+python -m backtester.run --strategy tudysho_monopteros
+```
+
+---
+
 ## Checkpoint — 2026-08-28: run-audit skill + grid autopsy CLI
 
 Deterministic grid-quality autopsy for existing runs (parameter η², danger,
