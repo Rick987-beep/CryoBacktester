@@ -576,7 +576,7 @@ compatibility shims only.
 
 | Family | Examples |
 |---|---|
-| `tudysho` | tudysho, eisbach, starnberg, stradysho, v1/v2 |
+| `tudysho` | tudysho, eisbach, monopteros, starnberg, stradysho, v1–v4 |
 | `theta_engine` | v1–v6 |
 | `other` | blueprint_howto, short_str_turb_dyn, cadysho, … |
 
