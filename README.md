@@ -56,7 +56,8 @@ python -m pytest workspace/tests/ -v   # maintainer only
 
 Private strategies, experiments, and marketing live in the
 **CryoBacktester-workspace** git submodule at `workspace/`. See
-[`docs/workspace-submodule.md`](docs/workspace-submodule.md).
+[`docs/workspace-submodule.md`](docs/workspace-submodule.md) and
+[`docs/solo-workflow.md`](docs/solo-workflow.md).
 
 Reports and run bundles are written to `data/runs/` as self-contained HTML + `.bundle/` dirs.
 The Research UI reads those same run bundles in a native window (or in the browser via `python -m backtester.ui.app`).
