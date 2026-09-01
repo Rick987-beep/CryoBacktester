@@ -4,6 +4,22 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-09-01: Marketing `ship/` / `_build/` layout
+
+Promoted product marketing reorganized under `workspace/marketing/`:
+
+- **`ship/{product_id}/`** — investor-safe strategy report + diligence CSVs/HTML (zip for allocators)
+- **`_build/{product_id}/`** — rebuild scripts, `data/`, internal sidecars
+- **`tools/`** — `export_diligence`, `build_investor_report`, `investor_notes`, `naming`
+
+Removed duplicate legacy folders, one-time editorial scripts (`rewrite_ch125.py`), and post-hoc sanitization. New Cursor skill: `.cursor/skills/marketing/SKILL.md`. Monthly refresh workflow documented in `workspace/marketing/README.md`.
+
+```bash
+python -m pytest workspace/tests/test_marketing.py -v
+```
+
+---
+
 ## Checkpoint — 2026-08-28: TuDySho Monopteros + investor report
 
 New catalog ID **`tudysho_monopteros`** (display **Monopteros**): one strategy
@@ -15,8 +31,8 @@ artefact — do not sync it to live.
 
 Favourite lock (UI): run **750**, combo `812903ec6cc9`
 (bundle `tudysho_monopteros_20260828_155923`). Investor HTML:
-`analysis/marketing/monopteros_strategy_report.html` (7-chapter Aureas shell;
-rebuild via `analysis/marketing/monopteros_strategy_report/build_report.py`).
+`workspace/marketing/ship/monopteros/monopteros_strategyreport_082026.html`
+(rebuild via `workspace/marketing/_build/monopteros/build_report.py`).
 
 ```bash
 python -m pytest workspace/tests/test_tudysho_monopteros.py workspace/tests/test_tudysho_eisbach.py -v

@@ -50,7 +50,7 @@ CryoBacktester/
 │   └── tests/
 ├── data/                # DATA PLANE — market, klines, runs (gitignored blobs)
 ├── analysis/            # Research artefacts (run_audit/, livecompare/, …)
-├── .cursor/skills/      # Agent skills: run-lookup, run-audit, livecompare
+├── .cursor/skills/      # Agent skills: run-lookup, run-audit, livecompare, marketing
 ├── tests/               # Product / UI / integration tests
 ├── analysis/
 └── docs/
@@ -105,8 +105,9 @@ improvising lookup, grid autopsy, or live-vs-BT work.
 | **run-lookup** | Run id / bundle / combo hash / trades / fills / metrics | `python -m backtester.inspect …` |
 | **run-audit** | Analyse an existing grid: what drives results, danger, overfitting, diverse live picks | `python -m backtester.research.run_audit RUN [--html]` |
 | **livecompare** | CryoTrader live slot vs backtest parity | `python -m backtester.compare run --slot …` |
+| **marketing** | Ship strategy reports + diligence CSVs for promoted products | `workspace/marketing/` — see skill |
 
-Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `analysis/livecompare/`.
+Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `analysis/livecompare/`; marketing ship → `workspace/marketing/ship/`.
 
 ---
 
@@ -359,6 +360,7 @@ Wings = investor principle (never naked), not a PnL/greek silver bullet.
 | `README.md` | Full backtester workflow, research pipeline, all sections |
 | `CHANGELOG.md` | Checkpoint history of notable product changes |
 | `.cursor/skills/run-lookup/SKILL.md` | Locate runs/combos via `backtester.inspect` |
+| `.cursor/skills/marketing/SKILL.md` | Monthly ship reports + diligence exports (`ship/` vs `_build/`) |
 | `.cursor/skills/run-audit/SKILL.md` | Grid quality autopsy (influence / danger / curve-fit / live picks) |
 | `.cursor/skills/livecompare/SKILL.md` | Live CryoTrader vs backtest comparison |
 | `analysis/run_audit/README.md` | Run-audit CLI outputs |
