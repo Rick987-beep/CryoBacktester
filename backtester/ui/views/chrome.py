@@ -183,7 +183,7 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
                 ts = (rr.created_at or "")[:16].replace("T", " ")
                 label = rr.label or rr.strategy
                 try:
-                    from workspace.catalog import family_for, family_label
+                    from backtester.catalog import family_for, family_label
                     fam = family_label(rr.family or family_for(rr.strategy or ""))
                     run_txt = (
                         f"#{rr.id} · {label} · {fam} · {ts} · "

@@ -32,7 +32,7 @@ _PARAM_TABLE_CSS = """
 def build_new_run_view(state, store, cache, run_service) -> pn.Column:
     """Build the New Run page."""
     from backtester.run import STRATEGIES
-    from workspace.catalog import (
+    from backtester.catalog import (
         FAMILIES,
         family_for,
         strategy_options,

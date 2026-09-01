@@ -14,7 +14,7 @@ Read fully before touching any code.
 1. **Never `git push`** without explicit user approval. **Do commit** after each named research step (new strategy version, experiment A/B/C run, a selector/grid closed) once tests pass — current worktree / topic branch, do not wait for “please commit”. Prefer `wip/<topic>` if still on `main` at the start of a multi-step arc. Never commit secrets, `data/runs/`, or one-off analysis blobs. See `.cursor/rules/step-commits.mdc`.
 2. **For any task bigger than a small edit: present a plan first.** Wait for the user to say "CODE" before writing code.
 3. **Bug spotted? Describe it, do NOT fix it.** Report the problem and stop. Wait for "CODE".
-4. **Run tests before and after any code change:** `python -m pytest workspace/tests/ -v`
+4. **Run tests before and after any code change:** `python -m pytest tests/ -v` (plus `workspace/tests/` when the private submodule is checked out). See `docs/workspace-submodule.md`.
 5. **`PARAM_GRID` and `DATE_RANGE` in strategy files are NOT sacred.** Change them freely as part of any analysis or reproduction task — they are working state, not protected config.
 
 ---
@@ -30,30 +30,20 @@ Strategies are occasionally ported from CryoBacktester → CryoTrader — that i
 
 ## Repo structure
 
-Three planes: **product** (`backtester/`), **use** (`workspace/`), **data** (`data/`).
+Three planes: **product** (`backtester/`), **private workspace submodule** (`workspace/`), **data** (`data/`).
 
 ```
 CryoBacktester/
-├── backtester/          # PRODUCT — engine, UI, indicators code, ingest, compare
-│   ├── core/            # includes paths.py data-plane resolver
-│   ├── strategies/      # compatibility shims → workspace.strategies
-│   ├── ui/  reporting/  research/  indicators/  ingest/  compare/  inspect/
-│   │         # ui: desktop.py (native) + app.py (browser)
-│   │         # research/run_audit/: grid autopsy CLI
-│   │         # inspect/: python -m backtester.inspect
-│   └── run.py           # CLI; STRATEGIES façade from workspace.catalog
-├── scripts/macos/CryoBacktester.app   # thin local Dock launcher → .venv desktop
-├── workspace/           # USE — strategies by family, experiments, strategy tests
-│   ├── catalog.py       # families + stable strategy IDs (never rename IDs)
-│   ├── strategies/{tudysho,theta_engine,other}/
+├── backtester/          # PRODUCT — engine, UI, indicators, public blueprint
+│   ├── catalog.py       # private workspace submodule or blueprint-only fallback
+│   ├── strategies/      # blueprint_howto.py (public)
+│   └── run.py           # CLI; STRATEGIES façade from backtester.catalog
+├── workspace/           # PRIVATE submodule → CryoBacktester-workspace
+│   ├── catalog.py       # full strategy registry (maintainer)
+│   ├── strategies/      # tudysho, theta_engine, long_signal, …
 │   ├── experiments/
+│   ├── marketing/
 │   └── tests/
-├── data/                # DATA PLANE — market, klines, runs (gitignored blobs)
-├── analysis/            # Research artefacts (run_audit/, livecompare/, …)
-├── .cursor/skills/      # Agent skills: run-lookup, run-audit, livecompare, marketing
-├── tests/               # Product / UI / integration tests
-├── analysis/
-└── docs/
 ```
 
 Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS` (see `backtester.core.paths`).

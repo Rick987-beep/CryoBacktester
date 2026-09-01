@@ -4,6 +4,24 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-09-01: Private workspace submodule split
+
+Research plane moved out of the public repo into **CryoBacktester-workspace**
+(private GitHub repo, git submodule at `workspace/`). Public repo ships
+`backtester/` product code plus `blueprint_howto` only; `backtester.catalog`
+loads the full private registry when `workspace/.private` is present.
+git-crypt retired; public history rewritten to drop old `workspace/` blobs.
+
+See `docs/workspace-submodule.md`.
+
+```bash
+git clone --recurse-submodules https://github.com/Rick987-beep/CryoBacktester.git
+python -m pytest tests/ -v
+python -m pytest workspace/tests/ -v   # maintainer
+```
+
+---
+
 ## Checkpoint — 2026-09-01: Marketing `ship/` / `_build/` layout
 
 Promoted product marketing reorganized under `workspace/marketing/`:

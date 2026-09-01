@@ -134,7 +134,7 @@ def _fav_by_combo_id(favs: list, combo_id: str):
 
 def build_favourites_view(state, store, cache) -> pn.Column:
     """Return the Favourites tab component."""
-    from workspace.catalog import FAMILIES, family_for, family_label
+    from backtester.catalog import FAMILIES, family_for, family_label
 
     title = pn.pane.Markdown("## Favourites", margin=(8, 4, 4, 4))
     empty_msg = pn.pane.Markdown(

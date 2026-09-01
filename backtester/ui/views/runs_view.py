@@ -18,7 +18,7 @@ _COLS = ["id", "favourite", "created_at", "strategy", "family", "label", "n_comb
 
 def build_runs_view(state, store, cache) -> pn.Column:
     """Build the Runs management page."""
-    from workspace.catalog import FAMILIES, family_for, family_label
+    from backtester.catalog import FAMILIES, family_for, family_label
 
     try:
         store.scan_bundles()

@@ -193,7 +193,7 @@ class StoreService:
         if meta_family:
             return str(meta_family)
         try:
-            from workspace.catalog import family_for
+            from backtester.catalog import family_for
             return family_for(strategy or "")
         except Exception:
             return "other"
@@ -281,7 +281,7 @@ class StoreService:
             meta["family"] = family
         elif strategy:
             try:
-                from workspace.catalog import family_for
+                from backtester.catalog import family_for
                 meta["family"] = family_for(strategy)
             except Exception:
                 pass

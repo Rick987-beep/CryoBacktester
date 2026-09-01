@@ -34,27 +34,29 @@ The companion live trading repo is [CryoTrader](https://github.com/Rick987-beep/
 ## Quickstart
 
 ```bash
-# 1. Create and activate virtual environment
+# 1. Clone (maintainers: include private workspace submodule)
+git clone --recurse-submodules https://github.com/Rick987-beep/CryoBacktester.git
+cd CryoBacktester
+
+# 2. Create and activate virtual environment
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Run a strategy discovery grid (requires data in data/market/)
-python -m backtester.run --strategy short_str_turb_dyn
+# 3. Run the public blueprint strategy (requires data in data/market/)
+python -m backtester.run --strategy blueprint_howto
 
-# 3. Sensitivity analysis around a known-good candidate
-python -m backtester.run --experiment short_str_turb_dyn_v1 --mode sensitivity
-
-# 4. Walk-forward validation
-python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
-
-# 5. Launch the interactive Research UI (native window — preferred)
+# 4. Launch the interactive Research UI (native window — preferred)
 python -m backtester.ui.desktop
-#    or open scripts/macos/CryoBacktester.app (Dock / Finder)
 
-# 6. Run tests
-python -m pytest tests/ workspace/tests/ -v
+# 5. Run product tests (strategy tests need the private workspace submodule)
+python -m pytest tests/ -v
+python -m pytest workspace/tests/ -v   # maintainer only
 ```
+
+Private strategies, experiments, and marketing live in the
+**CryoBacktester-workspace** git submodule at `workspace/`. See
+[`docs/workspace-submodule.md`](docs/workspace-submodule.md).
 
 Reports and run bundles are written to `data/runs/` as self-contained HTML + `.bundle/` dirs.
 The Research UI reads those same run bundles in a native window (or in the browser via `python -m backtester.ui.app`).
@@ -63,7 +65,7 @@ The Research UI reads those same run bundles in a native window (or in the brows
 
 ## Repo Structure
 
-Three planes: **`backtester/`** (product), **`workspace/`** (strategies/experiments/tests), **`data/`** (market history, klines, run bundles). See `AGENTS.md`, `workspace/README.md`, `data/README.md`.
+Three planes: **`backtester/`** (public product), **`workspace/`** (private submodule), **`data/`** (local). See `AGENTS.md`, [`docs/workspace-submodule.md`](docs/workspace-submodule.md), `data/README.md`.
 
 
 ```
@@ -106,7 +108,9 @@ CryoBacktester/
 │   │   ├── services/              # Data access layer
 │   │   ├── charts/
 │   │   └── state/                 # SQLite DB + desktop.lock (gitignored)
-│   ├── strategies/                # Compatibility shims → workspace.strategies
+│   ├── strategies/                # Public blueprint_howto only
+│   ├── catalog.py                 # Loads private workspace or public fallback
+│   ├── public_catalog.py          # Blueprint-only registry
 │   ├── calm_nights/               # Calm-nights helpers (cadysho)
 │   ├── ingest/
 │   │   ├── check_data_completeness.py
@@ -120,7 +124,7 @@ CryoBacktester/
 │   └── macos/
 │       ├── CryoBacktester.app     # Thin Dock launcher → .venv desktop UI
 │       └── brand/                 # Cryo family icons + DESIGN.md
-├── workspace/                     # USE plane — strategies, catalog, experiments
+├── workspace/                     # PRIVATE submodule (CryoBacktester-workspace)
 ├── tests/                         # Integration + UI tests
 │   └── ui/
 ├── docs/

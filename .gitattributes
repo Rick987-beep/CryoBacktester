@@ -1,18 +1,2 @@
-# git-crypt: strategy source is encrypted in the public repo.
-# blueprint_howto stays plaintext (public reference implementation).
-# See docs/git-crypt.md for unlock instructions.
-
-# Canonical strategy code (workspace)
-workspace/strategies/**/*.py filter=git-crypt diff=git-crypt
-workspace/strategies/other/blueprint_howto.py !filter !diff
-workspace/strategies/**/__init__.py !filter !diff
-
-# Strategy-specific tests
-workspace/tests/test_*.py filter=git-crypt diff=git-crypt
-workspace/tests/test_strategy_base.py !filter !diff
-workspace/tests/test_backtester_indicators.py !filter !diff
-workspace/tests/conftest.py !filter !diff
-workspace/tests/__init__.py !filter !diff
-
-# Compatibility shims are not secret (re-exports only)
-backtester/strategies/*.py !filter !diff
+# Strategy source lives in the private CryoBacktester-workspace submodule.
+# See docs/workspace-submodule.md — no git-crypt in the public repo.

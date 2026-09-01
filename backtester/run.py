@@ -26,12 +26,12 @@ from backtester.research.walk_forward import run_walk_forward
 from backtester.research.experiment import load_experiment
 from backtester.core.config import cfg as _cfg
 from backtester.core.paths import runs_dir
-from workspace.catalog import family_for, strategies_dict
+from backtester.catalog import family_for, strategies_dict
 
 # ── Strategy Registry (façade) ───────────────────────────────────
 #
-# Canonical registration lives in workspace.catalog.  Stable strategy
-# IDs must never be renamed (bundles, favourites, livecompare).
+# Canonical registration lives in backtester.catalog (private workspace submodule
+# or public blueprint-only fallback). Stable strategy IDs must never be renamed.
 # Legacy strategies live in backtester/archive/strategies_to_be_fixed/
 
 STRATEGIES = strategies_dict()
