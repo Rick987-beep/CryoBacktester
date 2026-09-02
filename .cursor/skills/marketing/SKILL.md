@@ -21,7 +21,7 @@ description: >-
 workspace/marketing/
   ship/{product_id}/          DISTRIBUTABLE — zip for allocators
   _build/{product_id}/        scripts, data/, _internal/, quality.json
-  tools/                      export_diligence, build_investor_report, naming, investor_notes
+  tools/                      export_diligence, build_investor_report, naming, investor_notes, social_square
   catalog.json                internal inventory (run/combo/rebuild commands)
   archive/                    superseded ship vintages
 ```
@@ -36,6 +36,7 @@ workspace/marketing/
 | NAV daily | `{product_id}_nav_daily_{MMYYYY}.csv` |
 | NAV extended | `{product_id}_nav_daily_extended_{MMYYYY}.csv` |
 | Trades | `{product_id}_trades_{MMYYYY}.csv` / `.json` / `.html` |
+| Social square | `{product_id}_social_{MMYYYY}.png` (1080×1080 LinkedIn / X) |
 
 `MMYYYY` = report vintage (usually backtest window **end month**), e.g. `082026`.  
 Helpers: `workspace/marketing/tools/naming.py`. Paths in `catalog.json`.
@@ -64,10 +65,11 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
    PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/render.py      # defined_theta
    PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/build_report.py  # monopteros, lenbach
    ```
-4. **Export diligence** (pandas only):
+4. **Export diligence + social square** (pandas + headless Chrome for PNG):
    ```bash
    python workspace/marketing/export_diligence.py           # all products
    python workspace/marketing/export_diligence.py lenbach # one product
+   # social-only: python workspace/marketing/tools/social_square.py
    ```
 5. **New vintage?** Move prior `ship/{id}/*_{OLDMMYYYY}.*` → `archive/{id}/{YYYY-MM-DD}_{reason}/`. Update `catalog.json` (`report_period`, diligence paths, `report_html`).
 6. **Verify** — `python -m pytest workspace/tests/test_marketing.py -v`
@@ -81,8 +83,12 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
    - `build_report.py` or `render.py` with `StrategyReportCopy` + `build_investor_report()`
 3. Set `REPORT_PERIOD` and product copy in the build script; wire `ship_report_path(_MARKETING, product_id, period)`.
 4. Add entry to `catalog.json` (`products[]` with `report_html`, `diligence`, `rebuild` commands).
-5. Run build + `export_diligence.py {product_id}`.
-6. Confirm `ship/{product_id}/` has 6 files and passes investor tests.
+5. Run build + `export_diligence.py {product_id}` (writes diligence + social PNG).
+6. Confirm `ship/{product_id}/` has 7 files and passes investor tests.
+
+## Social square
+
+Locked 1080×1080 eye-catcher (`tools/social_square.py`): report-aligned dark header, daily equity + drawdown (Chart.js), three KPIs, Aureas GmbH footer. Pitch scraped from the ship report `header-subtitle`. Preview: `_build/social_square_preview.html`. Requires Google Chrome / Chromium for PNG.
 
 ## Investor copy rules
 
@@ -98,4 +104,4 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
 
 ## Distribute
 
-Zip `workspace/marketing/ship/{product_id}/` (6 files) or entire `ship/` for all products.
+Zip `workspace/marketing/ship/{product_id}/` (7 files) or entire `ship/` for all products.
