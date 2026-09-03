@@ -163,6 +163,22 @@ python -m backtester.ingest.tardis.bulk_fetch
 The live tick recorder runs as `ct-recorder` on the VPS and writes daily parquets.
 Sync them down using `backtester/ingest/tickrecorder/sync.py` in CryoTrader.
 
+### ⚠️ Cloud Agent data availability (TODO — unresolved)
+
+The full historic dataset currently lives **only on the maintainer's local
+machine**. It is **not** on the VPS, and there is **no active Tardis account**,
+so neither ingestion path above works from a fresh Cloud Agent right now.
+
+Consequence: Cloud Agents boot with **no** `data/market/` parquets. The engine,
+UI, CLI, and the whole test suite work, but a real full-history backtest cannot
+run until the data is supplied (synthetic data can drive smoke tests only).
+
+To fix later, pick one: reactivate a Tardis account (`TARDIS_API_KEY` secret +
+`bulk_fetch`), restore the VPS recorder + sync (SSH-key secret + egress
+allowlist), or upload the parquets to storage the VM can reach and pull them in
+`.cursor/install.sh`. Environment setup (`.cursor/environment.json`) is otherwise
+complete; only the data plane is outstanding.
+
 ---
 
 ## Indicators (`backtester/indicators/`)
