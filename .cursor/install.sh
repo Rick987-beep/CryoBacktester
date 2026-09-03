@@ -17,8 +17,12 @@ fi
 
 # 2. Private workspace submodule (full strategy registry + tests). The
 #    repo is listed under repositoryDependencies so the generated token
-#    can fetch it. No-op if already checked out.
-git submodule update --init --recursive
+#    can fetch it. No-op if already checked out. Non-fatal: without access
+#    the catalog falls back to the public blueprint-only registry (see
+#    backtester/catalog.py), so a public clone still installs cleanly.
+if ! git submodule update --init --recursive; then
+  echo "WARNING: workspace submodule unavailable — using public blueprint-only catalog." >&2
+fi
 
 # 3. Python virtual environment at .venv/ (matches AGENTS.md / pyproject).
 if [ ! -x ".venv/bin/python" ]; then
