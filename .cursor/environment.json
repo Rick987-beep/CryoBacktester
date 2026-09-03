@@ -1,0 +1,17 @@
+{
+  "name": "CryoBacktester",
+  "install": "bash .cursor/install.sh",
+  "repositoryDependencies": [
+    "github.com/Rick987-beep/CryoBacktester-workspace"
+  ],
+  "ports": [
+    { "name": "research-ui", "port": 5007 }
+  ],
+  "terminals": [
+    {
+      "name": "research-ui",
+      "command": ". .venv/bin/activate && python -m backtester.ui.app --no-browser --port 5007",
+      "description": "CryoBacktester Panel research UI — serves http://localhost:5007 (health: /healthz)."
+    }
+  ]
+}
