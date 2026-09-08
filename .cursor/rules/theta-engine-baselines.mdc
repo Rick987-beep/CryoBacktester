@@ -26,7 +26,11 @@ v10/v11 forked these entries then added Greeks / sticky wings / perps — do not
 
 # Theta Engine v19 — Lenbach inventory discovery
 
-`theta_engine_v19` forks **`base`** (not v9) to rebuild the medium-DTE short book after Lenbach (`theta_engine_base` / run 759 / `fc678e1a6b1e`) blew up in Aug 2026. Step 1 grid only: `max_concurrent` × `peak_dd_pause_pct` (mark-NAV DD from peak pauses **new entries**; 0 = off). Locked: Mode C delta / min_dte / qty / hold + RichForce16. Fixed exits for Steps 1–2: credit SL **2.0×**, TP **0.60**. DATE_RANGE `2025-04-11` → `2026-08-31`. Entry redesign = Step 2; exit redesign (book stop) = Step 3; wings = Step 4. Constants: `V19_STEP1_DISCOVERY_GRID` in `v19.py`.
+`theta_engine_v19` forks **`base`** (not v9) to rebuild the medium-DTE short book after Lenbach (`theta_engine_base` / run 759 / `fc678e1a6b1e`) blew up in Aug 2026. DATE_RANGE `2025-04-11` → `2026-08-31`. Fixed exits for Steps 1–2: credit SL **2.0×**, TP **0.60**. Exit redesign (book stop) = Step 3; wings = Step 4.
+
+**Step 1 (run 775):** `max_concurrent` × `peak_dd_pause_pct` — occupancy drives PnL/DD almost linearly; peak-DD pause ≈ inert. Artefact: `V19_STEP1_DISCOVERY_GRID`.
+
+**Step 2 (working `PARAM_GRID` = `V19_STEP2_DISCOVERY_GRID`, ~3k cells):** occupancy band `{8,10}` × **side-force rebalance** (`side_imbalance_limit`: force light side when `|n_calls−n_puts|≥limit`, overrides skew; `0`=off) × **refill** (`force_after_days`, `min_entry_gap_days`) × **launch gate** (packed `launch_gate`: `off|skip_Nd_X|half_Nd_X`).
 
 # Theta Engine v14 short-DTE
 
