@@ -45,11 +45,11 @@ Helpers: `workspace/marketing/tools/naming.py`. Paths in `catalog.json`.
 
 Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json) — do not hard-code run/combo in ship copy.
 
-| Product id | Display name |
-|------------|--------------|
-| `defined_theta` | Defined Theta |
-| `monopteros` | Monopteros |
-| `lenbach` | Lenbach |
+| Product id | Display name | Status |
+|------------|--------------|--------|
+| `starnberg` | Starnberg | promoted |
+| `monopteros` | Monopteros | promoted |
+| `lenbach` | Lenbach | **withdrawn** (Aug-2026 blow-up; overhaul pending — run `759` / `fc678e1a6b1e`) |
 
 ## Monthly refresh workflow
 
@@ -60,15 +60,20 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
    python -m backtester.inspect trades RUN HASH --out workspace/marketing/_build/{id}/data/trades.csv
    # NAV: export combo equity_daily to _build/{id}/data/equity_daily.csv (nav_close column required)
    ```
-3. **Rebuild strategy report** (requires agent-commons on `PYTHONPATH`):
+3. **Rebuild strategy report** (Cryo/Aureas pack via agent-commons; emits `_build/brand/`):
    ```bash
-   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/render.py      # defined_theta
-   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/build_report.py  # monopteros, lenbach
+   # agent-commons required — auto-detected from ~/agent-commons, or:
+   export PYTHONPATH="$HOME/agent-commons${PYTHONPATH:+:$PYTHONPATH}"
+   # optional discovery: ~/agent-commons/.venv/bin/ac-brand paths
+   python workspace/marketing/_build/{id}/render.py      # starnberg
+   python workspace/marketing/_build/{id}/build_report.py  # monopteros
    ```
+   Ship HTML must embed the pack CSS bridge (`--ca-color-navy-900`). Use the
+   **strategy-report** + **brand** skills; never invent hex outside the pack.
 4. **Export diligence + social square** (pandas + headless Chrome for PNG):
    ```bash
-   python workspace/marketing/export_diligence.py           # all products
-   python workspace/marketing/export_diligence.py lenbach # one product
+   python workspace/marketing/export_diligence.py              # all promoted
+   python workspace/marketing/export_diligence.py monopteros # one product
    # social-only: python workspace/marketing/tools/social_square.py
    ```
 5. **New vintage?** Move prior `ship/{id}/*_{OLDMMYYYY}.*` → `archive/{id}/{YYYY-MM-DD}_{reason}/`. Update `catalog.json` (`report_period`, diligence paths, `report_html`).
@@ -86,9 +91,28 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
 5. Run build + `export_diligence.py {product_id}` (writes diligence + social PNG).
 6. Confirm `ship/{product_id}/` has 7 files and passes investor tests.
 
+## Brand (Cryo/Aureas)
+
+Investor ship artefacts are **rebuilt from pack-faithful templates** under
+`workspace/marketing/tools/templates/` (not a token alias of the old shell):
+
+| Artefact | Template | Pack mapping |
+|----------|----------|--------------|
+| Strategy report | `strategy_report.html.j2` + `strategy_report_layout.css` | `ca-document`, plain `ca-report-header` (no hatch), `ca-eyebrow`, type roles (`ca-type-*`), `ca-section-label`, `ca-rule-*`, `ca-numbers`, `ca-bullets`, `ca-callout`; KPI/highlight figures use **document** stack (not `font.data`) |
+| Trade-log HTML | `trades.html.j2` | Same header / type / table language |
+| Social square PNG | `social_square.html.j2` | Plain navy header, `ca-eyebrow` / `ca-type-display` / `ca-section-label`; KPI figures document stack @ 52px; equity/DD axes bound to plotted series |
+
+CSS bundle (reports/trades): emitted `document.css` + `strategy_report.css` bridge + layout.  
+Social square: pack tokens inlined in the template (no hatch).  
+Skills: **marketing** · **strategy-report** · **brand**. Visual law: `DESIGN_DECISION.md`.
+
 ## Social square
 
-Locked 1080×1080 eye-catcher (`tools/social_square.py`): report-aligned dark header, daily equity + drawdown (Chart.js), three KPIs, Aureas GmbH footer. Pitch scraped from the ship report `header-subtitle`. Preview: `_build/social_square_preview.html`. Requires Google Chrome / Chromium for PNG.
+Locked 1080×1080 eye-catcher (`tools/social_square.py` → `templates/social_square.html.j2`):
+plain navy header, daily equity + drawdown (Chart.js; Y-axes from series, not
+nice-tick inflation), three KPIs, Aureas GmbH footer. Pitch scraped from the
+ship report `header-subtitle`. Preview: `_build/social_square_preview.html`.
+Requires Google Chrome / Chromium for PNG.
 
 ## Investor copy rules
 
@@ -98,7 +122,7 @@ Locked 1080×1080 eye-catcher (`tools/social_square.py`): report-aligned dark he
 
 ## Do not use
 
-- `analysis/defined_theta_strategy_report*` — historical v1–v3 iterations; not canonical ship paths.
+- `analysis/starnberg_strategy_report*` — historical v1–v3 iterations; not canonical ship paths.
 - `analysis/marketing/` — redirect stub only.
 - Old per-product folders at `workspace/marketing/{id}/` (removed; use `ship/` + `_build/`).
 
