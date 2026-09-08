@@ -815,11 +815,21 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
     def _on_run_change(event):
         run_id = event.new
         if run_id is None:
+            state.active_combo_key = None
+            state.selected_combo_keys = []
             _content[:] = [_placeholder]
             _sel_label.object = ""
             return
         try:
             result = cache.get(run_id)
+            # Drop stale combo selection from a previous run (same hash ≠ same row).
+            key = state.active_combo_key
+            if key is not None and key not in result.key_to_idx:
+                state.active_combo_key = None
+            if state.selected_combo_keys:
+                keep = [k for k in state.selected_combo_keys if k in result.key_to_idx]
+                if keep != list(state.selected_combo_keys):
+                    state.selected_combo_keys = keep
             _content[:] = [_build_tabulator(result)]
         except Exception as exc:
             log.error("grid_view: failed to load run_id=%s — %s", run_id, exc)
@@ -848,14 +858,20 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         if key is None or run_id is None:
             return
         try:
+            result = cache.get(run_id)
+            if key not in result.key_to_idx:
+                _star_feedback.object = (
+                    "<span style='color:#dc2626'>⚠ Combo not in this run — "
+                    "select a row in the grid first.</span>"
+                )
+                return
             fav = store.get_favourite_by_combo(run_id, key)
             if fav:
                 store.remove_favourite(fav.id)
                 _star_btn.name = "☆ Star"
                 _star_feedback.object = "<span style='color:#d97706'>Removed from favourites.</span>"
             else:
-                result = cache.get(run_id)
-                stats = result.all_stats.get(key, {}) if result else {}
+                stats = result.all_stats.get(key, {})
                 rr = store.get_run(run_id)
                 strategy = rr.strategy if rr else ""
                 params_str = "  ".join(f"{k}={v}" for k, v in key)

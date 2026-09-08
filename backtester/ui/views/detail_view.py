@@ -348,14 +348,20 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
         if key is None or run_id is None:
             return
         try:
+            result = cache.get(run_id)
+            if key not in result.key_to_idx:
+                _star_feedback.object = (
+                    "<span style='color:#dc2626'>⚠ Combo not in this run — "
+                    "select a combo that belongs to the active run.</span>"
+                )
+                return
             fav = store.get_favourite_by_combo(run_id, key)
             if fav:
                 store.remove_favourite(fav.id)
                 _star_btn.name = "☆ Star"
                 _star_feedback.object = "<span style='color:#d97706'>Removed.</span>"
             else:
-                result = cache.get(run_id)
-                stats = result.all_stats.get(key, {}) if result else {}
+                stats = result.all_stats.get(key, {})
                 rr = store.get_run(run_id)
                 strategy = rr.strategy if rr else ""
                 params_str = "  ".join(f"{k}={v}" for k, v in key)

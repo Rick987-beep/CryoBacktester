@@ -27,12 +27,16 @@ macOS `.app` as `Contents/Resources/AppIcon.icns` + `CFBundleIconFile = AppIcon`
 
 Top-field colours — **lighter, saturated** (not near-black):
 
-| Product | Role | Field colour (intent) | Hex guide |
-|---------|------|------------------------|-----------|
-| **Backtester** | Research / replay | Green | `#22C55E` |
-| **Trader** | Live trading | Red | `#EF4444` |
-| **Quant** | Analysis / research tools | Blue | `#3B82F6` |
-| **Execute** | Execution / routing | Violet | `#8B5CF6` |
+| Product | Role | Field colour (intent) | Hex |
+|---------|------|------------------------|-----|
+| **Backtester** | Research / replay | Sage-teal | `#3d7a6a` |
+| **Trader** | Live trading | Terracotta | `#b05a48` |
+| **Quant** | Analysis / research tools | Brand blue | `#1e6fbf` |
+| **Execute** | Execution / routing | Dusty indigo | `#5c5f8a` |
+
+Field colours locked to Aureas Proposal A (2026-09-06) so product icons harmonise with
+navy `#0d1b2a` / gold `#c8a84b`. Previous Tailwind-bright masters saved as
+`icons/*.before-proposal-a.png`.
 
 Shared chrome:
 

@@ -331,7 +331,7 @@ cuts hit winners harder than losers. Mild DD / breach relief only. **Grid
 closed**; default stays `rich_mode=none`. Logic + `V17_RICH_DISCOVERY_GRID`
 kept in `v17.py` as the artefact.
 
-**`theta_engine_v18` / Defined Theta:** marketing name **Defined Theta**.
+**`theta_engine_v18` / Starnberg:** marketing name **Starnberg**.
 RichForce2 16 front + stops + 1:1 wing. Run 742 closed credit SL /
 tight stops. Working stop baselines: **Late1Eq5** (`d550e3296f17`) and
 **Full2Eq8** (`731b1d03b15d`). Favourite (run 746): `a1d621a81904` —

@@ -45,11 +45,11 @@ Helpers: `workspace/marketing/tools/naming.py`. Paths in `catalog.json`.
 
 Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json) — do not hard-code run/combo in ship copy.
 
-| Product id | Display name |
-|------------|--------------|
-| `defined_theta` | Defined Theta |
-| `monopteros` | Monopteros |
-| `lenbach` | Lenbach |
+| Product id | Display name | Status |
+|------------|--------------|--------|
+| `starnberg` | Starnberg | promoted |
+| `monopteros` | Monopteros | promoted |
+| `lenbach` | Lenbach | **withdrawn** (Aug-2026 blow-up; overhaul pending — run `759` / `fc678e1a6b1e`) |
 
 ## Monthly refresh workflow
 
@@ -62,13 +62,13 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
    ```
 3. **Rebuild strategy report** (requires agent-commons on `PYTHONPATH`):
    ```bash
-   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/render.py      # defined_theta
-   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/build_report.py  # monopteros, lenbach
+   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/render.py      # starnberg
+   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/build_report.py  # monopteros
    ```
 4. **Export diligence + social square** (pandas + headless Chrome for PNG):
    ```bash
-   python workspace/marketing/export_diligence.py           # all products
-   python workspace/marketing/export_diligence.py lenbach # one product
+   python workspace/marketing/export_diligence.py              # all promoted
+   python workspace/marketing/export_diligence.py monopteros # one product
    # social-only: python workspace/marketing/tools/social_square.py
    ```
 5. **New vintage?** Move prior `ship/{id}/*_{OLDMMYYYY}.*` → `archive/{id}/{YYYY-MM-DD}_{reason}/`. Update `catalog.json` (`report_period`, diligence paths, `report_html`).
@@ -98,7 +98,7 @@ Locked 1080×1080 eye-catcher (`tools/social_square.py`): report-aligned dark he
 
 ## Do not use
 
-- `analysis/defined_theta_strategy_report*` — historical v1–v3 iterations; not canonical ship paths.
+- `analysis/starnberg_strategy_report*` — historical v1–v3 iterations; not canonical ship paths.
 - `analysis/marketing/` — redirect stub only.
 - Old per-product folders at `workspace/marketing/{id}/` (removed; use `ship/` + `_build/`).
 
