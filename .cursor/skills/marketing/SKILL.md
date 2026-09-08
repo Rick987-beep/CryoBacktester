@@ -93,17 +93,17 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
 
 ## Brand (Cryo/Aureas)
 
-Investor ship artefacts use the **cryo_aureas** pack from agent-commons:
+Investor ship artefacts are **rebuilt from pack-faithful templates** under
+`workspace/marketing/tools/templates/` (not a token alias of the old shell):
 
-| Artefact | Brand path |
-|----------|------------|
-| Strategy report HTML | `render_html` → `strategy_report_css_bundle` (pack bridge + Chart.js shell) |
-| Trade-log HTML | Reuses ship report `<style>` (must include bridge) |
-| Social square PNG | `tools/social_square.py` → pack primitive tokens only |
-| Vendored CSS | `ac-brand emit` → `workspace/marketing/_build/brand/` on every rebuild |
+| Artefact | Template | Pack mapping |
+|----------|----------|--------------|
+| Strategy report | `strategy_report.html.j2` + `strategy_report_layout.css` | `ca-document`, `ca-report-header` + hatch.inverse, `ca-eyebrow`, type roles (`ca-type-*`), `ca-section-label`, `ca-rule-*`, `ca-numbers`, `ca-bullets`, `ca-callout`, `ca-data` / `ca-table` |
+| Trade-log HTML | `trades.html.j2` | Same header / type / table language |
+| Social square PNG | `social_square.html.j2` | Header + hatch + `ca-eyebrow` / `ca-type-display` / `ca-section-label` / `ca-data` |
 
-Skills: **marketing** (this) · **strategy-report** · **brand** (`ac-brand paths` / `emit`).  
-Visual law: `~/agent-commons/docs/cryo-aureas/DESIGN_DECISION.md`.
+CSS bundle: emitted `document.css` + `strategy_report.css` bridge + layout.
+Skills: **marketing** · **strategy-report** · **brand**. Visual law: `DESIGN_DECISION.md`.
 
 ## Social square
 
