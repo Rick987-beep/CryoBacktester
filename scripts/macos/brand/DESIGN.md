@@ -60,6 +60,14 @@ Hexes are guides — match the locked PNG masters in `icons/` if regenerating.
 - Family cohesion = **same mark + same two-zone layout**; differentiation =
   **top-field hue** only.
 
+## Institutional documents (Aureas)
+
+Investor HTML (strategy reports, trade logs, social squares) is **not** styled
+from this macOS icon folder. Those artefacts use the Cryo/Aureas pack in
+agent-commons (`ac-brand`, skill **brand** / **marketing**). Canonical visual
+law: `~/agent-commons/docs/cryo-aureas/DESIGN_DECISION.md`. Product icon field
+hues above stay accents only (badges/icons).
+
 ## Asset inventory
 
 | File | Use |

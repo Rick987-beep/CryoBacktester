@@ -100,14 +100,19 @@ Investor ship artefacts are **rebuilt from pack-faithful templates** under
 |----------|----------|--------------|
 | Strategy report | `strategy_report.html.j2` + `strategy_report_layout.css` | `ca-document`, plain `ca-report-header` (no hatch), `ca-eyebrow`, type roles (`ca-type-*`), `ca-section-label`, `ca-rule-*`, `ca-numbers`, `ca-bullets`, `ca-callout`; KPI/highlight figures use **document** stack (not `font.data`) |
 | Trade-log HTML | `trades.html.j2` | Same header / type / table language |
-| Social square PNG | `social_square.html.j2` | Header + hatch + `ca-eyebrow` / `ca-type-display` / `ca-section-label` / `ca-data` |
+| Social square PNG | `social_square.html.j2` | Plain navy header, `ca-eyebrow` / `ca-type-display` / `ca-section-label`; KPI figures document stack @ 52px; equity/DD axes bound to plotted series |
 
-CSS bundle: emitted `document.css` + `strategy_report.css` bridge + layout.
+CSS bundle (reports/trades): emitted `document.css` + `strategy_report.css` bridge + layout.  
+Social square: pack tokens inlined in the template (no hatch).  
 Skills: **marketing** · **strategy-report** · **brand**. Visual law: `DESIGN_DECISION.md`.
 
 ## Social square
 
-Locked 1080×1080 eye-catcher (`tools/social_square.py`): report-aligned dark header, daily equity + drawdown (Chart.js), three KPIs, Aureas GmbH footer. Pitch scraped from the ship report `header-subtitle`. Preview: `_build/social_square_preview.html`. Requires Google Chrome / Chromium for PNG.
+Locked 1080×1080 eye-catcher (`tools/social_square.py` → `templates/social_square.html.j2`):
+plain navy header, daily equity + drawdown (Chart.js; Y-axes from series, not
+nice-tick inflation), three KPIs, Aureas GmbH footer. Pitch scraped from the
+ship report `header-subtitle`. Preview: `_build/social_square_preview.html`.
+Requires Google Chrome / Chromium for PNG.
 
 ## Investor copy rules
 
