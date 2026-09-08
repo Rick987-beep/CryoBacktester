@@ -60,11 +60,16 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
    python -m backtester.inspect trades RUN HASH --out workspace/marketing/_build/{id}/data/trades.csv
    # NAV: export combo equity_daily to _build/{id}/data/equity_daily.csv (nav_close column required)
    ```
-3. **Rebuild strategy report** (requires agent-commons on `PYTHONPATH`):
+3. **Rebuild strategy report** (Cryo/Aureas pack via agent-commons; emits `_build/brand/`):
    ```bash
-   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/render.py      # starnberg
-   PYTHONPATH="$HOME/agent-commons" python workspace/marketing/_build/{id}/build_report.py  # monopteros
+   # agent-commons required — auto-detected from ~/agent-commons, or:
+   export PYTHONPATH="$HOME/agent-commons${PYTHONPATH:+:$PYTHONPATH}"
+   # optional discovery: ~/agent-commons/.venv/bin/ac-brand paths
+   python workspace/marketing/_build/{id}/render.py      # starnberg
+   python workspace/marketing/_build/{id}/build_report.py  # monopteros
    ```
+   Ship HTML must embed the pack CSS bridge (`--ca-color-navy-900`). Use the
+   **strategy-report** + **brand** skills; never invent hex outside the pack.
 4. **Export diligence + social square** (pandas + headless Chrome for PNG):
    ```bash
    python workspace/marketing/export_diligence.py              # all promoted
@@ -85,6 +90,20 @@ Read [`workspace/marketing/catalog.json`](../../workspace/marketing/catalog.json
 4. Add entry to `catalog.json` (`products[]` with `report_html`, `diligence`, `rebuild` commands).
 5. Run build + `export_diligence.py {product_id}` (writes diligence + social PNG).
 6. Confirm `ship/{product_id}/` has 7 files and passes investor tests.
+
+## Brand (Cryo/Aureas)
+
+Investor ship artefacts use the **cryo_aureas** pack from agent-commons:
+
+| Artefact | Brand path |
+|----------|------------|
+| Strategy report HTML | `render_html` → `strategy_report_css_bundle` (pack bridge + Chart.js shell) |
+| Trade-log HTML | Reuses ship report `<style>` (must include bridge) |
+| Social square PNG | `tools/social_square.py` → pack primitive tokens only |
+| Vendored CSS | `ac-brand emit` → `workspace/marketing/_build/brand/` on every rebuild |
+
+Skills: **marketing** (this) · **strategy-report** · **brand** (`ac-brand paths` / `emit`).  
+Visual law: `~/agent-commons/docs/cryo-aureas/DESIGN_DECISION.md`.
 
 ## Social square
 
