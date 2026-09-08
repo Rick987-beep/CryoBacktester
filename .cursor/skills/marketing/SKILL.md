@@ -98,7 +98,7 @@ Investor ship artefacts are **rebuilt from pack-faithful templates** under
 
 | Artefact | Template | Pack mapping |
 |----------|----------|--------------|
-| Strategy report | `strategy_report.html.j2` + `strategy_report_layout.css` | `ca-document`, `ca-report-header` + hatch.inverse, `ca-eyebrow`, type roles (`ca-type-*`), `ca-section-label`, `ca-rule-*`, `ca-numbers`, `ca-bullets`, `ca-callout`, `ca-data` / `ca-table` |
+| Strategy report | `strategy_report.html.j2` + `strategy_report_layout.css` | `ca-document`, plain `ca-report-header` (no hatch), `ca-eyebrow`, type roles (`ca-type-*`), `ca-section-label`, `ca-rule-*`, `ca-numbers`, `ca-bullets`, `ca-callout`; KPI/highlight figures use **document** stack (not `font.data`) |
 | Trade-log HTML | `trades.html.j2` | Same header / type / table language |
 | Social square PNG | `social_square.html.j2` | Header + hatch + `ca-eyebrow` / `ca-type-display` / `ca-section-label` / `ca-data` |
 
