@@ -1,0 +1,128 @@
+{
+  "product_name": "Monopteros",
+  "strategy_name_live": "monopteros",
+  "strategy_id_backtester": "tudysho_monopteros",
+  "implementation_target": "CryoTrader \u2014 one strategy module with three NYC schedule windows. Prefer forking / replacing prior tudysho multi-slot wiring; behavior from reference/monopteros.py.",
+  "entry_time_semantics": "NYC wall-clock (America/New_York, DST-aware). Convert via to_nyc / to_utc before comparing to system UTC. See TIMEZONE.md.",
+  "system_time_semantics": "CryoTrader loop, logs, and Deribit timestamps run in UTC.",
+  "position_rules": {
+    "max_concurrent_positions": 1,
+    "max_entries_per_schedule_per_nyc_day": 1,
+    "monday_two_schedules": true,
+    "structure": "naked_strangle"
+  },
+  "position_rules_doc": "POSITION_RULES.md",
+  "slots": {
+    "monopteros": {
+      "combo_hash": "7e21b64f1d94",
+      "param_file": "params/monopteros.json",
+      "label": "Monopteros (three NYC schedules, one equity curve)",
+      "reserved": false,
+      "schedules": {
+        "mon_thu": {
+          "label": "Mon\u2013Thu afternoon (1-DTE)",
+          "live_calendar": {
+            "weekdays_nyc": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "entry_time_nyc": "14:00",
+            "dte": 1,
+            "expiry_note": "Next daily Deribit expiry (~08:00 UTC)"
+          },
+          "trade_params": {
+            "entry_time": "14:00",
+            "dte": 1,
+            "delta": 0.05,
+            "min_otm_pct": 2.2,
+            "turbulence_threshold": 70.0,
+            "stop_loss_pct": 0.0,
+            "proximity_stop_hours": 8.0,
+            "proximity_buffer_usd": 500.0,
+            "premium_sl_except_final_hours": 8.0,
+            "watch_until_utc_midnight": true,
+            "watch_until_utc_hour": 8
+          }
+        },
+        "mon_early": {
+          "label": "Monday early (0-DTE)",
+          "live_calendar": {
+            "weekdays_nyc": [
+              0
+            ],
+            "entry_time_nyc": "00:05",
+            "dte": 0,
+            "expiry_note": "Monday entry \u2192 Monday 08:00 UTC expiry (dte=0)"
+          },
+          "trade_params": {
+            "entry_time": "00:05",
+            "dte": 0,
+            "delta": 0.05,
+            "min_otm_pct": 1.0,
+            "turbulence_threshold": 99.0,
+            "stop_loss_pct": 6.0,
+            "proximity_stop_hours": 4.0,
+            "proximity_buffer_usd": 800.0,
+            "premium_sl_except_final_hours": 4.0,
+            "watch_until_utc_midnight": false,
+            "watch_until_utc_hour": 7
+          }
+        },
+        "fri": {
+          "label": "Friday late-morning (Sat expiry)",
+          "live_calendar": {
+            "weekdays_nyc": [
+              4
+            ],
+            "entry_time_nyc": "12:30",
+            "dte": 1,
+            "expiry_note": "Friday entry \u2192 Saturday 08:00 UTC expiry"
+          },
+          "trade_params": {
+            "entry_time": "12:30",
+            "dte": 1,
+            "delta": 0.06,
+            "min_otm_pct": 2.4,
+            "turbulence_threshold": 99.0,
+            "stop_loss_pct": 3.5,
+            "proximity_stop_hours": 8.0,
+            "proximity_buffer_usd": 1000.0,
+            "premium_sl_except_final_hours": 8.0,
+            "watch_until_utc_midnight": true,
+            "watch_until_utc_hour": 8
+          }
+        }
+      }
+    }
+  },
+  "locked_combo": {
+    "ui_run_id": 770,
+    "bundle": "tudysho_monopteros_20260904_105017.bundle",
+    "combo_hash": "7e21b64f1d94",
+    "nav_premium_pct": 0.5,
+    "max_qty_per_1btc_equity": 6.0,
+    "equity_drawdown_stop_pct": 5.0
+  },
+  "schedule_source_combos": {
+    "mon_thu": {
+      "combo_hash": "16dcb4f42c9a",
+      "ui_run_id": 768
+    },
+    "mon_early": {
+      "combo_hash": "b012cb51c397",
+      "ui_run_id": 764
+    },
+    "fri": {
+      "combo_hash": "fd39a836394d",
+      "ui_run_id": 766
+    }
+  },
+  "ignore_grid_params": [
+    "leg_min_price",
+    "equity_sl_only_final_hours",
+    "equity_sl_except_final_hours"
+  ],
+  "ignore_grid_params_note": "leg_min_price=0 (off). equity_sl_* hour windows are 0 on this lock; equity_drawdown_stop_pct=5 applies for the full hold."
+}

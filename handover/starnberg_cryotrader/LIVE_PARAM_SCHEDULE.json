@@ -1,0 +1,55 @@
+{
+  "product_name": "Starnberg",
+  "strategy_name_live": "starnberg",
+  "strategy_id_backtester": "theta_engine_v18",
+  "implementation_target": "CryoTrader \u2014 greenfield strategy module (no existing theta live strategy). Reuse execution / option-selection helpers from CryoTrader; behavior from reference/v18.py (+ v17/v14/_common).",
+  "entry_time_semantics": "UTC wall-clock. entry_time_utc=16:00 (same as CryoTrader system time). See TIMEZONE.md.",
+  "system_time_semantics": "CryoTrader loop, logs, and Deribit timestamps run in UTC.",
+  "position_rules": {
+    "max_concurrent_positions": 1,
+    "max_entries_per_utc_day": 1,
+    "always_hedged": true,
+    "weekend_cover": "skip"
+  },
+  "position_rules_doc": "POSITION_RULES.md",
+  "slots": {
+    "starnberg": {
+      "combo_hash": "a1d621a81904",
+      "param_file": "params/starnberg.json",
+      "label": "Starnberg (RichForce2 16 front + Full2Eq8 + wing)",
+      "reserved": false,
+      "live_calendar": {
+        "weekdays_utc": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "entry_time_utc": "16:00",
+        "dte": 1,
+        "expiry_note": "Next daily Deribit expiry (~08:00 UTC)"
+      }
+    }
+  },
+  "locked_combo": {
+    "ui_run_id": 746,
+    "bundle": "theta_engine_v18_20260824_143142.bundle",
+    "combo_hash": "a1d621a81904",
+    "book": "rf2_1600",
+    "stop_book": "full2_eq8",
+    "wing_pct": 0.07,
+    "min_width_usd": 2500.0
+  },
+  "ignore_grid_params": [
+    "alpha_rank",
+    "alpha_vrp",
+    "vrp_lo",
+    "vrp_hi",
+    "rank_lo",
+    "rank_hi",
+    "f_min",
+    "rich_mode"
+  ],
+  "ignore_grid_params_note": "rich_mode discovery closed (run 741). Live uses rich_mode=none; alpha_* / vrp_* / rank_* / f_min are inert on that path."
+}

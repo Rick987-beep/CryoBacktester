@@ -72,16 +72,55 @@ def test_favourites_view_shows_rows_after_star(store_with_run):
 
 
 def test_favourites_display_columns_order():
-    """Table columns: ID, Added, metrics, strategy, family, note."""
+    """Table columns: ID, Run, Added, metrics, strategy, family, note."""
     from backtester.ui.views.favourites_view import _COL_TITLES, _DISPLAY_COLS
 
     titles = [_COL_TITLES[c] for c in _DISPLAY_COLS]
     assert titles == [
-        "ID", "Added", "Score", "Total PnL", "Ann. Return", "Sharpe",
+        "ID", "Run", "Added", "Score", "Total PnL", "Ann. Return", "Sharpe",
         "Strategy", "Family", "Note",
     ]
     assert "params_str" not in _DISPLAY_COLS
     assert "name" not in _DISPLAY_COLS
+
+
+def test_fav_by_id_disambiguates_duplicate_hashes(store_with_run, tiny_grid_result):
+    """Same combo_hash from two runs must resolve by fav primary key, not hash."""
+    from backtester.ui.services.store_service import key_hash
+    from backtester.ui.views.favourites_view import _fav_by_id
+
+    store, run_a, result = store_with_run
+    key = result.keys[0]
+    h = key_hash(key)
+
+    bundle_b = store.write_bundle(tiny_grid_result, strategy="fav_test_dup", runtime_s=1.0)
+    run_b = store.register_bundle(bundle_b)
+    assert run_b != run_a
+
+    id_a = store.add_favourite(
+        run_id=run_a, combo_key=key, name="from A", note="note A", strategy="fav_test",
+    )
+    id_b = store.add_favourite(
+        run_id=run_b, combo_key=key, name="from B", note="note B", strategy="fav_test",
+    )
+    favs = store.list_favourites()
+    assert {f.combo_hash for f in favs if f.id in (id_a, id_b)} == {h}
+
+    got_a = _fav_by_id(favs, id_a)
+    got_b = _fav_by_id(favs, id_b)
+    assert got_a is not None and got_a.note == "note A" and got_a.run_id == run_a
+    assert got_b is not None and got_b.note == "note B" and got_b.run_id == run_b
+    assert _fav_by_id(favs, 999999) is None
+
+
+def test_combo_key_in_result(store_with_run):
+    from backtester.ui.views.favourites_view import combo_key_in_result
+
+    store, run_id, result = store_with_run
+    assert combo_key_in_result(result, result.keys[0]) is True
+    assert combo_key_in_result(result, (("delta", 0.99), ("dte", 99))) is False
+    assert combo_key_in_result(None, result.keys[0]) is False
+    assert combo_key_in_result(result, None) is False
 
 
 def test_format_added_at():
@@ -96,12 +135,14 @@ def test_favourites_column_widths_increased():
     from backtester.ui.views.favourites_view import (
         _ADDED_COL_WIDTH,
         _ID_COL_WIDTH,
+        _RUN_COL_WIDTH,
         _SCORE_COL_WIDTH,
         _SHARPE_COL_WIDTH,
         _TOTAL_PNL_COL_WIDTH,
     )
 
     assert _ID_COL_WIDTH >= 105
+    assert _RUN_COL_WIDTH >= 50
     assert _ADDED_COL_WIDTH >= 130
     assert _SCORE_COL_WIDTH >= 70
     assert _TOTAL_PNL_COL_WIDTH >= 90
@@ -111,6 +152,7 @@ def test_favourites_column_widths_increased():
 def test_favourites_initial_sort_newest_first():
     """Tabulator config sorts by hidden ISO added_at column descending."""
     from backtester.ui.views.favourites_view import (
+        _FAV_ID_COL,
         _SORT_COL,
         _favourites_column_config,
     )
@@ -119,6 +161,9 @@ def test_favourites_initial_sort_newest_first():
     assert cfg["initialSort"] == [{"column": _SORT_COL, "dir": "desc"}]
     sort_col = next(c for c in cfg["columns"] if c["field"] == _SORT_COL)
     assert sort_col["visible"] is False
+    fav_id_col = next(c for c in cfg["columns"] if c["field"] == _FAV_ID_COL)
+    assert fav_id_col["visible"] is False
+    assert any(c["field"] == "Run" for c in cfg["columns"])
 
 
 def test_params_lines_from_fav_one_per_line(store_with_run):

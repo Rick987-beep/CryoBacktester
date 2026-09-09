@@ -24,14 +24,16 @@ from backtester.ui.services.store_service import key_from_json
 log = get_ui_logger(__name__)
 
 _DISPLAY_COLS = [
-    "combo_id", "added_at", "score", "total_pnl", "ann_return", "sharpe",
+    "combo_id", "run_id", "added_at", "score", "total_pnl", "ann_return", "sharpe",
     "strategy", "family", "note",
 ]
 
 _SORT_COL = "added_at_sort"
+_FAV_ID_COL = "_fav_id"
 
 _COL_TITLES = {
     "combo_id":   "ID",
+    "run_id":     "Run",
     "added_at":   "Added",
     "score":      "Score",
     "total_pnl":  "Total PnL",
@@ -43,6 +45,7 @@ _COL_TITLES = {
 }
 
 _ID_COL_WIDTH = 106          # +10% vs original 96
+_RUN_COL_WIDTH = 64
 _ADDED_COL_WIDTH = 138       # dd-mm-yyyy hh:mm
 _SCORE_COL_WIDTH = 70        # +25% vs 56
 _TOTAL_PNL_COL_WIDTH = 90    # +25% vs 72
@@ -107,6 +110,7 @@ def _favourites_column_config() -> dict:
         "initialSort": [{"column": _SORT_COL, "dir": "desc"}],
         "columns": [
             {"field": "ID", "width": _ID_COL_WIDTH, "widthGrow": 0, "widthShrink": 0, **no_sort},
+            {"field": "Run", "width": _RUN_COL_WIDTH, "widthGrow": 0, "widthShrink": 0, **no_sort},
             {"field": "Added", "width": _ADDED_COL_WIDTH, "widthGrow": 0, "widthShrink": 0, **no_sort},
             {"field": "Score", "width": _SCORE_COL_WIDTH, "widthGrow": 0, "maxWidth": _SCORE_COL_WIDTH, **no_sort},
             {"field": "Total PnL", "width": _TOTAL_PNL_COL_WIDTH, "widthGrow": 0,
@@ -120,16 +124,25 @@ def _favourites_column_config() -> dict:
              "width": 100, **no_sort},
             {"field": "Note", "minWidth": 80, "widthGrow": 2, **no_sort},
             {"field": _SORT_COL, "visible": False, "sorter": "string"},
+            {"field": _FAV_ID_COL, "visible": False},
         ],
     }
 
 
-def _fav_by_combo_id(favs: list, combo_id: str):
-    """Look up a favourite by combo_hash (stable across table re-sorts)."""
+def _fav_by_id(favs: list, fav_id: int):
+    """Look up a favourite by primary key (unique even when combo_hash collides)."""
     for fav in favs:
-        if fav.combo_hash == combo_id:
+        if fav.id == fav_id:
             return fav
     return None
+
+
+def combo_key_in_result(result, key) -> bool:
+    """True if *key* is a combo in the loaded grid result."""
+    if result is None or key is None:
+        return False
+    key_to_idx = getattr(result, "key_to_idx", None) or {}
+    return key in key_to_idx
 
 
 def build_favourites_view(state, store, cache) -> pn.Column:
@@ -217,7 +230,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         favs = store.list_favourites()
         _fav_rows["data"] = favs
         if not favs:
-            return pd.DataFrame(columns=_DISPLAY_COLS + [_SORT_COL, "_fav_id"])
+            return pd.DataFrame(columns=_DISPLAY_COLS + [_SORT_COL, _FAV_ID_COL])
         rows = []
         for fav in favs:
             raw_added = fav.added_at or ""
@@ -225,6 +238,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
             fam_id = family_for(strat)
             rows.append({
                 "combo_id":   fav.combo_hash or "",
+                "run_id":     fav.run_id,
                 "added_at":   _format_added_at(raw_added),
                 "score":      round(fav.score, 4) if fav.score is not None else None,
                 "total_pnl":  round(fav.total_pnl, 2) if fav.total_pnl is not None else None,
@@ -238,7 +252,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
                 "family_id":  fam_id,
                 "note":       fav.note or "",
                 _SORT_COL:    raw_added,
-                "_fav_id":    fav.id,
+                _FAV_ID_COL:  fav.id,
             })
         df = pd.DataFrame(rows)
         selected = family_filter.value
@@ -260,7 +274,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
             tab_holder[:] = [empty_msg]
             return
 
-        tab_cols = _DISPLAY_COLS + [_SORT_COL]
+        tab_cols = _DISPLAY_COLS + [_SORT_COL, _FAV_ID_COL]
         display_df = df[tab_cols].copy()
         display_df.columns = [_COL_TITLES.get(c, c) for c in tab_cols]
 
@@ -271,7 +285,7 @@ def build_favourites_view(state, store, cache) -> pn.Column:
             sizing_mode="stretch_width",
             height=400,
             layout="fit_columns",
-            hidden_columns=[_SORT_COL],
+            hidden_columns=[_SORT_COL, _FAV_ID_COL],
             configuration=_favourites_column_config(),
             stylesheets=[_TABLE_LAYOUT_CSS],
             formatters={
@@ -295,16 +309,20 @@ def build_favourites_view(state, store, cache) -> pn.Column:
                 save_note_btn.disabled = True
                 return
             idx = idxs[0]
-            combo_id = ""
+            fav_id = None
             if idx < len(tab.value):
-                combo_id = str(tab.value.iloc[idx].get("ID", ""))
-            fav = _fav_by_combo_id(_fav_rows["data"], combo_id)
+                raw = tab.value.iloc[idx].get(_FAV_ID_COL)
+                try:
+                    fav_id = int(raw) if raw is not None and raw == raw else None
+                except (TypeError, ValueError):
+                    fav_id = None
+            fav = _fav_by_id(_fav_rows["data"], fav_id) if fav_id is not None else None
             selected_fav["row"] = idx
             selected_fav["fav"] = fav
-            _set_action_buttons_enabled(True)
+            _set_action_buttons_enabled(fav is not None)
             note_input.value = fav.note if fav else ""
             _set_params_text(_params_lines_from_fav(fav))
-            save_note_btn.disabled = False
+            save_note_btn.disabled = fav is None
 
         tab.param.watch(_on_tab_selection, "selection")
         tab_holder[:] = [tab]

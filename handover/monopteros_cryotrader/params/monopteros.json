@@ -1,0 +1,92 @@
+{
+  "capital_usd": 100000.0,
+  "combo_hash": "7e21b64f1d94",
+  "date_range": [
+    "2025-04-11",
+    "2026-08-31"
+  ],
+  "equity_drawdown_stop_pct": 5.0,
+  "equity_sl_except_final_hours": 0.0,
+  "equity_sl_only_final_hours": 0.0,
+  "leg_min_price": 0.0,
+  "max_concurrent_positions": 1,
+  "max_qty_per_1btc_equity": 6.0,
+  "nav_premium_pct": 0.5,
+  "notes": "Marketing lock Monopteros (Aug-2026). One strategy with three NYC schedules; global sizing 0.5% NAV / max 6 contracts; equity DD stop 5%. Naked shorts (no wings).",
+  "product_name": "Monopteros",
+  "run_bundle": "tudysho_monopteros_20260904_105017.bundle",
+  "schedule_ids": [
+    "mon_thu",
+    "mon_early",
+    "fri"
+  ],
+  "schedule_source": "Aug-2026 research lock: mon_thu=16dcb4f42c9a/768, mon_early=b012cb51c397/764, fri=fd39a836394d/766 (watch windows from CryoTrader slot-02.toml @ 2026-08-28)",
+  "schedules": {
+    "fri": {
+      "delta": 0.06,
+      "dte": 1,
+      "entry_time": "12:30",
+      "entry_time_nyc": "12:30",
+      "expiry_note": "Friday entry \u2192 Saturday 08:00 UTC expiry",
+      "label": "Friday late-morning (Sat expiry)",
+      "min_otm_pct": 2.4,
+      "premium_sl_except_final_hours": 8.0,
+      "proximity_buffer_usd": 1000.0,
+      "proximity_stop_hours": 8.0,
+      "stop_loss_pct": 3.5,
+      "turbulence_threshold": 99.0,
+      "watch_until_utc_hour": 8,
+      "watch_until_utc_midnight": true,
+      "weekdays_nyc": [
+        4
+      ]
+    },
+    "mon_early": {
+      "delta": 0.05,
+      "dte": 0,
+      "entry_time": "00:05",
+      "entry_time_nyc": "00:05",
+      "expiry_note": "Monday entry \u2192 Monday 08:00 UTC expiry (dte=0)",
+      "label": "Monday early (0-DTE)",
+      "min_otm_pct": 1.0,
+      "premium_sl_except_final_hours": 4.0,
+      "proximity_buffer_usd": 800.0,
+      "proximity_stop_hours": 4.0,
+      "stop_loss_pct": 6.0,
+      "turbulence_threshold": 99.0,
+      "watch_until_utc_hour": 7,
+      "watch_until_utc_midnight": false,
+      "weekdays_nyc": [
+        0
+      ]
+    },
+    "mon_thu": {
+      "delta": 0.05,
+      "dte": 1,
+      "entry_time": "14:00",
+      "entry_time_nyc": "14:00",
+      "expiry_note": "Next daily Deribit expiry (~08:00 UTC)",
+      "label": "Mon\u2013Thu afternoon (1-DTE)",
+      "min_otm_pct": 2.2,
+      "premium_sl_except_final_hours": 8.0,
+      "proximity_buffer_usd": 500.0,
+      "proximity_stop_hours": 8.0,
+      "stop_loss_pct": 0.0,
+      "turbulence_threshold": 70.0,
+      "watch_until_utc_hour": 8,
+      "watch_until_utc_midnight": true,
+      "weekdays_nyc": [
+        0,
+        1,
+        2,
+        3
+      ]
+    }
+  },
+  "slot_id": "monopteros",
+  "strategy_id_backtester": "tudysho_monopteros",
+  "strategy_name_live_suggested": "monopteros",
+  "structure": "naked_strangle",
+  "take_profit_pct": 0.0,
+  "ui_run_id": 770
+}

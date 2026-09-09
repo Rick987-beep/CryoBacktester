@@ -1,0 +1,152 @@
+{
+  "slot_id": "monopteros",
+  "label": "Monopteros \u2014 three NYC schedules, 0.5% NAV, equity DD 5%",
+  "product_name": "Monopteros",
+  "combo_hash": "7e21b64f1d94",
+  "combo_idx": 0,
+  "ui_run_id": 770,
+  "run_bundle": "tudysho_monopteros_20260904_105017.bundle",
+  "strategy": "tudysho_monopteros",
+  "date_range": [
+    "2025-04-11",
+    "2026-08-31"
+  ],
+  "capital_usd": 100000.0,
+  "params_full_grid": {
+    "equity_drawdown_stop_pct": 5.0,
+    "equity_sl_except_final_hours": 0.0,
+    "equity_sl_only_final_hours": 0.0,
+    "leg_min_price": 0.0,
+    "max_qty_per_1btc_equity": 6.0,
+    "nav_premium_pct": 0.5
+  },
+  "params_for_live": {
+    "slot_id": "monopteros",
+    "product_name": "Monopteros",
+    "strategy_id_backtester": "tudysho_monopteros",
+    "strategy_name_live_suggested": "monopteros",
+    "combo_hash": "7e21b64f1d94",
+    "ui_run_id": 770,
+    "run_bundle": "tudysho_monopteros_20260904_105017.bundle",
+    "date_range": [
+      "2025-04-11",
+      "2026-08-31"
+    ],
+    "capital_usd": 100000.0,
+    "equity_drawdown_stop_pct": 5.0,
+    "equity_sl_except_final_hours": 0.0,
+    "equity_sl_only_final_hours": 0.0,
+    "leg_min_price": 0.0,
+    "max_qty_per_1btc_equity": 6.0,
+    "nav_premium_pct": 0.5,
+    "structure": "naked_strangle",
+    "take_profit_pct": 0.0,
+    "max_concurrent_positions": 1,
+    "schedules": {
+      "mon_thu": {
+        "label": "Mon\u2013Thu afternoon (1-DTE)",
+        "entry_time": "14:00",
+        "dte": 1,
+        "delta": 0.05,
+        "min_otm_pct": 2.2,
+        "turbulence_threshold": 70.0,
+        "stop_loss_pct": 0.0,
+        "proximity_stop_hours": 8.0,
+        "proximity_buffer_usd": 500.0,
+        "premium_sl_except_final_hours": 8.0,
+        "watch_until_utc_midnight": true,
+        "watch_until_utc_hour": 8,
+        "weekdays_nyc": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "entry_time_nyc": "14:00",
+        "expiry_note": "Next daily Deribit expiry (~08:00 UTC)"
+      },
+      "mon_early": {
+        "label": "Monday early (0-DTE)",
+        "entry_time": "00:05",
+        "dte": 0,
+        "delta": 0.05,
+        "min_otm_pct": 1.0,
+        "turbulence_threshold": 99.0,
+        "stop_loss_pct": 6.0,
+        "proximity_stop_hours": 4.0,
+        "proximity_buffer_usd": 800.0,
+        "premium_sl_except_final_hours": 4.0,
+        "watch_until_utc_midnight": false,
+        "watch_until_utc_hour": 7,
+        "weekdays_nyc": [
+          0
+        ],
+        "entry_time_nyc": "00:05",
+        "expiry_note": "Monday entry \u2192 Monday 08:00 UTC expiry (dte=0)"
+      },
+      "fri": {
+        "label": "Friday late-morning (Sat expiry)",
+        "entry_time": "12:30",
+        "dte": 1,
+        "delta": 0.06,
+        "min_otm_pct": 2.4,
+        "turbulence_threshold": 99.0,
+        "stop_loss_pct": 3.5,
+        "proximity_stop_hours": 8.0,
+        "proximity_buffer_usd": 1000.0,
+        "premium_sl_except_final_hours": 8.0,
+        "watch_until_utc_midnight": true,
+        "watch_until_utc_hour": 8,
+        "weekdays_nyc": [
+          4
+        ],
+        "entry_time_nyc": "12:30",
+        "expiry_note": "Friday entry \u2192 Saturday 08:00 UTC expiry"
+      }
+    },
+    "schedule_ids": [
+      "mon_thu",
+      "mon_early",
+      "fri"
+    ],
+    "schedule_source": "Aug-2026 research lock: mon_thu=16dcb4f42c9a/768, mon_early=b012cb51c397/764, fri=fd39a836394d/766 (watch windows from CryoTrader slot-02.toml @ 2026-08-28)",
+    "notes": "Marketing lock Monopteros (Aug-2026). One strategy with three NYC schedules; global sizing 0.5% NAV / max 6 contracts; equity DD stop 5%. Naked shorts (no wings)."
+  },
+  "n_trades": 382,
+  "total_pnl_usd": 113294.2360534668,
+  "total_return_pct": 113.2942360534668,
+  "sharpe": 4.100724697113037,
+  "sortino": 4.7197069659719855,
+  "calmar": 6.3733500796569516,
+  "max_dd_pct": 11.349560737609863,
+  "ann_return": 0.7233473062515259,
+  "omega": 2.909510612487793,
+  "win_rate_pct": 97.90575916230367,
+  "profit_factor": 3.735413701259086,
+  "median_pnl_usd": 368.9393310546875,
+  "max_win_usd": 951.1549682617188,
+  "max_loss_usd": -13454.552734375,
+  "fees_usd": 19770.2109375,
+  "exit_reasons": {
+    "expiry": 376,
+    "strike_proximity_stop": 4,
+    "stop_loss": 2
+  },
+  "favourite_note": "Monopteros master: mon_thu=16dcb4f42c9a (768), mon_early=b012cb51c397 (764), fri=fd39a836394d (766); nav=0.5% qty=6 eqDD=5%; window 2025-04-11\u21922026-08-31.",
+  "backtest_caveat": "Single master combo from run 770. Three schedules share one equity curve. Equity drawdown stop is on every ticket but did not fire in this sample (376 expiry / 4 proximity / 2 premium SL).",
+  "marketing_report": "workspace/marketing/ship/monopteros/monopteros_strategyreport_082026.html",
+  "schedule_source_combos": {
+    "mon_thu": {
+      "combo_hash": "16dcb4f42c9a",
+      "ui_run_id": 768
+    },
+    "mon_early": {
+      "combo_hash": "b012cb51c397",
+      "ui_run_id": 764
+    },
+    "fri": {
+      "combo_hash": "fd39a836394d",
+      "ui_run_id": 766
+    }
+  }
+}

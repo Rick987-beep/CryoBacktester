@@ -1,5 +1,5 @@
 ---
-description: Theta Engine baselines — Mode C, v14–v18 locks, Defined Theta marketing name
+description: Theta Engine baselines — Mode C, v14–v18 locks, Starnberg marketing name
 alwaysApply: true
 ---
 
@@ -24,6 +24,20 @@ v10/v11 forked these entries then added Greeks / sticky wings / perps — do not
 
 `theta_engine_v13` is a `base` fork with a **paired far-OTM wing** on every short (`wing_strike_pct` / `wing_debit_pct` / `wing_expiry`). Strike is % of the short strike (put K×(1−pct), call K×(1+pct)); qty is % of short credit, floored at 0.1 and capped at short qty — no budget skips. Short stays the boss; TP/SL are short-leg only. Default `track_investor_greeks=1` meters shorts-only vs full-book D/G (vega is a meter, not a gate) into `investor_greeks.parquet`. v9 remains the historical run-692 artefact.
 
+# Theta Engine v19 — Lenbach inventory discovery
+
+`theta_engine_v19` forks **`base`** (not v9) to rebuild the medium-DTE short book after Lenbach (`theta_engine_base` / run 759 / `fc678e1a6b1e`) blew up in Aug 2026. DATE_RANGE `2025-04-11` → `2026-08-31`. Fixed exits for Steps 1–2: credit SL **2.0×**, TP **0.60**. Exit redesign (book stop) = Step 3; wings = Step 4.
+
+**Step 1 (run 775 / `theta_engine_v19_20260908_091808`):** `max_concurrent` × `peak_dd_pause_pct` — occupancy drives PnL/DD almost linearly; peak-DD pause ≈ inert. Soft band ~mc **8–10**. Artefact: `V19_STEP1_DISCOVERY_GRID`. Audit: `analysis/run_audit/theta_engine_v19_20260908_091808/`.
+
+**Step 2 (closed — run 776 / `theta_engine_v19_20260908_135724`, 3000 cells):** working grid was `V19_STEP2_DISCOVERY_GRID` — mc `{8,10}` × **side-force** (`side_imbalance_limit`, `0`=pure skew) × **refill** (`force_after_days`, `min_entry_gap_days`) × packed `launch_gate`. Audit: `analysis/run_audit/theta_engine_v19_20260908_135724/` (curve-fit **LOW**).
+
+Step 2 learnings (pause checkpoint 2026-09-09):
+- **`side_imbalance_limit` dominates** (η² PnL ~0.62). Skew-only (`0`) best full-sample Sharpe/PnL but **worst Aug drop** (~12–14% peak→trough). Limit **`1` is dangerous** (destroys edge). Softer force **`2`–`4`** cuts Aug trough while keeping usable books.
+- **Faster refill helps**: `force_after_days=3` best; longer force hurts. `min_entry_gap` 0–1 ≈ same; gap ≥2 bleeds PnL.
+- **`launch_gate` ≈ noise** on this grid (η² ~0).
+- Live picks (not locks): `c823cd1f9665` (mc8 / imb4 / force3 / gap0 / off — S~1.53, DD~11%, Aug drop~8%) and `bc7b45e82c5c` (mc8 / imb2 / force3 / gap1 / skip_5d_0.08 — S~1.50, DD~9%, Aug drop~7%). Control skew-only mc10 Aug drop ~14%.
+- **Next = Step 3** (exit redesign / book stop). Keep Step 1–2 exits fixed (SL **2.0×**, TP **0.60**) until Step 3. Wings = Step 4. Chat resume: agent transcript `0cb1107c-b7a0-421b-b9ca-484f420047c1`.
 # Theta Engine v14 short-DTE
 
 **#1 book:** **RichForce2 15 skew6** — run 727 hash `eff2523b17b8`. VRP≥4 else force-2d @ 15:00 UTC, skew6, 1 DTE, 25Δ cheaper, qty 2, hold, no SL/TP. Do not treat the other three as co-equal defaults.
@@ -34,9 +48,9 @@ Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c
 
 `theta_engine_v18` forks `v17` / RichForce2 16 front with stop exits and an optional 1:1 further-OTM wing. **Run 742** closed the wide stop search: credit SL never beat naked; tight prox / tight equity hurt. Working stop baselines (packed `stop_book`): **Late1Eq5** (`late1_eq5` / `d550e3296f17` — prox 1@4 + eq 5%) and **Full2Eq8** (`full2_eq8` / `731b1d03b15d` — prox 2@16 + eq 8%). `wing_pct` = target width as fraction of short strike (same expiry, equal qty); **0 = naked**. `min_width_usd` floors listed outer width (**0 = no floor**); no `max_width_usd`. Design-A 252 stop grid kept as `V18_STOP_DISCOVERY_GRID`. Investor D/G sidecar retained.
 
-# Defined Theta (v18 marketing lock)
+# Starnberg (v18 marketing lock)
 
-**Product name:** **Defined Theta** (≤3 words; use in marketing / investor copy). Strategy ID stays `theta_engine_v18`.
+**Product name:** **Starnberg** (≤3 words; use in marketing / investor copy). Strategy ID stays `theta_engine_v18`.
 
 **Favourite cell (run 746):** combo `a1d621a81904` — `stop_book=full2_eq8` (Full2Eq8), `wing_pct=0.07`, `min_width_usd=2500`, RichForce2 16 front. ~182 trades, ~90% WR, Sharpe ~4.0 (range ~2025-08-18 → 2026-08-22). Star note: “1DTE perfection: with long wings, high sharpe, 90% win rate but not higher.”
 
