@@ -196,13 +196,13 @@ def load_experiment(name):
     # type: (str) -> Experiment
     """Load an experiment by name (without the .toml extension).
 
-    Searches in backtester/experiments/<name>.toml.
+    Searches in workspace/experiments/<name>.toml.
     """
     path = os.path.join(EXPERIMENTS_DIR, f"{name}.toml")
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Experiment file not found: {path}\n"
-            f"Expected location: backtester/experiments/{name}.toml"
+            f"Expected location: workspace/experiments/{name}.toml"
         )
     with open(path, "rb") as f:
         data = tomllib.load(f)

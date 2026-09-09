@@ -1,14 +1,15 @@
 # Data plane
 
-Market history, indicator caches, and backtest run artifacts live here — **not**
-in the shippable `backtester/` product package.
+Market history, indicator caches, and **engine artefacts** live here — **not**
+in the shippable `backtester/` product package and **not** in the private
+workspace (user research interpretation lives under `workspace/analysis/`).
 
 | Subdir | Contents |
 |---|---|
 | `market/` | Deribit options/spot parquet snapshots (+ nested `macro/` calendars) |
 | `macro/` | Synced macro series (e.g. `deribit/BTC_DVOL/` hive partitions) |
 | `klines/` | Binance kline cache used by indicators |
-| `runs/` | HTML reports + `*.bundle` UI run artifacts |
+| `runs/` | HTML reports + `*.bundle` UI run artifacts (engine output) |
 | `jobs/` | Detached job queue (`queue.json`, per-job `spec.json` / `status.json` / `out/*.bundle`) |
 | `tardis_raw/` | Optional Tardis ingest output |
 | `archive/` | Cold/legacy data blobs |

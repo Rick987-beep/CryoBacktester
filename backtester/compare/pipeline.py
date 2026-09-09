@@ -52,7 +52,10 @@ def run_pipeline(spec: RunSpec) -> Path:
         log_stage("pull_blotter_skipped", path=str(blotter))
     elif spec.skip_pull:
         # fallback to cached copy from prior livevsbtfills pull
-        cached = _repo_root() / "analysis/livevsbtfills/data/slot-02.jsonl"
+        cached = (
+            _repo_root()
+            / "workspace/archive/analysis/livevsbtfills/data/slot-02.jsonl"
+        )
         if cached.exists():
             blotter.write_text(cached.read_text())
             log_stage("pull_blotter_cached", source=str(cached))
@@ -143,7 +146,7 @@ def run_pipeline(spec: RunSpec) -> Path:
     write_report_html(manifest, comparison, forensics, spec.out_dir / "report.html")
 
     # Update LATEST pointer
-    latest = repo / "analysis/livecompare/LATEST"
+    latest = repo / "workspace/analysis/livecompare/LATEST"
     try:
         latest.write_text(str(spec.out_dir.relative_to(repo)) + "\n")
     except ValueError:

@@ -17,7 +17,7 @@ def _repo_root() -> Path:
 
 
 def load_strategy_map() -> dict:
-    path = _repo_root() / "analysis/livecompare/config/strategy_map.yaml"
+    path = _repo_root() / "workspace/analysis/livecompare/config/strategy_map.yaml"
     return yaml.safe_load(path.read_text())
 
 

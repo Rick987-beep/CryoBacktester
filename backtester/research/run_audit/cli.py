@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--out-dir",
         type=Path,
         default=None,
-        help="Write audit.json (+ report.html) here (default: analysis/run_audit/<bundle_stem>)",
+        help="Write audit.json (+ report.html) here (default: workspace/analysis/run_audit/<bundle_stem>)",
     )
     p.add_argument(
         "--html",
@@ -77,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def default_out_dir(bundle_name: str) -> Path:
     stem = bundle_name.removesuffix(".bundle")
-    return repo_root() / "analysis" / "run_audit" / stem
+    return repo_root() / "workspace" / "analysis" / "run_audit" / stem
 
 
 def run_audit_cli(argv: list[str] | None = None) -> int:

@@ -20,7 +20,7 @@ def favourite_to_toml(fav) -> str:
     """Return an experiment-style TOML string for *fav* (a FavRow).
 
     The snippet is compatible with the TOML experiment files in
-    ``backtester/experiments/`` and can be parsed by ``tomllib``.
+    ``workspace/experiments/`` and can be parsed by ``tomllib``.
     """
     from backtester.ui.services.store_service import key_from_json
 

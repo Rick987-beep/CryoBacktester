@@ -22,7 +22,7 @@
 ## Package layout
 
 ```
-analysis/livecompare/          # config + runs output
+workspace/analysis/livecompare/          # config + runs output
 backtester/compare/            # Python package
 .cursor/skills/livecompare/    # agent skill
 ```

@@ -23,7 +23,10 @@ def check(spec: RunSpec, date_from: str, date_to: str) -> Tuple[dict, List[Parit
     while d <= d1:
         opts = data_dir / f"options_{d.isoformat()}.parquet"
         spot = data_dir / f"spot_track_{d.isoformat()}.parquet"
-        inc_opts = _repo_root() / f"analysis/deribit_btc_options_jul2026/data/options_{d.isoformat()}_INCOMPLETE.parquet"
+        inc_opts = _repo_root() / (
+            "workspace/archive/analysis/deribit_btc_options_jul2026/data/"
+            f"options_{d.isoformat()}_INCOMPLETE.parquet"
+        )
         row = {
             "date": d.isoformat(),
             "options": opts.exists(),

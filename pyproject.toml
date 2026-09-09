@@ -5,8 +5,8 @@ markers = [
     "perf: inner-worker speedup gate (skip unless CRYOBT_RUN_PERF=1)",
 ]
 addopts = "-m 'not live and not slow_ui'"
-testpaths = ["workspace/tests", "backtester/calm_nights/tests", "tests"]
-norecursedirs = ["backtester/data", "backtester/data_archive", "backtester/data_spot_rebuilt", "backtester/reports", "backtester/newstrategy", "data"]
+testpaths = ["workspace/tests", "backtester/indicators/calm_nights/tests", "tests"]
+norecursedirs = ["backtester/data", "backtester/data_archive", "backtester/data_spot_rebuilt", "backtester/reports", "data"]
 
 # Pylance / Pyright: same interpreter as AGENTS.md (Python 3.12, .venv).
 [tool.pyright]

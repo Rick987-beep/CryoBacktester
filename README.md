@@ -104,7 +104,8 @@ CryoBacktester/
 │   │   ├── supertrend.py
 │   │   ├── turbulence.py
 │   │   ├── trend_regime.py
-│   │   └── ingest_klines.py
+│   │   ├── ingest_klines.py
+│   │   └── calm_nights/           # Calm-nights helpers (cadysho)
 │   ├── ui/                        # Interactive Research UI (Panel + Bokeh + Plotly)
 │   │   ├── desktop.py             # Native window: python -m backtester.ui.desktop
 │   │   ├── app.py                 # Browser CLI: python -m backtester.ui.app
@@ -118,34 +119,38 @@ CryoBacktester/
 │   ├── strategies/                # Public blueprint_howto only
 │   ├── catalog.py                 # Loads private workspace or public fallback
 │   ├── public_catalog.py          # Blueprint-only registry
-│   ├── calm_nights/               # Calm-nights helpers (cadysho)
 │   ├── ingest/
 │   │   ├── check_data_completeness.py
 │   │   ├── check_parquet.py
 │   │   └── tardis/                # Tardis bulk download pipeline
-│   ├── data/                      # Parquet snapshots (gitignored)
-│   ├── archive/                   # Archived data + legacy strategies (gitignored)
-│   └── reports/                   # Generated HTML / run bundles (gitignored)
+│   ├── data/                      # Symlink → ../data/market
+│   ├── archive/                   # Product graveyard (legacy strategies / planning)
+│   └── reports/                   # Symlink → ../data/runs
 │
 ├── scripts/
 │   └── macos/
 │       ├── CryoBacktester.app     # Thin Dock launcher → .venv desktop UI
 │       └── brand/                 # Cryo family icons + DESIGN.md
-├── workspace/                     # PRIVATE submodule (CryoBacktester-workspace)
+├── workspace/                     # PRIVATE submodule — user work
+│   ├── strategies/ experiments/ marketing/
+│   ├── analysis/                  # ACTIVE research I/O
+│   ├── archive/                   # CLOSED research
+│   └── handover/                  # CryoTrader port packs
+├── data/                          # Engine artefacts: runs/, jobs/, market/, …
 ├── tests/                         # Integration + UI tests
 │   └── ui/
 ├── docs/
-├── analysis/                      # One-off analysis artifacts
-├── handover/                      # External handover packages
+├── analysis/                      # Redirect stub only → workspace/analysis|archive
 └── pyproject.toml
 ```
 
 **Gitignored directories (local work, not code):**
 - `data/market/` — parquet snapshots (gitignored)
-- `backtester/archive/` — archived parquets + planning + legacy strategies
 - `data/runs/` — generated HTML reports and run bundles
+- `data/jobs/` — detached job dirs
 - `backtester/ui/state/` — SQLite UI state DB + desktop.lock
 - `backtester/indicators/data/` — cached kline data
+- `workspace/analysis/**` blobs — keep README/config only
 
 ---
 
@@ -387,7 +392,7 @@ In-sample (IS) uses the wide `PARAM_GRID` (honest search space). Out-of-sample (
 
 ### Why this separation matters
 - `PARAM_GRID` in each strategy file is the wide, unbiased discovery grid. **Never narrow it post-hoc.**
-- Experiment TOMLs in `backtester/experiments/` capture "what we think is good and why" — separately from the strategy definition.
+- Experiment TOMLs in `workspace/experiments/` capture "what we think is good and why" — separately from the strategy definition.
 - WFO uses the wide grid for its IS runs, so the IS optimiser has a real search problem, not a trivially narrow space around a known-good point.
 
 ### After a discovery run lands
@@ -396,7 +401,7 @@ Use the fast lookup + grid autopsy CLIs (do **not** reload the full `GridResult`
 ```bash
 python -m backtester.inspect show 748
 python -m backtester.research.run_audit 748 --html
-# → analysis/run_audit/<bundle_stem>/audit.json (+ report.html)
+# → workspace/analysis/run_audit/<bundle_stem>/audit.json (+ report.html)
 ```
 
 Agent skills: `.cursor/skills/run-lookup/`, `.cursor/skills/run-audit/` (see `AGENTS.md`).
@@ -593,10 +598,10 @@ Reports are gitignored — they are outputs, not code.
 
 ## Experiment Files
 
-`backtester/experiments/<name>.toml` bridges Step 1 (discovery) and Steps 2–3. It captures a specific candidate without polluting the strategy file.
+`workspace/experiments/<name>.toml` bridges Step 1 (discovery) and Steps 2–3. It captures a specific candidate without polluting the strategy file.
 
 ```toml
-# backtester/experiments/short_str_turb_dyn_v1.toml
+# workspace/experiments/short_str_turb_dyn_v1.toml
 strategy = "short_str_turb_dyn"
 
 [sensitivity]
@@ -652,7 +657,7 @@ compatibility shims only.
 | Family | Examples |
 |---|---|
 | `tudysho` | tudysho, eisbach, monopteros, starnberg, stradysho, v1–v4 |
-| `theta_engine` | v1–v6 |
+| `theta_engine` | base, v1–v14, v16–v19 (v15 unused) |
 | `other` | blueprint_howto, short_str_turb_dyn, cadysho, … |
 
 Legacy unfinished ports live in `backtester/archive/strategies_to_be_fixed/`.

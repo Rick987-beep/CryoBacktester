@@ -34,17 +34,24 @@ Three planes: **product** (`backtester/`), **private workspace submodule** (`wor
 
 ```
 CryoBacktester/
-├── backtester/          # PRODUCT — engine, UI, indicators, public blueprint
+├── backtester/          # PRODUCT — engine, UI, indicators, research code, jobd
 │   ├── catalog.py       # private workspace submodule or blueprint-only fallback
-│   ├── strategies/      # blueprint_howto.py (public)
+│   ├── strategies/      # blueprint_howto.py only (public demo)
+│   ├── research/        # run_audit, experiment loader, WFO (code — not TOMLs)
 │   └── run.py           # CLI; STRATEGIES façade from backtester.catalog
-├── workspace/           # PRIVATE submodule → CryoBacktester-workspace
+├── workspace/           # PRIVATE submodule — USER WORK
 │   ├── catalog.py       # full strategy registry (maintainer)
 │   ├── strategies/      # tudysho, theta_engine, long_signal, …
-│   ├── experiments/
-│   ├── marketing/
+│   ├── experiments/     # sole TOML experiment home
+│   ├── marketing/       # ship / _build / archive
+│   ├── analysis/        # ACTIVE research I/O (run_audit, livecompare)
+│   ├── archive/         # CLOSED research (archive-without-delete)
+│   ├── handover/        # CryoTrader port packs
 │   └── tests/
+├── data/                # DATA — engine artefacts (runs, jobs, market, …)
 ```
+
+**Planes:** interpretation of runs → `workspace/analysis/`; raw run bundles + jobd → `data/runs/`, `data/jobs/`. Closed research → `workspace/archive/` (never delete unique blobs).
 
 Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS`, `CRYOBT_JOBS` (see `backtester.core.paths`).
 
@@ -110,7 +117,7 @@ improvising lookup, grid autopsy, or live-vs-BT work.
 | **livecompare** | CryoTrader live slot vs backtest parity | `python -m backtester.compare run --slot …` |
 | **marketing** | Ship strategy reports + diligence CSVs for promoted products (Cryo/Aureas pack templates) | `workspace/marketing/` — see skill |
 
-Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `analysis/livecompare/`; marketing ship → `workspace/marketing/ship/`.
+Outputs: run-audit → `workspace/analysis/run_audit/<bundle_stem>/`; livecompare → `workspace/analysis/livecompare/`; marketing ship → `workspace/marketing/ship/`. Do not commit one-off analysis blobs.
 
 ---
 
@@ -148,7 +155,7 @@ Step 3 — Walk-Forward Validation
 ```
 
 **PARAM_GRID in each strategy file is the wide, unbiased discovery grid — never narrow it post-hoc.**
-Experiment TOMLs in `backtester/experiments/` capture candidates separately.
+Experiment TOMLs in `workspace/experiments/` capture candidates separately.
 Past-run lookup: `.cursor/skills/run-lookup/` · grid autopsy: `.cursor/skills/run-audit/`.
 
 ---
@@ -235,10 +242,11 @@ These indicator files are separate copies from CryoTrader's `indicators/` — th
 - Strategies implement the `Strategy` protocol from `backtester/core/strategy_base.py`
 - **Canonical strategy code** lives under `workspace/strategies/{family}/` (tudysho, theta_engine, other)
 - Register new strategies in `workspace/catalog.py` (stable ID + family + status) — never rename IDs
-- `backtester/strategies/*.py` are **compatibility shims** only; do not put new logic there
+- `backtester/strategies/` holds **public `blueprint_howto` only** — private strategies live under `workspace/strategies/`; do not add workspace re-export shims
 - `PARAM_GRID` in each strategy = wide, unbiased discovery grid (never narrowed post-hoc)
-- Experiment TOMLs in `workspace/experiments/`
-- Market data / runs / kline cache: `data/` (see `backtester.core.paths` + env overrides)
+- Experiment TOMLs in `workspace/experiments/` only (no `backtester/experiments/`)
+- Active analysis I/O: `workspace/analysis/`; closed research: `workspace/archive/`
+- Market data / runs / jobs / kline cache: `data/` (see `backtester.core.paths` + env overrides)
 - `logging.getLogger(__name__)` in every module
 
 ---
@@ -409,8 +417,9 @@ locks): `c823cd1f9665`, `bc7b45e82c5c`. **Next = Step 3 exits.** See
 | `.cursor/skills/marketing/SKILL.md` | Monthly ship reports + diligence; Cryo/Aureas brand templates |
 | `.cursor/skills/run-audit/SKILL.md` | Grid quality autopsy (influence / danger / curve-fit / live picks) |
 | `.cursor/skills/livecompare/SKILL.md` | Live CryoTrader vs backtest comparison |
-| `analysis/run_audit/README.md` | Run-audit CLI outputs |
-| `analysis/livecompare/README.md` | Livecompare CLI outputs |
+| `workspace/analysis/run_audit/README.md` | Run-audit CLI outputs (active) |
+| `workspace/analysis/livecompare/README.md` | Livecompare CLI outputs (active) |
+| `workspace/archive/README.md` | Closed research archive guiderail |
 | `scripts/macos/brand/DESIGN.md` | Cryo product-family visual language (icons / palette) |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
 | `workspace/strategies/other/blueprint_howto.py` | Canonical working strategy implementation |

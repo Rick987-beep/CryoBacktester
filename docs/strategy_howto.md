@@ -701,7 +701,7 @@ PARAM_GRID = {
 
 **Rules:**
 - `PARAM_GRID` is the wide, unbiased **discovery grid** — never narrow it after
-  seeing results. That is overfitting. Experiment TOMLs in `backtester/experiments/`
+  seeing results. That is overfitting. Experiment TOMLs in `workspace/experiments/`
   are where you record a "looks promising, let's study it" candidate.
 - List every parameter in `PARAM_GRID` even if there is only one value. This makes
   the grid explicit and means `describe_params()` captures it in every result row.

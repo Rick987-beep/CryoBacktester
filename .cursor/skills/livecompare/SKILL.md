@@ -22,7 +22,7 @@ python -m backtester.compare run --slot 02 --last-n 7 --skip-pull
 ```
 
 Read outputs **in this order**:
-1. `analysis/livecompare/LATEST` → run directory
+1. `workspace/analysis/livecompare/LATEST` → run directory
 2. `manifest.json` — provenance
 3. `warnings.json` — parity gaps **before** interpreting PnL
 4. `data/comparison.csv` — use `comparability` column
@@ -49,12 +49,12 @@ Read outputs **in this order**:
 
 - CryoTrader at `CT_ROOT` (default `../CryoTrader`) with `slots/slot-NN.toml`
 - Market parquets under `data/market/` (or `CRYOBT_MARKET_DATA`) for the window
-- BT strategy IDs from `workspace/catalog.py` (stable; never rename) — live→BT map in `analysis/livecompare/config/strategy_map.yaml`
+- BT strategy IDs from `workspace/catalog.py` (stable; never rename) — live→BT map in `workspace/analysis/livecompare/config/strategy_map.yaml`
 - SSH access for blotter pull unless `--skip-pull`
 - Run bundles default to `data/runs/` (`CRYOBT_RUNS`)
 
 ## Extend mapping
 
-Edit `analysis/livecompare/config/strategy_map.yaml` for new live strategies.
+Edit `workspace/analysis/livecompare/config/strategy_map.yaml` for new live strategies.
 
 See [reference.md](reference.md) for architecture.

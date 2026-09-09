@@ -122,8 +122,8 @@ Requires Google Chrome / Chromium for PNG.
 
 ## Do not use
 
-- `analysis/starnberg_strategy_report*` — historical v1–v3 iterations; not canonical ship paths.
-- `analysis/marketing/` — redirect stub only.
+- `workspace/archive/analysis/starnberg_strategy_report*` — historical v1–v3 iterations; not canonical ship paths.
+- `workspace/archive/analysis/marketing/` — redirect stub only.
 - Old per-product folders at `workspace/marketing/{id}/` (removed; use `ship/` + `_build/`).
 
 ## Distribute

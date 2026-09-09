@@ -162,7 +162,7 @@ def main():
     parser.add_argument("--step-days", type=int, default=15, metavar="N",
                         help="Window shift per step in calendar days (default: 15).")
     parser.add_argument("--experiment", default=None, metavar="NAME",
-                        help="Experiment name (backtester/experiments/<name>.toml). "
+                        help="Experiment name (workspace/experiments/<name>.toml). "
                              "Use with --mode sensitivity or --mode wfo.")
     parser.add_argument("--mode", default="discovery",
                         choices=["discovery", "sensitivity", "wfo"],

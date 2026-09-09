@@ -8,7 +8,7 @@ python -m backtester.inspect audit 748 --html --out-dir /tmp/audit748
 python -m backtester.research.run_audit RUN --stdout   # full JSON to stdout
 ```
 
-Default output dir: `analysis/run_audit/<bundle_stem>/`
+Default output dir: `workspace/analysis/run_audit/<bundle_stem>/`
 
 | File | Role |
 |------|------|

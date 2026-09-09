@@ -47,7 +47,9 @@ def main(argv: list[str] | None = None) -> None:
         ct = args.cryotrader_root or _default_ct_root()
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         out = args.out or (
-            repo / "analysis/livecompare/runs" / f"{ts}_slot{args.slot.zfill(2)}_last{args.last_n}"
+            repo
+            / "workspace/analysis/livecompare/runs"
+            / f"{ts}_slot{args.slot.zfill(2)}_last{args.last_n}"
         )
         out = out.resolve()
         spec = RunSpec(

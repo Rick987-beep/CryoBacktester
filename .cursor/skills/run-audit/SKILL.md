@@ -37,7 +37,7 @@ reads bundle parquets and uses the same `_all_combo_stats` path as inspect.
 
 1. `python -m backtester.inspect show RUN` — lock identity / date range / n_combos
 2. `python -m backtester.research.run_audit RUN --html` — write `audit.json` (+ `report.html`)
-3. Read `analysis/run_audit/<bundle_stem>/audit.json` (or `--out-dir`)
+3. Read `workspace/analysis/run_audit/<bundle_stem>/audit.json` (or `--out-dir`)
 4. Present findings: influence → danger → curve-fit → live picks
 5. Re-check final pick metrics with `inspect combo RUN HASH` (authoritative UI numbers)
 6. Deliverable: Cursor canvas **or** point at `report.html`; keep chat short

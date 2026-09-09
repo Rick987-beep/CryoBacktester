@@ -9,7 +9,10 @@ from backtester.run import STRATEGIES
 
 def test_blueprint_always_registered():
     assert "blueprint_howto" in STRATEGIES
-    assert set(strategies_dict().keys()) == set(STRATEGIES.keys())
+    # STRATEGIES is a process-wide map; job tests may inject ephemeral keys (job_smoke).
+    catalog_ids = set(strategies_dict().keys())
+    assert catalog_ids <= set(STRATEGIES.keys())
+    assert set(STRATEGIES.keys()) - catalog_ids <= {"job_smoke"}
     assert SPECS["blueprint_howto"].cls is STRATEGIES["blueprint_howto"]
 
 

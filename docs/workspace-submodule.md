@@ -1,7 +1,8 @@
 # Private workspace submodule
 
-Strategy implementations, experiments, marketing artefacts, and strategy tests
-are **not** part of the public repo. They live in a private submodule:
+Strategy implementations, experiments, marketing artefacts, analysis I/O,
+handover packs, and strategy tests are **not** part of the public repo. They
+live in a private submodule:
 
 **https://github.com/Rick987-beep/CryoBacktester-workspace** (private)
 
@@ -20,6 +21,21 @@ git submodule update --init workspace
 
 The sentinel file `workspace/.private` switches `backtester.catalog` to the full
 private registry. Without it, only `blueprint_howto` is registered (public fallback).
+
+## Layout (user work)
+
+```
+workspace/
+  strategies/     # canonical implementations
+  experiments/    # sole TOML experiment home
+  marketing/      # ship / _build / archive
+  analysis/       # ACTIVE research I/O (run_audit, livecompare)
+  archive/        # CLOSED research (never delete unique blobs)
+  handover/       # CryoTrader port packs
+  tests/
+```
+
+Engine artefacts (`data/runs/`, `data/jobs/`) stay on the public-repo data plane.
 
 ## Public-only clone
 

@@ -55,7 +55,7 @@ git push origin main
 
 - **`main`** on both repos = your saved checkpoints (push after each logical step).
 - **`wip/<topic>`** branches = optional experiments; merge to `main` when done, then delete the branch.
-- **`analysis/`** and **`data/runs/`** stay local — not committed (see `.gitignore`).
+- **`workspace/analysis/`** blobs and **`data/runs/`** / **`data/jobs/`** stay local — not committed (see `.gitignore`). Closed research parks under `workspace/archive/` (scripts/READMEs may be tracked; large blobs stay ignored).
 
 ## Worktrees (optional)
 

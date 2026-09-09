@@ -7,9 +7,18 @@ data/tardis_raw/
 data/archive/
 data/macro/
 
-# One-off analysis blobs (keep README/scripts only)
-analysis/deribit_btc_options_jul2026/data/
-analysis/deribit_btc_options_jul2026/*.zip
+# Active analysis blobs (workspace) — keep README/config/scripts only
+workspace/analysis/run_audit/*/
+workspace/analysis/livecompare/runs/
+workspace/analysis/livecompare/LATEST
+!workspace/analysis/**/README.md
+!workspace/analysis/**/config/**
+
+# Archived analysis large blobs
+workspace/archive/analysis/deribit_btc_options_jul2026/data/
+workspace/archive/analysis/deribit_btc_options_jul2026/*.zip
+
+# Root analysis/ is a redirect stub only (see analysis/README.md)
 
 # Legacy paths (now symlinks into data/) — ignore contents if resolved
 backtester/data/
