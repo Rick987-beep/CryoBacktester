@@ -388,6 +388,12 @@ class MarketReplay:
         end=None,           # type: Optional[Any]
         step_minutes=5,     # type: int
     ):
+        self.snapshot_path = snapshot_path
+        self.spot_track_path = spot_track_path
+        self.start = start
+        self.end = end
+        self.step_minutes = step_minutes
+        self.expiry_filter = expiry_filter
         # ----------------------------------------------------------
         # Load option snapshots (single file or directory of per-day files)
         # ----------------------------------------------------------
@@ -500,6 +506,7 @@ class MarketReplay:
             f"MarketReplay loaded: {n_opt:,} option rows ({opt_ram_mb:.0f} MB), "
             f"{n_ts} intervals, {n_spot} spot bars"
         )
+        self.freeze_readonly()
 
     @staticmethod
     def _load_parquets(path, prefix, columns=None, filter_expr=None):
@@ -595,6 +602,13 @@ class MarketReplay:
     def __len__(self):
         # type: () -> int
         return len(self._timestamps)
+
+    def freeze_readonly(self):
+        # type: () -> None
+        """Mark backing ndarrays non-writable. Idempotent. Call after load."""
+        from backtester.core.grid_workers import freeze_arrays
+
+        freeze_arrays(self)
 
     def __iter__(self):
         # type: () -> Iterator[MarketState]
