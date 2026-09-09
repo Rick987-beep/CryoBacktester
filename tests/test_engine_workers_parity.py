@@ -1,4 +1,4 @@
-"""A1/A4: combo-shard spawn matches workers=1; uneven shards; child errors.
+"""Combo-shard spawn matches workers=1; uneven shards; child errors.
 
 Production thresholds stay 8/8. These tests monkeypatch
 ``_effective_inner_workers`` so a tiny parquet fixture can hit workers=2/3/4.

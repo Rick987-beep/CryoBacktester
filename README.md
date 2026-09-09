@@ -94,6 +94,7 @@ CryoBacktester/
 │   │   ├── robustness.py          # Deflated Sharpe Ratio
 │   │   └── run_audit/             # Grid quality autopsy (η², danger, curve-fit, live picks)
 │   ├── inspect/                   # Fast run/combo lookup CLI (python -m backtester.inspect)
+│   ├── job/                       # Detached queue: jobd, JobStore, QueueClient
 │   ├── reporting/                 # Self-contained HTML reports
 │   │   ├── html_report.py
 │   │   └── charts.py              # SVG chart primitives
@@ -345,6 +346,14 @@ in `config.toml`). Children attach to a shared read-only `MarketReplay`;
 `CRYOBT_GRID_SHARE=0` forces each child to reload parquet. Walk-forward and
 livecompare stay `workers=1`.
 
+**Detached jobs:** `python -m backtester.run --strategy … --detach` (and Research
+UI **New Run**) enqueue on **jobd**. Observation is files under `data/jobs/`
+(`python -m backtester.job snapshot`). Commands go through one Unix socket.
+Default concurrency is 1 (FIFO). Closing the UI does not stop a job. CLI without
+`--detach` stays in-process foreground. Inner `--workers` still apply inside the
+job. Bundles land in `data/jobs/<id>/out/`; the UI registers them into
+`ui_state.db` when they finish.
+
 ---
 
 ## The Research Pipeline
@@ -396,8 +405,10 @@ Agent skills: `.cursor/skills/run-lookup/`, `.cursor/skills/run-audit/` (see `AG
 
 ## Research UI
 
-An interactive Panel-based app for exploring backtest results without re-running the engine.
-The preferred launch is a **native desktop window** (pywebview / WKWebView on macOS) — one Dock icon, one window, no browser tabs.
+An interactive Panel-based app for exploring backtest results and starting
+discovery runs. **New Run** enqueues on jobd (same as `--detach`). The preferred
+launch is a **native desktop window** (pywebview / WKWebView on macOS) — one Dock
+icon, one window, no browser tabs.
 
 ```bash
 # Native desktop (preferred)
@@ -480,6 +491,8 @@ finish (or on the next launch via `import_finished_jobs`).
 
 | Tab | Description |
 |---|---|
+| **New Run** | Enqueue a discovery grid on jobd; progress from `data/jobs/<id>/status.json` |
+| **Runs** | Indexed bundles (including jobs registered when they finish) |
 | **Results Grid** | All combos for the selected run — sortable, filterable, star/unstar |
 | **Combo Detail** | Stats card + equity/drawdown chart + trade log for one focused combo |
 | **Equity Overlay** | Multi-combo equity curves on one chart (select up to 50 combos) |
@@ -733,25 +746,32 @@ python -m backtester.run --strategy my_strategy
 ## Testing
 
 ```bash
-# Full test suite: UI tests + strategy tests
-python -m pytest tests/ workspace/tests/ -v
+# Product tests (engine, jobs, UI unit tests)
+python -m pytest tests/ -v
 
-# Strategy tests only (42 tests)
+# Inner combo-shard workers
+python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+
+# Detached jobs (fast stub queue tests + job_smoke E2E)
+python -m pytest tests/job -v
+
+# GUI job client (enqueue / quit-does-not-kill / reconnect)
+python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
+
+# Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v
-
-# UI tests only
-python -m pytest tests/ui/ -v
 
 # Live/network tests (deselected by default, require network)
 python -m pytest workspace/tests/ -m live -v
 ```
 
-Tests live in two directories:
-- `tests/ui/` — Panel UI unit tests (state, views, services, filter parser, etc.)
+Tests live in:
+- `tests/` — engine, jobs, CLI, Research UI
 - `workspace/tests/` — per-strategy backtesting unit tests
 
 `@pytest.mark.live` tests are excluded by default via `pyproject.toml` (`addopts = "-m 'not live'"`).
-`@pytest.mark.slow_ui` marks tests that require a real Panel server and are also excluded by default.
+`@pytest.mark.slow_ui` marks tests that boot a real Panel server (also excluded by default).
+The 777-grid worker check is `CRYOBT_RUN_777=1`; the inner-worker perf gate is `CRYOBT_RUN_PERF=1`.
 
 ---
 

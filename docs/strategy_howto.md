@@ -712,6 +712,9 @@ PARAM_GRID = {
 - The engine may shard a grid across processes by slicing the **expanded combo
   list**, never by taking a subset of `PARAM_GRID` axes
   (`Cartesian(subset) ≠ subset(Cartesian)`). Strategies do not need to know this.
+  CLI: `python -m backtester.run --strategy <id> --workers 4` (omit for auto;
+  `1` = single-process). `--detach` enqueues the same grid on jobd and returns;
+  Research UI New Run does the same.
 - Optional `PARAM_HELP = {"param_name": "short description", ...}` — shown in the
   Research UI New Run help column. Omit entirely or leave keys out; missing help
   displays as "—".

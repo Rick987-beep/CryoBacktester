@@ -116,10 +116,12 @@ Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `ana
 
 ## Runtime model
 
-1. Load snapshot parquets from `backtester/data/` via `MarketReplay`
-2. `engine.run_grid_full()` runs **all parameter combos in one pass** over the data
+1. Load snapshot parquets from `data/market/` via `MarketReplay`
+2. `engine.run_grid_full()` runs **all parameter combos in one pass** (optional inner combo-shard `--workers`)
 3. `GridResult` computes vectorised metrics per combo: Sharpe, PnL, Omega, Ulcer Index, drawdown, DSR, composite score
 4. `backtester.reporting.generate_html()` renders a self-contained HTML file (no recomputation)
+
+Detached runs (`--detach` / UI New Run) wrap that kernel in jobd. Observe `data/jobs/`; do not killpg jobs when the UI quits.
 
 ---
 
@@ -160,7 +162,7 @@ python -m pytest tests/ -v
 # Inner combo-shard workers
 python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
 
-# Detached jobs (stub unit tests + job_smoke E2E)
+# Detached jobs (fast stub queue tests + real job_smoke E2E)
 python -m pytest tests/job -v
 
 # GUI job client (enqueue / quit-does-not-kill / reconnect)

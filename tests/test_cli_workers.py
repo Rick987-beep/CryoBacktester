@@ -1,4 +1,4 @@
-"""C5: CLI --workers flag is wired and documented."""
+"""CLI --workers and --detach flags are documented in --help."""
 from __future__ import annotations
 
 import subprocess
@@ -13,3 +13,4 @@ def test_cli_help_includes_workers():
     )
     assert "--workers" in out
     assert "CRYOBT_GRID_WORKERS" in out
+    assert "--detach" in out

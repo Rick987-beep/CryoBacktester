@@ -1,4 +1,4 @@
-"""A5: inner workers=4 should be ≥2× workers=1 on a CPU-bound mid grid.
+"""Inner workers=4 should be ≥2× workers=1 on a CPU-bound mid grid.
 
 Skipped unless CRYOBT_RUN_PERF=1. Not required on every CI runner.
 """

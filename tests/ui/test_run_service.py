@@ -1,8 +1,6 @@
-"""
-tests/ui/test_run_service.py — RunService as a jobd client.
+"""RunService enqueues on jobd; shutdown_all does not kill jobs.
 
-Uses in-repo job_smoke + tiny parquet. Hard waits ≤20s. Always shut down jobd.
-GUI human recipe: README Research UI → “GUI job acceptance”.
+Human GUI recipe: README Research UI → “GUI job acceptance”.
 """
 from __future__ import annotations
 

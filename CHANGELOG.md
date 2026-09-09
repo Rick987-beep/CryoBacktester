@@ -20,15 +20,13 @@ python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.
 python -m pytest tests/job -v
 ```
 
-Jobd / `--detach` runs a real `run_backtest` in an isolated process (file
-snapshot + Unix-socket supervisor). Unit tests keep a 0.4s stub; E2E uses
-in-repo `job_smoke` + tiny parquet.
-
-Research UI **New Run** enqueues on the same jobd. Closing the desktop window
-does not kill jobs; reopen to reconnect. See README Research UI → GUI job
-acceptance.
+Jobd / `--detach` and Research UI **New Run** run `run_backtest` in an isolated
+process (file snapshot + Unix-socket supervisor). Closing the desktop window does
+not kill jobs; reopen to reconnect. Queue unit tests use a sub-second stub; E2E
+uses in-repo `job_smoke` + tiny parquet. Human GUI acceptance given 2026-09-09.
 
 ```bash
+python -m pytest tests/job -v
 python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
 ```
 

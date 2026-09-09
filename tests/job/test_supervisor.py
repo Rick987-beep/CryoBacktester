@@ -1,4 +1,8 @@
-"""In-process jobd tests. Stub jobs finish in <1s. Hard 5s waits. No run_backtest."""
+"""In-process jobd tests. Stub jobs finish in <1s. Hard 5s waits.
+
+``CRYOBT_JOB_STUB=1`` keeps the queue/cancel tests off ``run_backtest``.
+The real runner is covered in test_runner_real.py and test_acceptance_two_jobs.py.
+"""
 from __future__ import annotations
 
 import time

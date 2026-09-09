@@ -40,7 +40,7 @@ DEFAULT_OPTIONS = _cfg.data.options_parquet
 DEFAULT_SPOT = _cfg.data.spot_parquet
 
 
-# ── run_backtest() — callable by worker + tests ───────────────────
+# ── run_backtest() — CLI, job runner, and tests ───────────────────
 
 def run_backtest(
     strategy_key,

@@ -9,8 +9,7 @@ Writes to:
   - stderr (level from CRYOTRADER_UI_LOG_LEVEL env var, default INFO)
   - logs/ui.log (5 MB × 3 rotations, same level)
 
-Worker processes call get_ui_logger with a different name and get
-   logs/ui-worker-<pid>.log instead (see run_worker.py).
+Detached jobs log to ``data/jobs/<id>/job.log``, not here.
 """
 import logging
 import os

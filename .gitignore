@@ -26,7 +26,7 @@ backtester/reports/
 .git-crypt-key
 .cryo-backtester-git-crypt.key
 
-# Runtime logs (UI worker, etc.)
+# Runtime logs (Research UI, jobd)
 logs/
 
 # UI SQLite state DB + desktop single-instance lock

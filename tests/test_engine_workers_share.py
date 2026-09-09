@@ -1,4 +1,4 @@
-"""A3: shared read-only MarketReplay backing across parent and spawn children."""
+"""Shared read-only MarketReplay backing across parent and spawn children."""
 from __future__ import annotations
 
 import numpy as np

@@ -1,4 +1,4 @@
-"""Detached backtest jobs (file snapshot + later jobd)."""
+"""Detached backtest jobs: file snapshot (JobStore) plus jobd (QueueClient)."""
 
 from backtester.job.api import (
     HEARTBEAT_STALE_SEC,

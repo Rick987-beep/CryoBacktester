@@ -1,4 +1,7 @@
-"""E2E: two real job_smoke jobs through jobd (not the sleep stub).
+"""Two real job_smoke jobs through jobd: queue, complete, cancel.
+
+Unit tests in test_supervisor.py use a sub-second stub; this file uses the
+real runner.
 
 Uses the in-repo tiny parquet helper. Hard 30s waits. Always shut down jobd.
 """

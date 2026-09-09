@@ -5,14 +5,10 @@ New Run enqueues a ``JobSpec`` (same path as ``python -m backtester.run
 --detach``). Progress is polled from ``JobStore`` files. Cancel goes through
 ``QueueClient``. Closing the UI must **not** kill jobs — ``shutdown_all``
 only reaps leftover local test children (``submit_cmd``).
-
-``run_worker`` remains as a leftover subprocess entry for old tests; the GUI
-does not spawn it.
 """
 from __future__ import annotations
 
 import atexit
-import json
 import os
 import signal
 import subprocess
@@ -38,15 +34,10 @@ class RunHandle:
         proc=None,
         job_id: str | None = None,
         job_store: JobStore | None = None,
-        progress_path: str = "",
-        config_path: str = "",
     ):
         self.proc = proc
         self.job_id = job_id
         self._job_store = job_store
-        self.progress_path = progress_path
-        self.config_path = config_path
-        self._last_pos = 0
         self._last_progress_key = None
         self._terminal_emitted = False
         self._pid = proc.pid if proc is not None else None
@@ -222,7 +213,7 @@ class RunService:
     def submit_cmd(self, cmd: list[str]) -> RunHandle:
         """Spawn an arbitrary command as a tracked *local* child (tests)."""
         proc = self._spawn(cmd)
-        handle = RunHandle(proc=proc, progress_path="", config_path="")
+        handle = RunHandle(proc=proc)
         self._handles.append(handle)
         log.info("run_service: spawned cmd worker pid=%d cmd=%s", proc.pid, cmd[:3])
         return handle
@@ -263,15 +254,9 @@ class RunService:
         return run_ids
 
     def tail_progress(self, handle: RunHandle) -> Iterator[dict]:
-        """Yield new progress dicts. Job handles poll ``status.json``.
-
-        Local jsonl tails (legacy ``run_worker``) still work if
-        ``handle.progress_path`` is set.
-        """
+        """Yield new progress dicts by polling ``status.json``."""
         if handle.job_id:
             yield from self._tail_job(handle)
-            return
-        yield from self._tail_jsonl(handle)
 
     def _tail_job(self, handle: RunHandle) -> Iterator[dict]:
         view = handle._job_view()
@@ -320,24 +305,6 @@ class RunService:
             status = "cancelled" if view.state == "cancelled" else "error"
             yield {"status": status, "message": view.error or view.state}
 
-    def _tail_jsonl(self, handle: RunHandle) -> Iterator[dict]:
-        if not handle.progress_path or not os.path.exists(handle.progress_path):
-            return
-
-        with open(handle.progress_path, "rb") as f:
-            f.seek(handle._last_pos)
-            data = f.read()
-            handle._last_pos += len(data)
-
-        for raw in data.decode("utf-8", errors="replace").splitlines():
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                yield json.loads(raw)
-            except json.JSONDecodeError:
-                log.debug("run_service: bad JSON in progress: %r", raw)
-
     def cancel(self, handle: RunHandle):
         """Cancel a jobd job, or SIGTERM a local test child."""
         if handle.job_id:
@@ -350,7 +317,7 @@ class RunService:
         self._stop_handle(handle, timeout_s=2.0)
 
     def shutdown_all(self, timeout_s: float = 2.0) -> None:
-        """Reap local test children only. Never cancel jobd jobs (G0)."""
+        """Reap local test children only. Never cancel jobd jobs."""
         for handle in list(self._handles):
             if handle.proc is None:
                 continue
@@ -383,18 +350,6 @@ class RunService:
                     return None
             return None
 
-        if handle.proc is None:
-            return None
-        handle.proc.wait()
-        for line in self.tail_progress(handle):
-            if line.get("status") == "done":
-                bundle_path = line.get("bundle_path")
-                if bundle_path:
-                    try:
-                        run_id = self._store.register_bundle(bundle_path)
-                        self._cache.get(run_id)
-                        return run_id
-                    except Exception as exc:
-                        log.error("run_service: failed to register bundle: %s", exc)
-                return None
+        if handle.proc is not None:
+            handle.proc.wait()
         return None

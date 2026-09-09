@@ -9,7 +9,7 @@ in the shippable `backtester/` product package.
 | `macro/` | Synced macro series (e.g. `deribit/BTC_DVOL/` hive partitions) |
 | `klines/` | Binance kline cache used by indicators |
 | `runs/` | HTML reports + `*.bundle` UI run artifacts |
-| `jobs/` | Detached job queue (`queue.json`, per-job `spec.json` / `status.json`) |
+| `jobs/` | Detached job queue (`queue.json`, per-job `spec.json` / `status.json` / `out/*.bundle`) |
 | `tardis_raw/` | Optional Tardis ingest output |
 | `archive/` | Cold/legacy data blobs |
 
