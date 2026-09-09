@@ -77,6 +77,7 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 
 # Research UI — native window (preferred)
 python -m backtester.ui.desktop
+# New Run enqueues on jobd. Closing the window does not stop the backtest.
 # or: open scripts/macos/CryoBacktester.app
 
 # Research UI — browser / Terminal (dev)
@@ -161,6 +162,9 @@ python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.
 
 # Detached jobs (stub unit tests + job_smoke E2E)
 python -m pytest tests/job -v
+
+# GUI job client (enqueue / quit-does-not-kill / reconnect)
+python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
 
 # Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v

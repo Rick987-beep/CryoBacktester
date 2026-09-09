@@ -417,7 +417,46 @@ python -m backtester.ui.app --no-browser
 python -m backtester.ui.app --dev        # autoreload on file changes
 ```
 
-**Quit behaviour (desktop):** if a backtest worker is still running, a confirmation dialog appears. Cancel keeps the window open; confirm stops all workers (SIGTERM, then SIGKILL) and exits. Closing the window also releases the single-instance lock.
+**New Run** enqueues on **jobd** (same as `python -m backtester.run --detach`).
+Progress is polled from `data/jobs/<id>/status.json`. Closing the UI does **not**
+stop the backtest.
+
+**Quit behaviour (desktop):** if jobs are still queued or running, a confirmation
+dialog appears. Cancel keeps the window open; confirm **closes the window only** —
+jobs keep running. Reopen the UI to watch progress, or use **Cancel** in New Run
+to stop them. Closing the window also releases the single-instance lock.
+
+### GUI job acceptance (human)
+
+Use a **short** grid. `blueprint_howto` is two combos over four days — enough to
+see progress without waiting on a discovery grid.
+
+From this checkout, point at market data if this tree has no `data/market/`:
+
+```bash
+export CRYOBT_MARKET_DATA=/path/to/CryoBacktester/data/market
+export CRYOBT_KLINE_DIR=/path/to/CryoBacktester/data/klines
+python -m backtester.ui.desktop
+```
+
+1. **New Run** → strategy `blueprint_howto` (leave its date range). Click **Run**.
+   Status should go Queued → Running with a progress bar.
+2. In a Terminal: `python -m backtester.job snapshot` — same `job_id`, state
+   `running`. Heartbeat file: `data/jobs/<id>/status.json`.
+3. **Quit the desktop window while it is still running.** Confirm the dialog
+   (jobs keep running). The Dock icon is gone.
+4. Still in Terminal: snapshot still shows `running`; `ps` still has the job
+   runner PID. `status.json` `heartbeat_ts` is moving.
+5. Relaunch `python -m backtester.ui.desktop`. New Run should say **Reconnected**
+   and keep showing progress. When it finishes, the bundle loads and the UI
+   switches to Results Grid.
+6. **Cancel:** start another `blueprint_howto` run, click **Cancel** — snapshot
+   goes `cancelled`, no new bundle, runner PID gone.
+7. **Queue (optional):** while a run is in flight, from Terminal
+   `python -m backtester.run --strategy blueprint_howto --detach`. Snapshot
+   shows the second job `queued` until the first finishes (concurrency=1).
+
+Automated coverage: `python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v`
 
 **Troubleshooting**
 
@@ -433,7 +472,9 @@ python -m backtester.ui.app --dev        # autoreload on file changes
 
 The UI scans `data/runs/` for run bundles — directories created by `run.py`
 (format: `<strategy>_<timestamp>.bundle/`) containing `meta.json`, `trade_log.parquet`,
-`nav_daily.parquet`, and `final_nav.parquet`. It does **not** re-run the backtest engine.
+`nav_daily.parquet`, and `final_nav.parquet`. New Run jobs write bundles under
+`data/jobs/<id>/out/` and the UI **registers** them into `ui_state.db` when they
+finish (or on the next launch via `import_finished_jobs`).
 
 ### Tabs
 

@@ -10,8 +10,9 @@ Usage:
     python -m backtester.ui.desktop --port 5007
     python -m backtester.ui.desktop --state-dir /tmp/cryo-ui-state
 
-Quit: if backtest workers are still running, a confirmation dialog is shown.
-Cancel keeps the window open; confirm stops workers and exits.
+Quit: if backtest jobs are still running, a confirmation dialog is shown.
+Cancel keeps the window open; confirm closes the window. Jobs keep running
+on jobd — reopen the UI to watch progress.
 """
 from __future__ import annotations
 
@@ -92,12 +93,12 @@ def handle_window_closing(run_service, confirm_fn) -> bool:
     if n <= 0:
         return True
     msg = (
-        f"{n} backtest(s) still running. Quit anyway?\n\n"
-        "Confirming will stop all running workers."
+        f"{n} backtest(s) still running in the background.\n\n"
+        "Quit the window? They will keep running. "
+        "Reopen the UI to watch progress, or Cancel in New Run to stop them."
     )
     if not confirm_fn(msg):
         return False
-    run_service.shutdown_all()
     return True
 
 
@@ -174,7 +175,10 @@ def main(argv: list[str] | None = None) -> int:
     run_service = getattr(template, "_cryo_run_service", None)
 
     def _on_signal(signum, _frame):
-        log.info("desktop: received signal %s — shutting down workers", signum)
+        log.info(
+            "desktop: received signal %s — exiting; background jobs keep running",
+            signum,
+        )
         if run_service is not None:
             run_service.shutdown_all()
         lock.release()

@@ -106,14 +106,30 @@ def test_handle_window_closing_cancel_keeps_window():
     assert svc.running_worker_count() == 2
 
 
-def test_handle_window_closing_confirm_shuts_down():
+def test_handle_window_closing_confirm_leaves_jobs():
+    """Quit confirms close the window; jobs keep running (G0)."""
     svc = _FakeRunService(1)
     assert handle_window_closing(svc, confirm_fn=lambda _m: True) is True
-    assert svc.shutdown_calls == 1
+    assert svc.shutdown_calls == 0
+    assert svc.running_worker_count() == 1
+
+
+def test_handle_window_closing_confirm_copy_mentions_background():
+    svc = _FakeRunService(1)
+    seen = []
+
+    def _confirm(msg: str) -> bool:
+        seen.append(msg)
+        return True
+
+    assert handle_window_closing(svc, confirm_fn=_confirm) is True
+    assert seen
+    assert "keep running" in seen[0].lower() or "background" in seen[0].lower()
 
 
 def test_handle_window_closing_none_run_service():
     assert handle_window_closing(None, confirm_fn=lambda _m: False) is True
+
 
 
 # ── CLI / imports ────────────────────────────────────────────────────────────

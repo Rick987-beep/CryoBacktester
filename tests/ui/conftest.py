@@ -5,12 +5,23 @@ tiny_grid_result  — a real GridResult from 3 combos × ~15-day synthetic trade
 tmp_bundle_dir    — tmp_path/bundles, monkeypatched as bundles_root.
 tmp_state_dir     — tmp_path/ui_state, monkeypatched as state_dir.
 sqlite_store      — a StoreService bound to a throwaway DB.
+
+Jobs are isolated to a per-test CRYOBT_JOBS dir so GUI tests never talk to
+the developer's live jobd.
 """
 import os
 import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
+
+
+@pytest.fixture(autouse=True)
+def _isolate_jobs(tmp_path, monkeypatch):
+    """Keep GUI tests off the developer's live jobd / data/jobs/."""
+    monkeypatch.setenv("CRYOBT_JOBS", str(tmp_path / "jobs"))
+    monkeypatch.setenv("CRYOBT_JOBD_IDLE_SEC", "8")
+    monkeypatch.delenv("CRYOBT_JOB_STUB", raising=False)
 
 
 def _make_tiny_grid_result():

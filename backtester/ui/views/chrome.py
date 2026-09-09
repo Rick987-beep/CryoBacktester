@@ -217,9 +217,11 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
         flight = ""
         if handle is not None:
             cancel_btn.visible = True
+            queued = getattr(handle, "is_queued", lambda: False)()
+            flight_txt = "Queued…" if queued else "Running…"
             flight = (
                 '<div style="flex:0 0 auto;padding:0 8px;color:#2563eb;'
-                'font-weight:600;white-space:nowrap">Running…</div>'
+                f'font-weight:600;white-space:nowrap">{flight_txt}</div>'
             )
         else:
             cancel_btn.visible = False

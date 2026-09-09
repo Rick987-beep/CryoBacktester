@@ -99,6 +99,10 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     store = StoreService(_state_dir, _bundles_root)
     cache = ResultCache(store, max_unpinned=5)
     run_service = RunService(store, cache)
+    try:
+        run_service.import_finished_jobs()
+    except Exception as exc:
+        log.warning("import_finished_jobs at startup failed: %s", exc)
     state = AppState()
     state.active_tab = normalize_tab_name(state.active_tab)
 
@@ -211,7 +215,10 @@ def main():
     run_service = template._cryo_run_service
 
     def _on_signal(signum, _frame):
-        log.info("app: received signal %s — shutting down workers", signum)
+        log.info(
+            "app: received signal %s — exiting; background jobs keep running",
+            signum,
+        )
         run_service.shutdown_all()
         # Let Panel/Tornado unwind; force-exit if needed
         raise SystemExit(0)

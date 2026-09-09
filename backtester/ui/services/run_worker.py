@@ -1,5 +1,8 @@
 """
-run_worker.py — Subprocess worker for UI-initiated backtests.
+run_worker.py — Legacy subprocess worker (not used by the GUI).
+
+The Research UI now enqueues via jobd (``RunService.submit``). This module
+remains for older tests that spawn ``python -m backtester.ui.services.run_worker``.
 
 Entry point: python -m backtester.ui.services.run_worker --config <path>
 
