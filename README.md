@@ -108,6 +108,8 @@ CryoBacktester/
 │   │   └── calm_nights/           # Calm-nights helpers (cadysho)
 │   ├── ui/                        # Interactive Research UI (Panel + Bokeh + Plotly)
 │   │   ├── desktop.py             # Native window: python -m backtester.ui.desktop
+│   │   ├── brand/                 # Light cryo_aureas shell (CSS + icon)
+│   │   ├── views/                 # Pages: New Run, Backtester Run, Completed Runs, …
 │   │   ├── app.py                 # Browser CLI: python -m backtester.ui.app
 │   │   ├── server_utils.py        # wait_for_healthz + URL/WS origin helpers
 │   │   ├── state.py               # AppState param object (shared reactive state)
@@ -434,13 +436,15 @@ python -m backtester.ui.app --dev        # autoreload on file changes
 ```
 
 **New Run** enqueues on **jobd** (same as `python -m backtester.run --detach`).
-Progress is polled from `data/jobs/<id>/status.json`. Closing the UI does **not**
-stop the backtest.
+You can enqueue additional jobs while one is running (they wait in the jobd
+queue). Live progress, queue, and job log are on **Backtester Run**. Closing
+the UI does **not** stop the backtest.
 
 **Quit behaviour (desktop):** if jobs are still queued or running, a confirmation
 dialog appears. Cancel keeps the window open; confirm **closes the window only** —
-jobs keep running. Reopen the UI to watch progress, or use **Cancel** in New Run
-to stop them. Closing the window also releases the single-instance lock.
+jobs keep running. Reopen the UI to watch progress on **Backtester Run**, or use
+**Cancel** on the selection bar to stop the active job. Closing the window also
+releases the single-instance lock.
 
 ### GUI job acceptance (human)
 
@@ -456,23 +460,24 @@ python -m backtester.ui.desktop
 ```
 
 1. **New Run** → strategy `blueprint_howto` (leave its date range). Click **Run**.
-   Status should go Queued → Running with a progress bar.
+   The UI switches to **Backtester Run** (Queued → Running, progress bar, log).
 2. In a Terminal: `python -m backtester.job snapshot` — same `job_id`, state
    `running`. Heartbeat file: `data/jobs/<id>/status.json`.
 3. **Quit the desktop window while it is still running.** Confirm the dialog
    (jobs keep running). The Dock icon is gone.
 4. Still in Terminal: snapshot still shows `running`; `ps` still has the job
    runner PID. `status.json` `heartbeat_ts` is moving.
-5. Relaunch `python -m backtester.ui.desktop`. New Run should say **Reconnected**
-   and keep showing progress. When it finishes, the bundle loads and the UI
-   switches to Results Grid.
-6. **Cancel:** start another `blueprint_howto` run, click **Cancel** — snapshot
-   goes `cancelled`, no new bundle, runner PID gone.
-7. **Queue (optional):** while a run is in flight, from Terminal
-   `python -m backtester.run --strategy blueprint_howto --detach`. Snapshot
-   shows the second job `queued` until the first finishes (concurrency=1).
+5. Relaunch `python -m backtester.ui.desktop`. **Backtester Run** should
+   reconnect and keep showing progress. When it finishes, the bundle loads and
+   the UI switches to Results Grid.
+6. **Cancel:** start another `blueprint_howto` run, click **Cancel** on the
+   selection bar — snapshot goes `cancelled`, no new bundle, runner PID gone.
+7. **Queue:** while a run is in flight, use **New Run → Run** again (or
+   `python -m backtester.run --strategy blueprint_howto --detach`). Snapshot /
+   Backtester Run queue shows the second job `queued` until the first finishes
+   (concurrency=1).
 
-Automated coverage: `python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v`
+Automated coverage: `python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py tests/ui/test_backtester_run_view.py tests/ui/test_brand_shell.py -v`
 
 **Troubleshooting**
 
@@ -496,13 +501,22 @@ finish (or on the next launch via `import_finished_jobs`).
 
 | Tab | Description |
 |---|---|
-| **New Run** | Enqueue a discovery grid on jobd; progress from `data/jobs/<id>/status.json` |
-| **Runs** | Indexed bundles (including jobs registered when they finish) |
-| **Results Grid** | All combos for the selected run — sortable, filterable, star/unstar |
+| **New Run** | Form to enqueue a discovery grid on jobd (may queue while another runs) |
+| **Backtester Run** | Live progress, phase/status, jobd queue, and `job.log` for in-flight jobs |
+| **Completed Runs** | Indexed finished bundles (open → grid, re-run prefill, prune) |
+| **Results Grid** | All combos for the selected run — sortable, filterable, star/unstar, column chooser |
 | **Combo Detail** | Stats card + equity/drawdown chart + trade log for one focused combo |
-| **Equity Overlay** | Multi-combo equity curves on one chart (select up to 50 combos) |
 | **Favourites** | Starred combos across all runs; TOML export, re-run prefill, notes |
-| **Compare** | Side-by-side metric table for selected combos |
+
+Legacy URL `?tab=` values: `Runs` → Completed Runs; `Equity Overlay` → Combo Detail;
+`Compare` → Favourites. Unused modules `compare_view.py` / `overlay_view.py` remain
+in-tree but are not nav-wired.
+
+### Brand
+
+The Research UI uses a **light** cryo_aureas shell (`backtester/ui/brand/` —
+`research_light.css` + backtester icon). Hex comes from pack tokens only.
+Local specimen / mockups live under repo-root `brand/` (not required at runtime).
 
 ### Results Grid filter syntax
 

@@ -19,6 +19,8 @@ from backtester.job.api import JobSpec, JobStore, atomic_write_json, read_json
 _CANCELLED = False
 _LAST_HB = 0.0
 _HB_MIN_INTERVAL = 0.25
+# Persist across progress heartbeats (write_status replaces the whole file).
+_STATUS_KEEP: dict = {}
 
 
 def _now() -> str:
@@ -67,8 +69,19 @@ def _heartbeat(store: JobStore, job_id: str, extra: dict | None = None, *, force
         "pid": os.getpid(),
         "heartbeat_ts": _now(),
     }
+    payload.update({k: v for k, v in _STATUS_KEEP.items() if v is not None})
     if extra:
         payload.update(extra)
+        for key in (
+            "phase",
+            "message",
+            "inner_workers_effective",
+            "n_shards",
+            "n_combos",
+            "shards_done",
+        ):
+            if key in extra and extra[key] is not None:
+                _STATUS_KEEP[key] = extra[key]
     store.write_status(job_id, payload)
 
 
@@ -96,11 +109,16 @@ def _load_spec(store: JobStore, job_id: str) -> JobSpec:
 
 def _run_real(store: JobStore, job_id: str):
     # type: (JobStore, str) -> tuple[Path, dict]
+    import re
+
     from backtester.job.smoke import register_smoke
     from backtester.run import run_backtest
 
     register_smoke()
     spec = _load_spec(store, job_id)
+    _STATUS_KEEP.clear()
+    if spec.requested_inner_workers is not None:
+        _STATUS_KEEP["inner_workers_effective"] = int(spec.requested_inner_workers)
     out_root = store.job_dir(job_id) / "out"
     out_root.mkdir(parents=True, exist_ok=True)
     os.environ["CRYOBT_UI_STATE"] = str(store.job_dir(job_id) / "ui_state")
@@ -122,7 +140,14 @@ def _run_real(store: JobStore, job_id: str):
     def status_cb(phase, msg):
         if _CANCELLED:
             raise KeyboardInterrupt("job cancelled")
-        _heartbeat(store, job_id, {"phase": str(phase), "message": str(msg)}, force=True)
+        text = str(msg)
+        extra: dict = {"phase": str(phase), "message": text}
+        m = re.search(r"(\d+)\s+workers", text, re.I)
+        if m:
+            n = int(m.group(1))
+            extra["inner_workers_effective"] = n
+            extra["n_shards"] = n
+        _heartbeat(store, job_id, extra, force=True)
 
     bundle = run_backtest(
         spec.strategy,

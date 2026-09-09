@@ -1,10 +1,8 @@
 """
-views/compare_view.py — Compare tab.
+views/compare_view.py — Side-by-side run/combo compare (unused module).
 
-Pick Run A and Run B (from all registered runs), then pick a Combo from
-each.  Renders:
-  - Overlaid equity curves (reuses equity_overlay_figure)
-  - Stats-delta table: metric / A / B / Δ / winner
+Not wired into the Research UI nav (removed from Favourites). Kept for
+possible revival; do not import from app.py until product wants it back.
 """
 from __future__ import annotations
 

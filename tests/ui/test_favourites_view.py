@@ -208,3 +208,34 @@ def test_favourites_view_has_params_textarea(store_with_run):
     assert textareas[0].disabled is False
     assert textareas[0].rows >= _PARAMS_TEXTAREA_ROWS
     assert any("overflow-y" in s for s in textareas[0].stylesheets)
+
+
+def test_favourites_view_omits_compare_runs(store_with_run):
+    """Compare Runs section is no longer embedded under Favourites."""
+    import panel as pn
+
+    pn.extension("tabulator", "plotly")
+    from backtester.ui.state import AppState
+    from backtester.ui.services.cache_service import ResultCache
+    from backtester.ui.views.favourites_view import build_favourites_view
+
+    store, _run_id, _result = store_with_run
+    cache = ResultCache(store, max_unpinned=5)
+    view = build_favourites_view(AppState(), store, cache)
+
+    md_text = " ".join(
+        str(getattr(obj, "object", ""))
+        for obj in view.select(pn.pane.Markdown)
+    )
+    assert "Compare Runs" not in md_text
+    # Former embed was a nested Column; Favourites root should stay flat-ish
+    assert all(
+        not (
+            isinstance(obj, pn.Column)
+            and any(
+                "Compare Runs" in str(getattr(child, "object", ""))
+                for child in getattr(obj, "objects", [])
+            )
+        )
+        for obj in view.objects
+    )

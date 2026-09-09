@@ -1,5 +1,5 @@
 """
-views/runs_view.py — Full-page run management (list, favourite, delete, prune).
+views/runs_view.py — Full-page completed-run management (list, favourite, delete, prune).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _COLS = ["id", "favourite", "created_at", "strategy", "family", "label", "n_comb
 
 
 def build_runs_view(state, store, cache) -> pn.Column:
-    """Build the Runs management page."""
+    """Build the Completed Runs management page."""
     from backtester.catalog import FAMILIES, family_for, family_label
 
     try:
@@ -300,25 +300,31 @@ def build_runs_view(state, store, cache) -> pn.Column:
     prune_preview_btn.on_click(_on_prune_preview)
     prune_confirm_btn.on_click(_on_prune_confirm)
 
-    # Refresh when navigating to Runs
+    # Refresh when navigating to Completed Runs
     def _on_tab(event):
-        if event.new == "Runs":
+        if event.new == "Completed Runs":
             _refresh()
 
     state.param.watch(_on_tab, ["active_tab"])
     _refresh()
 
-    actions = pn.Row(
+    actions = pn.FlexBox(
         refresh_btn, family_filter, open_btn, rerun_btn, delete_btn,
+        align_items="flex-end",
+        gap="8px",
+        flex_wrap="wrap",
         sizing_mode="stretch_width",
     )
-    prune_row = pn.Row(
+    prune_row = pn.FlexBox(
         prune_days, prune_preview_btn, prune_confirm_btn,
+        align_items="flex-end",
+        gap="8px",
+        flex_wrap="wrap",
         sizing_mode="stretch_width",
     )
 
     return pn.Column(
-        pn.pane.Markdown("## Runs", margin=(8, 4, 4, 4)),
+        pn.pane.Markdown("## Completed Runs", margin=(8, 4, 4, 4)),
         actions,
         status,
         table_holder,

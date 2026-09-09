@@ -114,8 +114,8 @@ _COL_CHOOSER_WRAP_CSS = """
 }
 .bk-input-group.bk-inline {
     display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 4px 10px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 6px 12px;
     width: 100%;
     white-space: normal !important;
     align-items: start;
@@ -124,30 +124,78 @@ _COL_CHOOSER_WRAP_CSS = """
     margin-left: 0 !important;
     display: inline-flex;
     align-items: flex-start;
+    gap: 6px;
     min-width: 0;
+    padding: 2px 0;
 }
 .bk-input-group.bk-inline > label > span {
     white-space: normal;
     word-break: break-word;
     overflow-wrap: anywhere;
-    line-height: 1.2;
+    line-height: 1.25;
     font-size: 12px;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: #1a1a2e;
 }
 """
 
-# Labels for the three chooser sections (plain DOM, not shadow-root).
+# Outer panel + per-zone cards (plain DOM, not shadow-root).
 _COL_CHOOSER_SECTION_CSS = """
+.cryo-col-chooser {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    padding: 4px 0 8px 0;
+}
 .cryo-col-chooser-section {
-    margin-bottom: 6px;
     width: 100%;
     max-width: 100%;
     overflow: hidden;
+    border: 1px solid rgba(38, 51, 71, 0.22);
+    border-radius: 4px;
+    background: #ffffff;
+    padding: 0 0 12px 0;
+}
+.cryo-col-chooser-section.zone-rank {
+    border-left: 3px solid #0d1b2a;
+    background: #f8fafc;
+}
+.cryo-col-chooser-section.zone-params {
+    border-left: 3px solid #1e6fbf;
+    background: #eff6ff;
+}
+.cryo-col-chooser-section.zone-perf {
+    border-left: 3px solid #3d7a6a;
+    background: #f0fdf4;
+}
+.cryo-col-chooser-body {
+    padding: 12px 16px 6px 16px;
+}
+"""
+
+# HTML pane is its own shadow root — parent Column stylesheets do not reach
+# the label markup. Stamp this on the HTML pane (and keep inline styles).
+_COL_CHOOSER_LABEL_CSS = """
+:host {
+    display: block;
+    width: 100%;
 }
 .cryo-col-chooser-label {
-    font-size: 12px;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 12px 16px 10px 16px;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
     font-weight: 600;
-    color: #4b5563;
-    margin: 4px 4px 2px 4px;
+    letter-spacing: normal;
+    line-height: 1.3;
+    color: #1a1a2e;
+    border-bottom: 1px solid rgba(38, 51, 71, 0.18);
+    background: rgba(255, 255, 255, 0.55);
 }
 """
 
@@ -531,17 +579,41 @@ def _make_column_chooser() -> pn.widgets.CheckBoxGroup:
     )
 
 
-def _make_chooser_section(label: str, chooser: pn.widgets.CheckBoxGroup) -> pn.Column:
+def _make_chooser_section(
+    label: str,
+    chooser: pn.widgets.CheckBoxGroup,
+    zone: str,
+) -> pn.Column:
     """Wrap a CheckBoxGroup with a zone label inside the column chooser panel."""
+    # Inline styles: HTML pane shadow root ignores parent Column stylesheets.
+    # Match Combo Selection: / Filter: — 14px / 600 / #1a1a2e
+    label_html = (
+        f'<div class="cryo-col-chooser-label" style="'
+        "box-sizing:border-box;display:block;width:100%;margin:0;"
+        "padding:12px 16px 10px 16px;"
+        "font-family:'Segoe UI',system-ui,-apple-system,sans-serif;"
+        "font-size:14px;font-weight:600;line-height:1.3;color:#1a1a2e;"
+        "border-bottom:1px solid rgba(38,51,71,0.18);"
+        'background:rgba(255,255,255,0.55)">'
+        f"{label}</div>"
+    )
     return pn.Column(
         pn.pane.HTML(
-            f'<div class="cryo-col-chooser-label">{label}</div>',
+            label_html,
             margin=(0, 0),
             sizing_mode="stretch_width",
+            stylesheets=[_COL_CHOOSER_LABEL_CSS],
         ),
-        chooser,
-        css_classes=["cryo-col-chooser-section"],
+        pn.Column(
+            chooser,
+            css_classes=["cryo-col-chooser-body"],
+            sizing_mode="stretch_width",
+            margin=(0, 0),
+            styles={"padding": "12px 16px 6px 16px"},
+        ),
+        css_classes=["cryo-col-chooser-section", f"zone-{zone}"],
         sizing_mode="stretch_width",
+        margin=(0, 4),
     )
 
 
@@ -558,12 +630,14 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     # --- "View Detail" button (enabled when exactly 1 combo is selected) ---
     _view_detail_btn = pn.widgets.Button(
-        name="View Detail", button_type="primary", disabled=True, width=110
+        name="View Detail", button_type="primary", disabled=True, width=110,
+        margin=(4, 4),
     )
 
     # --- "Star" button (Phase 4) ---
     _star_btn = pn.widgets.Button(
         name="☆ Star", button_type="light", disabled=True, width=90,
+        margin=(4, 4),
     )
     _star_feedback = pn.pane.HTML("", styles={"font-size": "11px"}, width=150)
 
@@ -579,10 +653,10 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
     _csv_download = pn.widgets.FileDownload(
         callback=_get_csv,
         filename="results.csv",
-        label="⬇ CSV",
+        label="Export grid as CSV",
         button_type="light",
-        width=80,
-        margin=(0, 4),
+        width=150,
+        margin=(4, 4),
     )
 
     # --- Column chooser: three zones matching the table layout ---
@@ -593,17 +667,17 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
     _col_choosers = (_col_chooser_rank, _col_chooser_params, _col_chooser_perf)
 
     _col_chooser_panel = pn.Column(
-        _make_chooser_section("Rank & score", _col_chooser_rank),
-        _make_chooser_section("Parameters", _col_chooser_params),
-        _make_chooser_section("Performance", _col_chooser_perf),
+        _make_chooser_section("Rank", _col_chooser_rank, "rank"),
+        _make_chooser_section("Parameters", _col_chooser_params, "params"),
+        _make_chooser_section("Performance", _col_chooser_perf, "perf"),
         visible=False,
         sizing_mode="stretch_width",
         css_classes=["cryo-col-chooser"],
         stylesheets=[_COL_CHOOSER_SECTION_CSS],
     )
     _cols_toggle = pn.widgets.Toggle(
-        name="⚙ Columns", value=False, button_type="light",
-        width=105, margin=(0, 4),
+        name="Column Selection", value=False, button_type="light",
+        width=140, margin=(4, 4),
     )
     _cols_toggle.param.watch(
         lambda e: setattr(_col_chooser_panel, "visible", e.new), "value"
@@ -636,21 +710,12 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
         placeholder="e.g.  sharpe>1.5   pnl:0..5000   exit_reason:trigger,expiry",
         name="",
         sizing_mode="stretch_width",
-        margin=(2, 4),
+        max_width=720,
+        margin=(4, 4),
     )
     _filter_feedback = pn.pane.HTML("", styles={"font-size": "11px"}, width=320)
     _filter_clear = pn.widgets.Button(
-        name="✕ Clear", width=70, button_type="light", margin=(2, 4),
-    )
-    _filter_row = pn.Row(
-        pn.pane.Markdown("**Filter:**", margin=(8, 4)),
-        _filter_input,
-        _filter_clear,
-        _filter_feedback,
-        pn.Spacer(),
-        _csv_download,
-        _cols_toggle,
-        sizing_mode="stretch_width",
+        name="Clear filter", width=110, button_type="light", margin=(4, 4),
     )
 
     def _apply_current_filter(tab):
@@ -894,13 +959,42 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     _star_btn.on_click(_on_star)
 
-    _action_row = pn.Row(
-        pn.pane.Markdown("### Results Grid", margin=(5, 10)),
-        pn.Spacer(),
+    _title = pn.pane.Markdown("### Results Grid", margin=(5, 4, 4, 4))
+    _combo_label = pn.pane.HTML(
+        "<span style='font-family:\"Segoe UI\",system-ui,sans-serif;font-size:14px;"
+        "font-weight:600;color:#1a1a2e;white-space:nowrap'>Combo Selection:</span>",
+        width=130,
+        height=28,
+        margin=(10, 4, 4, 4),
+    )
+    _combo_row = pn.FlexBox(
+        _combo_label,
         _view_detail_btn,
         _star_btn,
+        _csv_download,
+        _cols_toggle,
         _star_feedback,
         _sel_label,
+        align_items="center",
+        gap="8px",
+        flex_wrap="wrap",
+        sizing_mode="stretch_width",
+    )
+    _filter_label = pn.pane.HTML(
+        "<span style='font-family:\"Segoe UI\",system-ui,sans-serif;font-size:14px;"
+        "font-weight:600;color:#1a1a2e;white-space:nowrap'>Filter:</span>",
+        width=55,
+        height=28,
+        margin=(10, 4, 4, 4),
+    )
+    _filter_row = pn.FlexBox(
+        _filter_label,
+        _filter_input,
+        _filter_clear,
+        _filter_feedback,
+        align_items="center",
+        gap="8px",
+        flex_wrap="wrap",
         sizing_mode="stretch_width",
     )
 
@@ -912,4 +1006,11 @@ def build_grid_view(state, cache, store=None) -> pn.Column:
 
     _view_detail_btn.on_click(_on_view_detail)
 
-    return pn.Column(_action_row, _filter_row, _col_chooser_panel, _content, sizing_mode="stretch_width")
+    return pn.Column(
+        _title,
+        _combo_row,
+        _filter_row,
+        _col_chooser_panel,
+        _content,
+        sizing_mode="stretch_width",
+    )

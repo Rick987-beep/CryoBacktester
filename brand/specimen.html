@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CryoBacktester — UI specimen (light brand)</title>
+  <link rel="stylesheet" href="research_light.css" />
+</head>
+<body>
+  <header class="ca-shell-header">
+    <div class="ca-brand">
+      <img src="icons/backtester.png" alt="" width="28" height="28" />
+      <h1 class="ca-title">CryoBacktester</h1>
+    </div>
+    <nav class="ca-nav" aria-label="Primary">
+      <button type="button" class="ca-nav-btn">New Run</button>
+      <button type="button" class="ca-nav-btn">Runs</button>
+      <button type="button" class="ca-nav-btn is-active">Results Grid</button>
+      <button type="button" class="ca-nav-btn">Combo Detail</button>
+      <button type="button" class="ca-nav-btn">Favourites</button>
+    </nav>
+  </header>
+
+  <div class="ca-context-bar">
+    <span class="ca-label">Run</span>
+    <span class="ca-data">776</span>
+    <span class="ca-label">Bundle</span>
+    <span class="ca-data">theta_engine_v19_20260908_135724</span>
+    <span class="ca-label">Combo</span>
+    <span class="ca-data">c823cd1f9665</span>
+    <span class="ca-badge ca-badge-bt">Backtester</span>
+    <span class="ca-badge ca-badge-ok">done</span>
+  </div>
+
+  <main class="ca-page">
+    <section class="ca-section">
+      <h2 class="ca-section-h">Type scale (4 roles)</h2>
+      <div class="ca-panel">
+        <div class="ca-type-sample">
+          <span class="role">title 20</span>
+          <span style="font-size: var(--ca-fs-title); font-weight: 600; color: var(--ca-navy-900);">CryoBacktester</span>
+          <span class="role">body 14</span>
+          <span class="ca-body">Body copy for forms, help text, and panel content.</span>
+          <span class="role">label 12</span>
+          <span class="ca-label" style="color: var(--ca-text);">Field label · nav · caption</span>
+          <span class="role">data 13</span>
+          <span class="ca-data">fc678e1a6b1e · Sharpe 1.53 · DD 11.2%</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="ca-section">
+      <h2 class="ca-section-h">Buttons</h2>
+      <div class="ca-panel">
+        <div class="ca-row">
+          <button type="button" class="ca-btn ca-btn-primary">Run backtest</button>
+          <button type="button" class="ca-btn ca-btn-accent">Save favourite</button>
+          <button type="button" class="ca-btn ca-btn-secondary">Cancel</button>
+          <button type="button" class="ca-btn ca-btn-ghost">Open audit</button>
+          <button type="button" class="ca-btn ca-btn-danger">Cancel job</button>
+          <button type="button" class="ca-btn ca-btn-primary" disabled>Disabled</button>
+        </div>
+        <div class="ca-row">
+          <button type="button" class="ca-btn ca-btn-sm ca-btn-secondary">Small secondary</button>
+          <button type="button" class="ca-btn ca-btn-sm ca-btn-primary">Small primary</button>
+          <a class="ca-link" href="#">Text link</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="ca-section">
+      <h2 class="ca-section-h">Entry fields</h2>
+      <div class="ca-panel">
+        <div class="ca-row">
+          <div class="ca-stack">
+            <label class="ca-field-label" for="strategy">Strategy</label>
+            <select id="strategy" class="ca-select">
+              <option>theta_engine_v19</option>
+              <option>theta_engine_v18</option>
+              <option>tudysho_v4</option>
+            </select>
+            <span class="ca-hint">Catalog ID — stable, never rename</span>
+          </div>
+          <div class="ca-stack">
+            <label class="ca-field-label" for="workers">Workers</label>
+            <input id="workers" class="ca-input ca-data" type="text" value="4" />
+            <span class="ca-hint">Combo-shard processes</span>
+          </div>
+        </div>
+        <div class="ca-row">
+          <div class="ca-stack">
+            <label class="ca-field-label" for="start">Date start</label>
+            <input id="start" class="ca-input ca-data" type="text" value="2025-04-11" />
+          </div>
+          <div class="ca-stack">
+            <label class="ca-field-label" for="end">Date end</label>
+            <input id="end" class="ca-input ca-data" type="text" value="2026-08-31" />
+          </div>
+        </div>
+        <div class="ca-row">
+          <div class="ca-stack">
+            <label class="ca-field-label" for="notes">Notes</label>
+            <textarea id="notes" class="ca-textarea" placeholder="Optional run note…"></textarea>
+          </div>
+        </div>
+        <div class="ca-row">
+          <div class="ca-stack">
+            <label class="ca-field-label" for="bad">Invalid example</label>
+            <input id="bad" class="ca-input is-error" type="text" value="not-a-date" />
+            <span class="ca-hint" style="color: var(--ca-negative);">Expected YYYY-MM-DD</span>
+          </div>
+          <div class="ca-stack">
+            <label class="ca-field-label" for="off">Disabled</label>
+            <input id="off" class="ca-input" type="text" value="read-only value" disabled />
+          </div>
+        </div>
+        <div class="ca-row">
+          <label class="ca-check">
+            <input type="checkbox" checked />
+            Detach to jobd
+          </label>
+          <label class="ca-check">
+            <input type="checkbox" />
+            Robustness (DSR)
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="ca-section">
+      <h2 class="ca-section-h">Badges &amp; status</h2>
+      <div class="ca-panel">
+        <div class="ca-row">
+          <span class="ca-badge ca-badge-bt">Backtester</span>
+          <span class="ca-badge ca-badge-ok">done</span>
+          <span class="ca-badge ca-badge-err">failed</span>
+          <span class="ca-badge ca-badge-muted">queued</span>
+        </div>
+      </div>
+    </section>
+
+    <p class="ca-note">
+      Specimen only — pack tokens from <span class="ca-data">cryo_aureas</span>.
+      Tables and Plotly left alone. Review chrome + controls, then we port into Panel.
+    </p>
+  </main>
+
+  <script>
+    document.querySelectorAll(".ca-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".ca-nav-btn").forEach((b) => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+      });
+    });
+  </script>
+</body>
+</html>

@@ -107,11 +107,34 @@ class RunService:
 
     def in_flight_job_count(self) -> int:
         try:
-            snap = self._client.snapshot()
+            snap = self.queue_snapshot()
         except Exception as exc:
             log.debug("run_service: snapshot failed: %s", exc)
             return sum(1 for h in self._handles if h.job_id and h.is_alive())
         return len(snap.running) + len(snap.queued)
+
+    def queue_snapshot(self) -> QueueSnapshot:
+        """Current jobd queue: running, queued, recent."""
+        return self._client.snapshot()
+
+    def job_log_tail(self, job_id: str, *, max_bytes: int = 24_000) -> str:
+        """Return the trailing bytes of ``job.log`` for ``job_id`` (UTF-8)."""
+        if not job_id:
+            return ""
+        path = self._client.store.job_dir(job_id) / "job.log"
+        if not path.is_file():
+            return ""
+        try:
+            size = path.stat().st_size
+            with path.open("rb") as fh:
+                if size > max_bytes:
+                    fh.seek(size - max_bytes)
+                    fh.readline()  # drop partial first line
+                raw = fh.read()
+            return raw.decode("utf-8", errors="replace")
+        except OSError as exc:
+            log.debug("run_service: job_log_tail failed job_id=%s: %s", job_id, exc)
+            return ""
 
     def _spawn(self, cmd: list[str]) -> subprocess.Popen:
         """Spawn ``cmd`` in a new session (local test children only)."""
@@ -220,7 +243,7 @@ class RunService:
 
     def adopt_in_flight(self) -> RunHandle | None:
         """Attach the first running (else queued) job so the UI can reconnect."""
-        snap = self._client.snapshot()
+        snap = self.queue_snapshot()
         views = list(snap.running) + list(snap.queued)
         if not views:
             return None
@@ -237,7 +260,7 @@ class RunService:
         """Register recent done job bundles into the UI store (idempotent)."""
         run_ids: list[int] = []
         try:
-            snap = self._client.snapshot()
+            snap = self.queue_snapshot()
         except Exception as exc:
             log.debug("run_service: import snapshot failed: %s", exc)
             return run_ids
@@ -268,9 +291,12 @@ class RunService:
         key = (
             view.state,
             view.phase,
+            view.message,
             view.current,
             view.total,
             view.date,
+            view.inner_workers_effective,
+            view.n_shards,
             view.bundle_path,
             view.error,
             view.queue_position,
@@ -286,7 +312,8 @@ class RunService:
             return
 
         if view.phase:
-            yield {"phase": view.phase, "msg": view.phase}
+            msg = view.message or view.phase
+            yield {"phase": view.phase, "msg": msg}
         if view.current is not None and view.total is not None:
             yield {
                 "current": view.current,

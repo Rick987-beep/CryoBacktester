@@ -84,7 +84,8 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 
 # Research UI — native window (preferred)
 python -m backtester.ui.desktop
-# New Run enqueues on jobd. Closing the window does not stop the backtest.
+# New Run enqueues on jobd; progress / queue / log on Backtester Run.
+# Closing the window does not stop the backtest.
 # or: open scripts/macos/CryoBacktester.app
 
 # Research UI — browser / Terminal (dev)
@@ -172,8 +173,8 @@ python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.
 # Detached jobs (fast stub queue tests + real job_smoke E2E)
 python -m pytest tests/job -v
 
-# GUI job client (enqueue / quit-does-not-kill / reconnect)
-python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
+# GUI job client (enqueue / quit-does-not-kill / reconnect / brand shell)
+python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py tests/ui/test_backtester_run_view.py tests/ui/test_brand_shell.py -v
 
 # Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v
@@ -421,6 +422,7 @@ locks): `c823cd1f9665`, `bc7b45e82c5c`. **Next = Step 3 exits.** See
 | `workspace/analysis/livecompare/README.md` | Livecompare CLI outputs (active) |
 | `workspace/archive/README.md` | Closed research archive guiderail |
 | `scripts/macos/brand/DESIGN.md` | Cryo product-family visual language (icons / palette) |
+| `backtester/ui/brand/` | Research UI light shell (cryo_aureas tokens + CSS) |
 | `docs/strategy_howto.md` | How to write a new strategy — authoritative reference |
 | `workspace/strategies/other/blueprint_howto.py` | Canonical working strategy implementation |
 | `workspace/catalog.py` | Family registry + stable strategy IDs |

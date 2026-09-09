@@ -1,0 +1,65 @@
+{
+  "pack_id": "cryo_aureas",
+  "ux_id": "ops",
+  "density": "dense",
+  "shell": "dark-ops",
+  "product_accent_role": "badge_icon_only",
+  "widgets": [
+    "nav",
+    "badge",
+    "meta_pill",
+    "kill_control",
+    "log_viewer",
+    "dense_table",
+    "slot_card",
+    "metric_chip"
+  ],
+  "colors": {
+    "page": "#0d1b2a",
+    "panel": "#1a2e44",
+    "gold": "#c8a84b",
+    "blue": "#1e6fbf",
+    "muted": "#8a9ab0",
+    "border": "#263347",
+    "product": {
+      "backtester": "#3d7a6a",
+      "trader": "#b05a48",
+      "quant": "#1e6fbf",
+      "execute": "#5c5f8a"
+    },
+    "status": {
+      "positive": "#2ecc71",
+      "negative": "#e74c3c"
+    }
+  },
+  "typography": {
+    "ui": "system-ui, -apple-system, sans-serif",
+    "data": "\"SF Mono\", \"Fira Code\", \"Cascadia Code\", ui-monospace, monospace"
+  },
+  "spacing": {
+    "grid_px": 4,
+    "scale": {
+      "xs": 4,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 24
+    }
+  },
+  "css": {
+    "ops": "dist/ops.css",
+    "classes": {
+      "page": "ca-ops",
+      "panel": "ca-ops-panel",
+      "data": "ca-ops-data",
+      "hatch": "ca-pattern-hatch-inverse",
+      "badges": {
+        "backtester": "ca-badge-backtester",
+        "trader": "ca-badge-trader",
+        "quant": "ca-badge-quant",
+        "execute": "ca-badge-execute"
+      }
+    }
+  },
+  "rule": "Never paste document type scale / strategy-report header CSS into hub or Panel."
+}

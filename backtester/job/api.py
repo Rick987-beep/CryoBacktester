@@ -90,7 +90,9 @@ class JobView:
     current: int | None = None
     total: int | None = None
     date: str | None = None
+    message: str | None = None
     inner_workers_effective: int | None = None
+    n_shards: int | None = None
     pid: int | None = None
     submitted_at: str = ""
     heartbeat_ts: str | None = None
@@ -270,7 +272,9 @@ class JobStore:
             current=status.get("current"),
             total=status.get("total"),
             date=status.get("date"),
+            message=status.get("message"),
             inner_workers_effective=status.get("inner_workers_effective"),
+            n_shards=status.get("n_shards"),
             pid=status.get("pid"),
             submitted_at=submitted_at,
             heartbeat_ts=heartbeat_ts,

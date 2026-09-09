@@ -1,0 +1,23 @@
+{
+  "built_at": "2026-09-08T09:13:12.408044+00:00",
+  "root": "/Users/ulrikdeichsel/agent-commons/agent_commons/brand/packs/cryo_aureas",
+  "files": [
+    "document.css",
+    "ops.css",
+    "web.css",
+    "strategy_report.css",
+    "ops_theme.json",
+    "tokens.json",
+    "tokens.typ"
+  ],
+  "kit_files": [
+    "kit/samples/brand-book.html",
+    "kit/samples/README.md",
+    "kit/templates/README.md"
+  ],
+  "design_id": "aureas-institutional",
+  "ux_id": "ops",
+  "web_id": "marketing",
+  "token_count": 18,
+  "motif_png": "assets/patterns/motif-candlestick.png"
+}

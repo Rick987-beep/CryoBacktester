@@ -1,5 +1,9 @@
 """
 views/chrome.py — Top navigation + context detail bar for the Research UI.
+
+Nav order: New Run → Backtester Run → Completed Runs → Results Grid →
+Combo Detail → Favourites. Legacy ?tab=Runs / Equity Overlay / Compare map
+via ``normalize_tab_name``.
 """
 from __future__ import annotations
 
@@ -12,7 +16,8 @@ log = get_ui_logger(__name__)
 # Canonical nav pages (order = left-to-right)
 NAV_PAGES = [
     "New Run",
-    "Runs",
+    "Backtester Run",
+    "Completed Runs",
     "Results Grid",
     "Combo Detail",
     "Favourites",
@@ -22,9 +27,10 @@ NAV_PAGES = [
 _LEGACY_TAB_MAP = {
     "Equity Overlay": "Combo Detail",
     "Compare": "Favourites",
+    "Runs": "Completed Runs",
 }
 
-# Nav sits on the blue template header — use amber/slate, not header blue
+# Nav sits on navy brand header — inactive glass, active gold (cryo_aureas)
 _NAV_CSS = """
 :host .bk-btn-group {
   display: flex;
@@ -32,22 +38,25 @@ _NAV_CSS = """
   gap: 4px;
 }
 :host .bk-btn-group .bk-btn {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #f8fafc !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #f5f7fa !important;
   border: 1px solid rgba(255, 255, 255, 0.28) !important;
   box-shadow: none !important;
-  font-weight: 500;
-  padding: 6px 12px;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
 }
 :host .bk-btn-group .bk-btn:hover {
-  background: rgba(255, 255, 255, 0.22) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
 }
 :host .bk-btn-group .bk-btn.bk-active,
 :host .bk-btn-group .bk-btn[aria-pressed="true"] {
-  background: #f59e0b !important;
-  color: #1a1a2e !important;
-  border-color: #d97706 !important;
-  font-weight: 600;
+  background: #c8a84b !important;
+  color: #0B1220 !important;
+  border-color: #c8a84b !important;
+  font-weight: 600 !important;
 }
 """
 
@@ -71,6 +80,8 @@ def build_nav(state) -> pn.widgets.RadioButtonGroup:
         value=normalize_tab_name(state.active_tab),
         button_type="default",
         sizing_mode="fixed",
+        width=780,
+        height=36,
         margin=(6, 8),
         stylesheets=[_NAV_CSS],
     )
@@ -219,29 +230,20 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
             cancel_btn.visible = True
             queued = getattr(handle, "is_queued", lambda: False)()
             flight_txt = "Queued…" if queued else "Running…"
-            flight = (
-                '<div style="flex:0 0 auto;padding:0 8px;color:#2563eb;'
-                f'font-weight:600;white-space:nowrap">{flight_txt}</div>'
-            )
+            flight = f'<div class="ca-sel-flight">{flight_txt}</div>'
         else:
             cancel_btn.visible = False
 
         run_safe = _esc(run_txt)
         combo_safe = _esc(combo_txt)
         bar_html.object = (
-            '<div style="display:flex;align-items:center;height:36px;font-size:13px;'
-            'line-height:36px;background:#f8fafc;border-bottom:1px solid #e5e7eb;'
-            'overflow:hidden;white-space:nowrap">'
-            f'<div style="flex:0 1 auto;max-width:40%;min-width:160px;overflow:hidden;'
-            f'text-overflow:ellipsis;padding:0 10px" title="{run_safe}">'
-            f'<span style="color:#6b7280;font-weight:600;margin-right:6px">'
-            f'Selected Run:</span>{run_safe}</div>'
-            f'<div style="flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;'
-            f'padding:0 10px;border-left:1px solid #e5e7eb" title="{combo_safe}">'
-            f'<span style="color:#6b7280;font-weight:600;margin-right:6px">'
-            f'Selected Combo:</span>'
-            f'<span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">'
-            f'{combo_safe}</span></div>'
+            '<div class="ca-selection-bar">'
+            f'<div class="ca-sel-run" title="{run_safe}">'
+            f'<span class="ca-sel-label">Selected Run:</span>'
+            f'<span class="ca-sel-data">{run_safe}</span></div>'
+            f'<div class="ca-sel-combo" title="{combo_safe}">'
+            f'<span class="ca-sel-label">Selected Combo:</span>'
+            f'<span class="ca-sel-data">{combo_safe}</span></div>'
             + flight
             + "</div>"
         )

@@ -19,12 +19,19 @@ def test_normalize_tab_name_legacy():
     assert normalize_tab_name("unknown-tab") == "Results Grid"
     assert normalize_tab_name(None) == "Results Grid"
     assert set(NAV_PAGES) == {
-        "New Run", "Runs", "Results Grid", "Combo Detail", "Favourites",
+        "New Run",
+        "Backtester Run",
+        "Completed Runs",
+        "Results Grid",
+        "Combo Detail",
+        "Favourites",
     }
+    assert normalize_tab_name("Runs") == "Completed Runs"
 
 
-def test_shell_no_sidebar_and_five_pages(tmp_path):
+def test_shell_no_sidebar_and_six_pages(tmp_path):
     from backtester.ui.app import build_app
+    from backtester.ui.brand import NAVY_900
 
     app = build_app(
         state_dir=str(tmp_path / "state"),
@@ -33,13 +40,19 @@ def test_shell_no_sidebar_and_five_pages(tmp_path):
     assert isinstance(app, pn.template.base.BaseTemplate)
     assert not hasattr(app, "sidebar") or len(getattr(app, "sidebar", [])) == 0
     assert list(app._cryo_nav_pages) == [
-        "New Run", "Runs", "Results Grid", "Combo Detail", "Favourites",
+        "New Run",
+        "Backtester Run",
+        "Completed Runs",
+        "Results Grid",
+        "Combo Detail",
+        "Favourites",
     ]
+    assert app.header_background == NAVY_900
     # Dark mode UI must not be present
     src = Path(importlib.import_module("backtester.ui.app").__file__).read_text()
     assert "dark_mode" not in src
     assert "Dark mode" not in src
-
+    assert "theme=\"default\"" in src or "theme='default'" in src
 
 def test_delete_runs_respects_pin_and_removes_bundle(sqlite_store, tiny_grid_result, tmp_path):
     # write two bundles

@@ -1,12 +1,8 @@
 """
-views/overlay_view.py — Multi-combo equity overlay (embedded in Combo Detail).
+views/overlay_view.py — Multi-combo equity overlay (unused module).
 
-Renders a multi-combo equity overlay chart.
-Responds to state.selected_combo_keys and state.active_run_id.
-
-Controls:
-  - Y-mode toggle: NAV vs Cum PnL
-  - Log-y toggle
+Not wired into the Research UI (removed from Combo Detail). Kept for
+possible revival; do not import from app.py until product wants it back.
 """
 import panel as pn
 import param

@@ -106,3 +106,30 @@ def test_detail_view_builds_without_error(tiny_grid_result, sqlite_store):
     state.active_run_id = run_id
     state.active_combo_key = tiny_grid_result.best_key
     # Should not raise
+
+
+def test_detail_view_omits_equity_overlay(tiny_grid_result, sqlite_store):
+    """Multi-combo Equity Overlay is no longer embedded under Combo Detail."""
+    pn.extension("tabulator", "plotly", sizing_mode="stretch_width")
+    from backtester.ui.state import AppState
+    from backtester.ui.services.cache_service import ResultCache
+    from backtester.ui.views.detail_view import build_detail_view
+
+    cache = ResultCache(sqlite_store, max_unpinned=5)
+    bundle_path = sqlite_store.write_bundle(
+        tiny_grid_result, strategy="tiny_test", runtime_s=0.1, source="test"
+    )
+    cache.get(sqlite_store.register_bundle(bundle_path))
+    view = build_detail_view(AppState(), cache)
+
+    md_text = " ".join(
+        str(getattr(obj, "object", ""))
+        for obj in view.select(pn.pane.Markdown)
+    )
+    html_text = " ".join(
+        str(getattr(obj, "object", ""))
+        for obj in view.select(pn.pane.HTML)
+    )
+    assert "Equity Overlay" not in md_text
+    assert "Equity Overlay" not in html_text
+    assert len(view.objects) == 1  # content only — no overlay sibling

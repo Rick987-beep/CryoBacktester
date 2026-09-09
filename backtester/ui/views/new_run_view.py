@@ -1,5 +1,5 @@
 """
-views/new_run_view.py — Full-page New Run form (strategy, params, progress).
+views/new_run_view.py — Full-page New Run form (strategy, params, enqueue).
 """
 from __future__ import annotations
 
@@ -16,21 +16,23 @@ log = get_ui_logger(__name__)
 _PARAM_TABLE_CSS = """
 .param-help {
   font-size: 12px;
-  color: #6b7280;
+  color: #8a9ab0;
   line-height: 1.35;
   padding: 4px 8px 8px 4px;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 .param-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   padding: 8px 4px 0 4px;
-  color: #1a2332;
+  color: #1a1a2e;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 """
 
 
 def build_new_run_view(state, store, cache, run_service) -> pn.Column:
-    """Build the New Run page."""
+    """Build the New Run page (form only — progress lives on Backtester Run)."""
     from backtester.run import STRATEGIES
     from backtester.catalog import (
         FAMILIES,
@@ -66,7 +68,7 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
         name="↻ Reload strategy",
         button_type="light",
         width=140,
-        margin=(22, 0, 0, 8),
+        margin=(4, 4),
     )
 
     _param_inputs: dict = {}
@@ -87,19 +89,6 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
 
     run_btn = pn.widgets.Button(
         name="▶ Run", button_type="success", disabled=True, width=120, margin=(6, 4),
-    )
-    cancel_btn = pn.widgets.Button(
-        name="■ Cancel", button_type="danger", disabled=True, width=120, margin=(6, 4),
-    )
-
-    progress_bar = pn.widgets.Progress(
-        name="Progress", value=0, max=100,
-        bar_color="primary", sizing_mode="stretch_width",
-        height=28, visible=False, margin=(8, 4),
-    )
-    progress_label = pn.pane.HTML(
-        "", sizing_mode="stretch_width",
-        styles={"font-size": "13px", "color": "#6b7280", "min-height": "24px"},
     )
     status_label = pn.pane.HTML(
         "", sizing_mode="stretch_width",
@@ -140,7 +129,8 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
                 _param_errors[pname].object = ""
         if not _validate_dates():
             all_ok = False
-        run_btn.disabled = not all_ok or state.active_run_handle is not None
+        # jobd accepts a queue — Run stays enabled while another job is active
+        run_btn.disabled = not all_ok
         return all_ok
 
     def _load_strategy_params(key: str):
@@ -239,130 +229,6 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
     _load_strategy_params(strategy_select.value)
     _load_date_range(strategy_select.value)
 
-    _cb_handle: dict = {"cb": None, "handle": None}
-
-    def _stop_cb():
-        cb = _cb_handle.get("cb")
-        if cb:
-            try:
-                cb.stop()
-            except Exception:
-                pass
-        _cb_handle["cb"] = None
-        _cb_handle["handle"] = None
-
-    def _on_run_done(line):
-        _stop_cb()
-        bundle_path = line.get("bundle_path")
-        try:
-            run_id = store.register_bundle(bundle_path)
-            cache.get(run_id)
-            state.active_run_id = run_id
-            status_label.object = (
-                f"<span style='color:#16a34a'>✓ Done — run #{run_id} loaded. "
-                f"Switch to Results Grid to inspect.</span>"
-            )
-            progress_bar.value = 100
-            state.active_tab = "Results Grid"
-        except Exception as exc:
-            log.error("new_run_view: failed to register completed run: %s", exc)
-            status_label.object = (
-                f"<span style='color:#dc2626'>⚠ Run done but load failed: {exc}</span>"
-            )
-        state.active_run_handle = None
-        cancel_btn.disabled = True
-        run_btn.disabled = False
-
-    def _on_run_ended(line):
-        _stop_cb()
-        status_code = line.get("status", "error")
-        msg = line.get("message", "")
-        if status_code == "cancelled":
-            status_label.object = "<span style='color:#d97706'>Cancelled.</span>"
-        else:
-            status_label.object = (
-                f"<span style='color:#dc2626'>⚠ Error: {msg}</span>"
-            )
-        progress_bar.visible = False
-        state.active_run_handle = None
-        cancel_btn.disabled = True
-        run_btn.disabled = False
-
-    def _begin_watch(handle, *, reconnect: bool = False):
-        """Poll JobStore progress until the job finishes or is cancelled."""
-        _stop_cb()
-        state.active_run_handle = handle
-        run_btn.disabled = True
-        cancel_btn.disabled = False
-        progress_bar.value = 0
-        progress_bar.visible = True
-        progress_label.object = ""
-        if reconnect:
-            status_label.object = (
-                "<span style='color:#2563eb'>Reconnected — job still running…</span>"
-            )
-        elif getattr(handle, "is_queued", lambda: False)():
-            status_label.object = "<span style='color:#2563eb'>Queued…</span>"
-        else:
-            status_label.object = "<span style='color:#2563eb'>Running…</span>"
-        _cb_handle["handle"] = handle
-
-        def _poll():
-            h = _cb_handle.get("handle")
-            if h is None:
-                return
-            for line in run_service.tail_progress(h):
-                if "phase" in line:
-                    phase = line["phase"]
-                    msg = line.get("msg", "")
-                    progress_label.object = msg
-                    if phase == "queued":
-                        progress_bar.value = 1
-                        status_label.object = (
-                            "<span style='color:#2563eb'>Queued…</span>"
-                        )
-                    elif phase == "loading_data":
-                        progress_bar.value = 3
-                        status_label.object = (
-                            "<span style='color:#2563eb'>Running…</span>"
-                        )
-                    elif phase == "building_indicators":
-                        progress_bar.value = 8
-                    elif phase == "backtesting" or phase == "starting":
-                        progress_bar.value = max(progress_bar.value, 12)
-                        status_label.object = (
-                            "<span style='color:#2563eb'>Running…</span>"
-                        )
-                elif "current" in line and "total" in line:
-                    total = line["total"]
-                    current = line["current"]
-                    if total > 0:
-                        progress_bar.value = 12 + int(88 * current / total)
-                    if line.get("date"):
-                        progress_label.object = f"Processing {line['date']}"
-                elif line.get("status") == "done":
-                    _on_run_done(line)
-                    return
-                elif line.get("status") in ("error", "cancelled"):
-                    _on_run_ended(line)
-                    return
-            if not h.is_alive():
-                remaining = list(run_service.tail_progress(h))
-                final = next((l for l in reversed(remaining) if "status" in l), None)
-                if final:
-                    if final.get("status") == "done":
-                        _on_run_done(final)
-                    else:
-                        _on_run_ended(final)
-                else:
-                    _on_run_ended({
-                        "status": "error",
-                        "message": "job exited unexpectedly",
-                    })
-
-        cb = pn.state.add_periodic_callback(_poll, period=500)
-        _cb_handle["cb"] = cb
-
     def _on_run(event):
         if not _validate_all():
             return
@@ -396,20 +262,30 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
             log.error("new_run_view: submit failed: %s", exc)
             return
 
-        _begin_watch(handle)
+        status_label.object = (
+            f"<span style='color:#16a34a'>Enqueued "
+            f"<code>{getattr(handle, 'job_id', '')}</code> — "
+            f"see queue on Backtester Run.</span>"
+        )
+        # Keep watching the in-flight job; only adopt the new handle if idle
+        current = state.active_run_handle
+        current_alive = False
+        if current is not None:
+            try:
+                current_alive = bool(current.is_alive())
+            except Exception:
+                current_alive = False
+        if not current_alive:
+            state.active_run_handle = handle
+        state.active_tab = "Backtester Run"
+        _validate_all()
 
     run_btn.on_click(_on_run)
 
-    def _on_cancel(event):
-        h = _cb_handle.get("handle") or state.active_run_handle
-        if h:
-            try:
-                run_service.cancel(h)
-            except Exception as exc:
-                log.error("new_run_view: cancel failed: %s", exc)
-        cancel_btn.disabled = True
+    def _on_handle_change(event):
+        _validate_all()
 
-    cancel_btn.on_click(_on_cancel)
+    state.param.watch(_on_handle_change, "active_run_handle")
 
     def _on_rerun_request(event):
         req = event.new
@@ -420,7 +296,6 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
         if strat:
             fam = family_for(strat)
             family_select.value = fam if fam in family_select.options.values() else _FAMILY_ALL
-            # Refresh options for family then set strategy
             strategy_select.options = _strategy_select_options(family_select.value)
             if strat in strategy_select.options.values():
                 strategy_select.value = strat
@@ -441,37 +316,27 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
 
     state.param.watch(_on_rerun_request, ["rerun_request"])
 
-    def _adopt_later():
-        try:
-            adopted = run_service.adopt_in_flight()
-        except Exception as exc:
-            log.debug("new_run_view: adopt_in_flight failed: %s", exc)
-            return
-        if adopted is not None:
-            _begin_watch(adopted, reconnect=True)
-
-    try:
-        pn.state.onload(_adopt_later)
-    except Exception as exc:
-        log.debug("new_run_view: onload adopt not available: %s", exc)
-
     return pn.Column(
         pn.pane.Markdown("## New Run", margin=(8, 4, 4, 4)),
         pn.pane.Markdown(
             "Runs enqueue on **jobd** (same as `python -m backtester.run --detach`). "
-            "Closing the window does not stop them — reopen to watch progress.",
+            "You can queue several jobs while one is running — watch them on "
+            "**Backtester Run**. Closing the window does not stop jobs.",
             margin=(0, 4, 8, 4),
         ),
-        pn.Row(family_select, strategy_select, reload_btn, sizing_mode="stretch_width"),
+        pn.FlexBox(
+            family_select, strategy_select, reload_btn,
+            align_items="flex-end",
+            gap="8px",
+            flex_wrap="wrap",
+            sizing_mode="stretch_width",
+        ),
         pn.pane.Markdown("### Parameters", margin=(12, 4, 4, 4)),
         param_editor_col,
         pn.pane.Markdown("### Date range", margin=(12, 4, 4, 4)),
         pn.Row(date_from_input, date_to_input, sizing_mode="stretch_width"),
         date_error,
-        pn.Row(run_btn, cancel_btn, sizing_mode="stretch_width"),
-        pn.pane.Markdown("### Progress", margin=(16, 4, 4, 4)),
-        progress_bar,
-        progress_label,
+        pn.Row(run_btn, sizing_mode="stretch_width"),
         status_label,
         sizing_mode="stretch_width",
     )

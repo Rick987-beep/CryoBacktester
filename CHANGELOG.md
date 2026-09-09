@@ -4,6 +4,29 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-09-09: Research UI brand + Backtester Run
+
+Light **cryo_aureas** shell for the Research UI (`backtester/ui/brand/`), nav
+reorder, and a dedicated live-job page.
+
+- Brand: navy/gold chrome, research_light CSS stamped into Bokeh shadow roots,
+  backtester icon in the header.
+- Nav: **New Run** → **Backtester Run** → **Completed Runs** → Results Grid →
+  Combo Detail → Favourites (legacy `?tab=Runs` / Equity Overlay / Compare map).
+- **Backtester Run**: progress, status, workers/shards, equal-height Queue + Log,
+  reconnect via `adopt_in_flight`. Cancel on the selection bar only.
+- **New Run** is form-only; **Run** may enqueue while another job is active.
+- Results Grid column chooser zone cards; Compare / Equity Overlay removed from
+  Favourites / Combo Detail (modules kept unused).
+
+```bash
+python -m pytest tests/ui/test_brand_shell.py tests/ui/test_backtester_run_view.py \
+  tests/ui/test_shell_redesign.py tests/ui/test_grid_layout.py -v
+python -m backtester.ui.app --no-browser
+```
+
+---
+
 ## Checkpoint — 2026-09-09: Inner combo-shard workers
 
 Discovery grids can shard **expanded combos** across spawn processes that share

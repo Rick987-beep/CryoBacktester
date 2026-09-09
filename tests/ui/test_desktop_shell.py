@@ -272,7 +272,8 @@ def test_panel_session_hydrates_nav_with_localhost_url():
                     stack.append(child)
         assert found == [
             "New Run",
-            "Runs",
+            "Backtester Run",
+            "Completed Runs",
             "Results Grid",
             "Combo Detail",
             "Favourites",

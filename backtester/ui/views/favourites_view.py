@@ -7,8 +7,6 @@ Shows a Tabulator of starred combos. Row actions (on selected row):
   Unstar  — remove from favourites
   Edit Note — inline text editor for the note field
   Copy TOML — copy params as experiment-style TOML snippet
-
-Also embeds the Compare section (former Compare tab) below the favourites table.
 """
 from __future__ import annotations
 
@@ -423,14 +421,20 @@ def build_favourites_view(state, store, cache) -> pn.Column:
     note_input.param.watch(lambda e: None, "value")  # ensure reactive
 
     # ── Layout ───────────────────────────────────────────────────────────────
-    action_row = pn.Row(
+    action_row = pn.FlexBox(
         open_btn, rerun_btn, unstar_btn, copy_toml_btn, refresh_btn, family_filter,
+        align_items="flex-end",
+        gap="8px",
+        flex_wrap="wrap",
         sizing_mode="stretch_width",
     )
-    note_row = pn.Row(note_input, save_note_btn, sizing_mode="stretch_width")
-
-    from backtester.ui.views.compare_view import build_compare_view
-    compare_section = build_compare_view(state, store, cache)
+    note_row = pn.FlexBox(
+        note_input, save_note_btn,
+        align_items="flex-end",
+        gap="8px",
+        flex_wrap="wrap",
+        sizing_mode="stretch_width",
+    )
 
     return pn.Column(
         title,
@@ -439,9 +443,5 @@ def build_favourites_view(state, store, cache) -> pn.Column:
         action_feedback,
         tab_holder,
         params_input,
-        pn.pane.HTML(
-            "<hr style='margin:24px 0 8px 0;border:none;border-top:1px solid #e5e7eb'>"
-        ),
-        compare_section,
         sizing_mode="stretch_width",
     )

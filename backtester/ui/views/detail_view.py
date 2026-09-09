@@ -7,8 +7,6 @@ Three stacked sections for one focused combo:
   3. Trades table — Tabulator of all trades for this combo.
      Clicking a row opens the Trade Inspector panel (replaces a placeholder pane).
 
-Plus a multi-combo Equity Overlay section (when ≥2 grid rows are selected).
-
 Layout switches whenever state.active_combo_key or state.active_run_id changes.
 """
 import pandas as pd
@@ -596,15 +594,7 @@ def build_detail_view(state, cache, store=None) -> pn.Column:
 
     state.param.watch(_on_change, ["active_run_id", "active_combo_key"])
 
-    # Multi-combo equity overlay (folded from former Equity Overlay tab)
-    from backtester.ui.views.overlay_view import build_overlay_view
-    overlay_section = build_overlay_view(state, cache)
-
     return pn.Column(
         _content,
-        pn.pane.HTML(
-            "<hr style='margin:20px 0 8px 0;border:none;border-top:1px solid #e5e7eb'>"
-        ),
-        overlay_section,
         sizing_mode="stretch_width",
     )

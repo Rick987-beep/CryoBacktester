@@ -121,6 +121,29 @@ def test_make_column_chooser_has_wrap_stylesheet():
     assert chooser.stylesheets == [_COL_CHOOSER_WRAP_CSS]
     assert "auto-fill" in _COL_CHOOSER_WRAP_CSS
     assert "bk-input-group.bk-inline" in _COL_CHOOSER_WRAP_CSS
+    assert "minmax(200px" in _COL_CHOOSER_WRAP_CSS
+
+
+def test_make_chooser_section_has_zone_card():
+    from backtester.ui.views.grid_view import (
+        _COL_CHOOSER_LABEL_CSS,
+        _COL_CHOOSER_SECTION_CSS,
+        _make_chooser_section,
+        _make_column_chooser,
+    )
+
+    section = _make_chooser_section("Parameters", _make_column_chooser(), "params")
+    assert "cryo-col-chooser-section" in section.css_classes
+    assert "zone-params" in section.css_classes
+    assert "zone-params" in _COL_CHOOSER_SECTION_CSS
+    assert "zone-rank" in _COL_CHOOSER_SECTION_CSS
+    assert "zone-perf" in _COL_CHOOSER_SECTION_CSS
+    label = section.objects[0]
+    assert "font-size:14px" in label.object
+    assert "font-weight:600" in label.object
+    assert "padding:12px 16px" in label.object
+    assert _COL_CHOOSER_LABEL_CSS in label.stylesheets
+    assert "font-size: 14px" in _COL_CHOOSER_LABEL_CSS
 
 
 def test_build_grid_view_imports_and_returns_column(tiny_grid_result):

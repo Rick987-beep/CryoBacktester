@@ -87,6 +87,7 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     )
     from backtester.ui.views.runs_view import build_runs_view
     from backtester.ui.views.new_run_view import build_new_run_view
+    from backtester.ui.views.backtester_run_view import build_backtester_run_view
     from backtester.ui.views.grid_view import build_grid_view
     from backtester.ui.views.detail_view import build_detail_view
     from backtester.ui.views.favourites_view import build_favourites_view
@@ -111,11 +112,14 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     except Exception as exc:
         log.warning("scan_bundles at startup failed: %s", exc)
 
-    # No-sidebar light shell — brand + nav live in the blue header
+    # No-sidebar light shell — Cryo/Aureas brand + nav in navy header
+    from backtester.ui.brand import apply_to_template, stamp_brand_stylesheets
+
     template = pn.template.VanillaTemplate(
         title="CryoBacktester",
         theme="default",
     )
+    apply_to_template(template)
 
     nav = build_nav(state)
     template.header.append(nav)
@@ -123,6 +127,7 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     detail_bar = build_detail_bar(state, store, run_service=run_service, cache=cache)
 
     new_run_view = build_new_run_view(state, store, cache, run_service)
+    backtester_run_view = build_backtester_run_view(state, store, cache, run_service)
     runs_view = build_runs_view(state, store, cache)
     grid_view = build_grid_view(state, cache, store=store)
     detail_view = build_detail_view(state, cache, store=store)
@@ -130,7 +135,8 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
 
     pages = {
         "New Run": new_run_view,
-        "Runs": runs_view,
+        "Backtester Run": backtester_run_view,
+        "Completed Runs": runs_view,
         "Results Grid": grid_view,
         "Combo Detail": detail_view,
         "Favourites": favourites_view,
@@ -154,6 +160,13 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
         sizing_mode="stretch_width",
     )
     template.main.append(main)
+
+    # Bokeh 3 shadow DOM: stamp brand CSS onto every viewable stylesheets list
+    stamp_brand_stylesheets(nav)
+    stamp_brand_stylesheets(detail_bar)
+    for _page in pages.values():
+        stamp_brand_stylesheets(_page)
+    stamp_brand_stylesheets(main)
 
     # Expose for tests + desktop/CLI lifecycle (not used by Panel itself)
     template._cryo_nav_pages = list(NAV_PAGES)
