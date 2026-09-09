@@ -172,9 +172,10 @@ def main():
                         help="Skip writing a run bundle (no .bundle/ dir next to the HTML).")
     parser.add_argument(
         "--workers", type=int, default=None, metavar="N",
-        help="Inner combo-shard processes (spawn, duplicate-load). "
+        help="Inner combo-shard processes (shared read-only MarketReplay). "
              "Default: auto from P-cores + RAM + combo count. "
-             "1 = single-process (legacy). Env: CRYOBT_GRID_WORKERS.",
+             "1 = single-process (legacy). Env: CRYOBT_GRID_WORKERS. "
+             "CRYOBT_GRID_SHARE=0 forces duplicate-load debug.",
     )
     args = parser.parse_args()
 

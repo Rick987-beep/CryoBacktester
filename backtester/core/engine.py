@@ -42,6 +42,7 @@ Usage:
 import itertools
 import logging
 import multiprocessing
+import os
 import time as _time
 from typing import Any, Dict, List, Optional, Tuple, Type
 
@@ -435,9 +436,9 @@ def _effective_inner_workers(n_combos, requested, replay, strategy_cls):
         strategy_is_spawnable,
     )
 
-    # C2 is duplicate-load: each child reloads parquet. Sharing=False until C4.
+    sharing = os.environ.get("CRYOBT_GRID_SHARE", "1") != "0"
     n_workers = resolve_workers_from_cfg(
-        n_combos, requested, sharing=False,
+        n_combos, requested, sharing=sharing,
     )
     if n_workers <= 1:
         return 1
@@ -452,18 +453,22 @@ def _effective_inner_workers(n_combos, requested, replay, strategy_cls):
 
 def _run_grid_shard(payload):
     # type: (Dict[str, Any]) -> Tuple
-    """Spawn child: reload MarketReplay from paths, run one combo shard."""
+    """Spawn child: attach shared replay or reload from paths, run one shard."""
     from backtester.core.market_replay import MarketReplay
 
-    spec = payload["spec"]
-    replay = MarketReplay(
-        spec["snapshot_path"],
-        spec["spot_track_path"],
-        expiry_filter=spec.get("expiry_filter"),
-        start=spec.get("start"),
-        end=spec.get("end"),
-        step_minutes=spec.get("step_minutes", 5),
-    )
+    share_meta = payload.get("share_meta")
+    if share_meta is not None:
+        replay = MarketReplay.from_shared_meta(share_meta)
+    else:
+        spec = payload["spec"]
+        replay = MarketReplay(
+            spec["snapshot_path"],
+            spec["spot_track_path"],
+            expiry_filter=spec.get("expiry_filter"),
+            start=spec.get("start"),
+            end=spec.get("end"),
+            step_minutes=spec.get("step_minutes", 5),
+        )
     return _run_grid_full_combos(
         payload["strategy_cls"],
         payload["combos"],
@@ -488,13 +493,25 @@ def _run_grid_full_spawn(
     # type: (Type, List[Dict[str, Any]], Any, Optional[Dict[str, Any]], bool, int, Optional[Any]) -> Tuple
     from backtester.core.grid_workers import (
         merge_grid_results,
+        pack_replay_shared,
         partition_combos,
         replay_reload_spec,
         shard_offsets,
+        unlink_replay_shared,
     )
 
     spec = replay_reload_spec(replay)
-    if spec is None:
+    share = os.environ.get("CRYOBT_GRID_SHARE", "1") != "0"
+    share_meta = None
+    holders = []
+    if share:
+        try:
+            share_meta, holders = pack_replay_shared(replay)
+        except Exception:
+            _log.exception("shared replay pack failed; falling back to duplicate-load")
+            share_meta = None
+            holders = []
+    if share_meta is None and spec is None:
         return _run_grid_full_combos(
             strategy_cls, combos, replay,
             extra_params=extra_params, progress=progress, status_cb=status_cb,
@@ -507,6 +524,7 @@ def _run_grid_full_spawn(
             "combos": part,
             "extra_params": extra_params,
             "spec": spec,
+            "share_meta": share_meta,
             "progress": bool(progress) and i == 0,
             "progress_cb_interval": 50,
         }
@@ -515,8 +533,11 @@ def _run_grid_full_spawn(
     if status_cb is not None:
         status_cb("backtesting", f"Running backtest ({len(parts)} workers)…")
     ctx = multiprocessing.get_context("spawn")
-    with ctx.Pool(len(parts)) as pool:
-        shards = pool.map(_run_grid_shard, payloads)
+    try:
+        with ctx.Pool(len(parts)) as pool:
+            shards = pool.map(_run_grid_shard, payloads)
+    finally:
+        unlink_replay_shared(holders)
     master_keys = []
     for _df, keys, *_rest in shards:
         master_keys.extend(keys)
@@ -569,7 +590,9 @@ def run_grid_full(
     if progress:
         print(f"Running {n_combos} parameter combos...")
         if n_workers > 1:
-            print(f"  inner workers: {n_workers} (spawn, duplicate-load)")
+            share = os.environ.get("CRYOBT_GRID_SHARE", "1") != "0"
+            mode = "shared replay" if share else "duplicate-load"
+            print(f"  inner workers: {n_workers} (spawn, {mode})")
 
     if n_workers <= 1:
         out = _run_grid_full_combos(
@@ -596,7 +619,8 @@ def run_grid_full(
 
     df = out[0]
     df.attrs["grid_workers"] = worker_run_meta(
-        workers, n_workers, sharing=False,
+        workers, n_workers,
+        sharing=os.environ.get("CRYOBT_GRID_SHARE", "1") != "0",
     )
     return out
 

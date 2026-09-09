@@ -610,6 +610,40 @@ class MarketReplay:
 
         freeze_arrays(self)
 
+    @classmethod
+    def from_shared_meta(cls, meta):
+        # type: (dict) -> "MarketReplay"
+        """Attach to parent SharedMemory columns. Does not load parquet."""
+        from multiprocessing import shared_memory
+
+        self = cls.__new__(cls)
+        self.snapshot_path = meta.get("snapshot_path")
+        self.spot_track_path = meta.get("spot_track_path")
+        self.start = meta.get("start")
+        self.end = meta.get("end")
+        self.step_minutes = int(meta.get("step_minutes") or 5)
+        self.expiry_filter = meta.get("expiry_filter")
+        self._expiry_table = list(meta.get("expiry_table") or [])
+        holders = []
+        for name, spec in (meta.get("arrays") or {}).items():
+            shm = shared_memory.SharedMemory(name=spec["name"])
+            arr = np.ndarray(
+                tuple(spec["shape"]),
+                dtype=np.dtype(spec["dtype"]),
+                buffer=shm.buf,
+            )
+            arr.flags.writeable = False
+            setattr(self, name, arr)
+            holders.append(shm)
+        self._shm_holders = holders
+        self._ts_to_idx = {}
+        ts_sorted = getattr(self, "_ts_sorted", None)
+        if ts_sorted is not None:
+            for i, ts_val in enumerate(ts_sorted):
+                self._ts_to_idx[int(ts_val)] = i
+        self.freeze_readonly()
+        return self
+
     def __iter__(self):
         # type: () -> Iterator[MarketState]
         """Yield MarketState for each time step."""

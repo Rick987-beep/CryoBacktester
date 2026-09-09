@@ -370,3 +370,67 @@ def freeze_arrays(obj: Any, names: Sequence[str] = _ARRAY_ATTRS) -> None:
         arr = getattr(obj, name, None)
         if isinstance(arr, np.ndarray):
             arr.flags.writeable = False
+
+
+def pack_replay_shared(replay: Any) -> tuple[dict[str, Any], list]:
+    """Copy replay ndarrays into SharedMemory. Parent keeps holders until unlink.
+
+    Replaces replay's array attributes with read-only views onto the same blocks
+    so parent and children share backing store.
+    """
+    from multiprocessing import shared_memory
+
+    import numpy as np
+
+    freeze_arrays(replay)
+    holders: list = []
+    arrays: dict[str, Any] = {}
+    for name in _ARRAY_ATTRS:
+        arr = getattr(replay, name, None)
+        if not isinstance(arr, np.ndarray):
+            continue
+        nbytes = max(int(arr.nbytes), 1)
+        shm = shared_memory.SharedMemory(create=True, size=nbytes)
+        view = np.ndarray(arr.shape, dtype=arr.dtype, buffer=shm.buf)
+        if arr.size:
+            view[:] = arr
+        view.flags.writeable = False
+        setattr(replay, name, view)
+        arrays[name] = {
+            "name": shm.name,
+            "shape": tuple(int(x) for x in arr.shape),
+            "dtype": str(arr.dtype),
+        }
+        holders.append(shm)
+    if not arrays:
+        for shm in holders:
+            try:
+                shm.close()
+                shm.unlink()
+            except Exception:
+                pass
+        raise ValueError("replay has no ndarray columns to share")
+    replay._shm_holders = holders
+    meta = {
+        "arrays": arrays,
+        "expiry_table": list(getattr(replay, "_expiry_table", []) or []),
+        "snapshot_path": getattr(replay, "snapshot_path", None),
+        "spot_track_path": getattr(replay, "spot_track_path", None),
+        "start": getattr(replay, "start", None),
+        "end": getattr(replay, "end", None),
+        "step_minutes": int(getattr(replay, "step_minutes", 5) or 5),
+        "expiry_filter": getattr(replay, "expiry_filter", None),
+    }
+    return meta, holders
+
+
+def unlink_replay_shared(holders: Sequence[Any]) -> None:
+    for shm in holders or []:
+        try:
+            shm.close()
+        except Exception:
+            pass
+        try:
+            shm.unlink()
+        except Exception:
+            pass
