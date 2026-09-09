@@ -85,6 +85,23 @@ def test_resolve_workers_env_override(monkeypatch):
     assert resolve_workers(100, None, _profile()) == 1
 
 
+def test_resolve_workers_requested_gt_n_combos():
+    """A4: effective workers never exceed n_combos."""
+    air = resolve_workers(
+        5, 99, _profile(), min_combos_parallel=1, min_combos_per_worker=1,
+    )
+    assert 1 <= air <= 5
+    big = resolve_workers(
+        5,
+        99,
+        _profile(performance_cpus=32, total_ram_gb=64.0, available_ram_gb=32.0),
+        min_combos_parallel=1,
+        min_combos_per_worker=1,
+        hard_cap=16,
+    )
+    assert big == 5
+
+
 def test_resolve_workers_rejects_negative():
     with pytest.raises(ValueError):
         resolve_workers(-1, 4, _profile())

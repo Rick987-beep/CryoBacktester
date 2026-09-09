@@ -88,6 +88,89 @@ def test_workers_1_does_not_construct_pool(monkeypatch):
     assert len(final) == 3
 
 
+@pytest.mark.parametrize("n", [1, 2, 7, 8])
+def test_tiny_grids_never_construct_pool(monkeypatch, n):
+    """A2: n < 16 with default mins → no Pool, even if the caller asks for 4."""
+    import backtester.core.engine as eng
+
+    def boom(*_a, **_k):
+        raise AssertionError("Pool must not be constructed for tiny grids")
+
+    monkeypatch.setattr(
+        eng.multiprocessing,
+        "get_context",
+        lambda *_a, **_k: SimpleNamespace(Pool=boom),
+    )
+    df, keys, *_ = run_grid_full(
+        _TinyPnlStrategy,
+        {"x": list(range(n))},
+        _fake_replay(),
+        progress=False,
+        workers=4,
+    )
+    assert len(keys) == n
+    assert len(df) == n
+
+
+def test_below_min_combos_on_reloadable_replay(tmp_path, monkeypatch):
+    """A2 on a real MarketReplay: 7 combos + workers=4 still no spawn."""
+    from datetime import timedelta
+
+    import pandas as pd
+    from backtester.core.market_replay import MarketReplay
+    import backtester.core.engine as eng
+
+    start = datetime(2025, 10, 1, 12, 0, tzinfo=timezone.utc)
+    opt_rows, spot_rows = [], []
+    for i in range(4):
+        dt = start + timedelta(minutes=5 * i)
+        ts = int(dt.timestamp() * 1_000_000)
+        opt_rows.append(
+            {
+                "timestamp": ts,
+                "expiry": "3OCT25",
+                "strike": 100000.0,
+                "is_call": True,
+                "bid_price": 0.01,
+                "ask_price": 0.012,
+                "mark_price": 0.011,
+                "mark_iv": 50.0,
+                "delta": 0.25,
+            }
+        )
+        spot_rows.append(
+            {
+                "timestamp": ts,
+                "open": 100000.0,
+                "high": 100010.0,
+                "low": 99990.0,
+                "close": 100000.0,
+            }
+        )
+    opt = tmp_path / "options.parquet"
+    spot = tmp_path / "spot.parquet"
+    pd.DataFrame(opt_rows).to_parquet(opt, index=False)
+    pd.DataFrame(spot_rows).to_parquet(spot, index=False)
+
+    def boom(*_a, **_k):
+        raise AssertionError("Pool must not spawn below min_combos_parallel")
+
+    monkeypatch.setattr(
+        eng.multiprocessing,
+        "get_context",
+        lambda *_a, **_k: SimpleNamespace(Pool=boom),
+    )
+    df, keys, *_ = run_grid_full(
+        _TinyPnlStrategy,
+        {"x": list(range(7))},
+        MarketReplay(str(opt), str(spot)),
+        progress=False,
+        workers=4,
+    )
+    assert len(keys) == 7
+    assert len(df) == 7
+
+
 def test_fake_replay_never_spawns_even_if_requested(monkeypatch):
     import backtester.core.engine as eng
 
