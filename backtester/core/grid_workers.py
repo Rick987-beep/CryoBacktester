@@ -338,6 +338,30 @@ def strategy_is_spawnable(strategy_cls: Any) -> bool:
         return False
 
 
+def worker_run_meta(
+    requested: int | None,
+    effective: int,
+    *,
+    sharing: bool = False,
+) -> dict[str, Any]:
+    """Bundle/CLI sidecar: requested vs host_cap vs effective + machine probe."""
+    profile = probe_machine()
+    host_cap = auto_worker_cap(profile, sharing=sharing)
+    return {
+        "grid_workers_requested": requested,
+        "grid_workers_host_cap": int(host_cap),
+        "grid_workers_effective": int(effective),
+        "grid_machine": {
+            "logical_cpus": int(profile.logical_cpus),
+            "physical_cpus": int(profile.physical_cpus),
+            "performance_cpus": int(profile.performance_cpus),
+            "total_ram_gb": round(float(profile.total_ram_gb), 2),
+            "available_ram_gb": round(float(profile.available_ram_gb), 2),
+            "on_battery": bool(profile.on_battery),
+        },
+    }
+
+
 def freeze_arrays(obj: Any, names: Sequence[str] = _ARRAY_ATTRS) -> None:
     """Set ndarray.flags.writeable = False on named attributes. Idempotent."""
     import numpy as np

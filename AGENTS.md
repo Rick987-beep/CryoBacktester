@@ -54,6 +54,10 @@ Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR
 # Discovery — wide parameter grid, full date range
 python -m backtester.run --strategy <name>
 
+# Inner combo-shard workers (auto from P-cores + RAM; 1 = single-process)
+python -m backtester.run --strategy <name> --workers 4
+# or: CRYOBT_GRID_WORKERS=4 python -m backtester.run --strategy <name>
+
 # With robustness stats (Deflated Sharpe Ratio)
 python -m backtester.run --strategy short_str_turb_dyn --robustness
 

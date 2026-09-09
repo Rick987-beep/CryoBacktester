@@ -572,7 +572,7 @@ def run_grid_full(
             print(f"  inner workers: {n_workers} (spawn, duplicate-load)")
 
     if n_workers <= 1:
-        return _run_grid_full_combos(
+        out = _run_grid_full_combos(
             strategy_cls,
             combos,
             replay,
@@ -582,15 +582,23 @@ def run_grid_full(
             progress_cb_interval=progress_cb_interval,
             status_cb=status_cb,
         )
-    return _run_grid_full_spawn(
-        strategy_cls,
-        combos,
-        replay,
-        extra_params=extra_params,
-        progress=progress,
-        n_workers=n_workers,
-        status_cb=status_cb,
+    else:
+        out = _run_grid_full_spawn(
+            strategy_cls,
+            combos,
+            replay,
+            extra_params=extra_params,
+            progress=progress,
+            n_workers=n_workers,
+            status_cb=status_cb,
+        )
+    from backtester.core.grid_workers import worker_run_meta
+
+    df = out[0]
+    df.attrs["grid_workers"] = worker_run_meta(
+        workers, n_workers, sharing=False,
     )
+    return out
 
 
 def _run_grid_full_combos(

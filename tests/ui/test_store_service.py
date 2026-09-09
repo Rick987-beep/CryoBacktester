@@ -45,6 +45,22 @@ def test_write_and_load_bundle_roundtrip(sqlite_store, tiny_grid_result):
     assert loaded.best_key == tiny_grid_result.best_key
 
 
+def test_write_bundle_records_grid_workers(sqlite_store, tiny_grid_result):
+    tiny_grid_result.grid_workers = {
+        "grid_workers_requested": 4,
+        "grid_workers_host_cap": 4,
+        "grid_workers_effective": 2,
+        "grid_machine": {"performance_cpus": 4, "on_battery": False},
+    }
+    bundle_path = sqlite_store.write_bundle(
+        tiny_grid_result, strategy="gw_meta", runtime_s=1.0, source="test"
+    )
+    meta = json.loads((bundle_path / "meta.json").read_text())
+    assert meta["grid_workers_requested"] == 4
+    assert meta["grid_workers_effective"] == 2
+    assert meta["grid_machine"]["performance_cpus"] == 4
+
+
 def test_register_bundle_idempotent(sqlite_store, tiny_grid_result):
     """Registering the same bundle twice yields one DB row."""
     bundle_path = sqlite_store.write_bundle(

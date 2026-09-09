@@ -625,6 +625,7 @@ class GridResult:
         self.date_range = date_range  # (date_from_str, date_to_str)
         attrs = getattr(df, "attrs", None) or {}
         self.extra_parquets = dict(attrs.get("extra_parquets") or {})
+        self.grid_workers = dict(attrs.get("grid_workers") or {})
         if getattr(df, "attrs", None) is not None:
             df.attrs.pop("extra_parquets", None)
 

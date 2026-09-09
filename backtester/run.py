@@ -53,6 +53,7 @@ def run_backtest(
     progress_cb=None,
     status_cb=None,
     source="cli",
+    workers=None,
 ):
     """Run a discovery backtest and write both an HTML report and a run bundle.
 
@@ -68,6 +69,7 @@ def run_backtest(
         status_cb:     Optional callable(phase, msg) — called at phase transitions:
                        "loading_data", "building_indicators", "backtesting".
         source:        "cli" | "ui" recorded in bundle meta.
+        workers:       Inner combo-shard processes. None = auto. 1 = single-process.
 
     Returns:
         pathlib.Path pointing to the .bundle/ directory.
@@ -93,6 +95,7 @@ def run_backtest(
         strategy_cls, param_grid, replay,
         progress_cb=progress_cb,
         status_cb=status_cb,
+        workers=workers,
     )
     grid_time = time.time() - t1
 
@@ -167,6 +170,12 @@ def main():
                              "(experiment grid around best params), wfo (walk-forward).")
     parser.add_argument("--no-bundle", action="store_true",
                         help="Skip writing a run bundle (no .bundle/ dir next to the HTML).")
+    parser.add_argument(
+        "--workers", type=int, default=None, metavar="N",
+        help="Inner combo-shard processes (spawn, duplicate-load). "
+             "Default: auto from P-cores + RAM + combo count. "
+             "1 = single-process (legacy). Env: CRYOBT_GRID_WORKERS.",
+    )
     args = parser.parse_args()
 
     # ── Resolve strategy, param_grid, and WFO window params ───────
@@ -202,7 +211,7 @@ def main():
     # Run grid
     t1 = time.time()
     df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
-        strategy_cls, param_grid, replay
+        strategy_cls, param_grid, replay, workers=args.workers,
     )
     grid_time = time.time() - t1
 

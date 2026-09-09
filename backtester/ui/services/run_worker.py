@@ -132,6 +132,7 @@ def main():
             progress_cb=_progress_cb,
             status_cb=_status_cb,
             source="ui",
+            workers=cfg.get("workers"),
         )
 
         _write_line(progress_path, {

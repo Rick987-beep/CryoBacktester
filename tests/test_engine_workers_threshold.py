@@ -191,3 +191,18 @@ def test_fake_replay_never_spawns_even_if_requested(monkeypatch):
     )
     assert len(keys) == 16
     assert len(df) == 16
+
+
+def test_workers_1_stamps_bundle_meta():
+    df, *_ = run_grid_full(
+        _TinyPnlStrategy,
+        {"x": [0, 1]},
+        _fake_replay(),
+        progress=False,
+        workers=1,
+    )
+    meta = df.attrs.get("grid_workers") or {}
+    assert meta["grid_workers_requested"] == 1
+    assert meta["grid_workers_effective"] == 1
+    assert meta["grid_workers_host_cap"] >= 1
+    assert "performance_cpus" in meta["grid_machine"]
