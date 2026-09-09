@@ -21,6 +21,11 @@ Two public entry points:
                        • nav_daily_df  — daily NAV low/high/close per combo
                        • final_nav_df  — final NAV + realized/open PnL per combo
 
+  Inner workers: run_grid_full(..., workers=N) shards already-expanded combos
+  across spawn children when N>1 and MarketReplay can reload from parquet.
+  workers=1 (the default once combo-count/host caps resolve) is bit-identical
+  to the pre-parallel kernel — no Pool is created.
+
 NAV tracking detail:
   Every tick, _open_unrealized_pnl() marks all open positions to market.
   It reads pos._last_reprice_usd (cached by _reprice_legs in strategy_base)
