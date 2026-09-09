@@ -178,3 +178,26 @@ def test_freeze_idempotent():
     freeze_arrays(obj, names=["_opt_bid"])
     freeze_arrays(obj, names=["_opt_bid"])
     assert obj._opt_bid.flags.writeable is False
+
+
+def test_replay_reload_spec_missing_paths():
+    class Fake:
+        pass
+
+    from backtester.core.grid_workers import replay_reload_spec
+
+    assert replay_reload_spec(Fake()) is None
+    obj = Fake()
+    obj.snapshot_path = "/no/such/options.parquet"
+    obj.spot_track_path = "/no/such/spot.parquet"
+    assert replay_reload_spec(obj) is None
+
+
+def test_strategy_is_spawnable_nested_vs_module():
+    from backtester.core.grid_workers import strategy_is_spawnable
+
+    class _Nested:
+        pass
+
+    assert strategy_is_spawnable(_Nested) is False
+    assert strategy_is_spawnable(MachineProfile) is True

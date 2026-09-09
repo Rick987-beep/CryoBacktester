@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import pickle
 import platform
 import subprocess
 from dataclasses import dataclass
@@ -309,6 +310,32 @@ def merge_grid_results(
         df.attrs["extra_parquets"] = {"investor_greeks.parquet": merged_greeks}
     keys = list(master_keys)
     return df, keys, nav_daily, final_nav, df_fills
+
+
+def replay_reload_spec(replay: Any) -> dict[str, Any] | None:
+    """Paths + filters to rebuild MarketReplay in a spawn child. None = cannot."""
+    path = getattr(replay, "snapshot_path", None)
+    spot = getattr(replay, "spot_track_path", None)
+    if not path or not spot:
+        return None
+    if not os.path.exists(str(path)) or not os.path.exists(str(spot)):
+        return None
+    return {
+        "snapshot_path": str(path),
+        "spot_track_path": str(spot),
+        "expiry_filter": getattr(replay, "expiry_filter", None),
+        "start": getattr(replay, "start", None),
+        "end": getattr(replay, "end", None),
+        "step_minutes": int(getattr(replay, "step_minutes", 5) or 5),
+    }
+
+
+def strategy_is_spawnable(strategy_cls: Any) -> bool:
+    try:
+        pickle.dumps(strategy_cls)
+        return True
+    except Exception:
+        return False
 
 
 def freeze_arrays(obj: Any, names: Sequence[str] = _ARRAY_ATTRS) -> None:

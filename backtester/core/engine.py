@@ -36,6 +36,7 @@ Usage:
 """
 import itertools
 import logging
+import multiprocessing
 import time as _time
 from typing import Any, Dict, List, Optional, Tuple, Type
 
@@ -420,6 +421,103 @@ def run_grid(
     return results
 
 
+def _effective_inner_workers(n_combos, requested, replay, strategy_cls):
+    # type: (int, Optional[int], Any, Type) -> int
+    """Resolve inner workers; 1 means the legacy single-process kernel."""
+    from backtester.core.grid_workers import (
+        replay_reload_spec,
+        resolve_workers_from_cfg,
+        strategy_is_spawnable,
+    )
+
+    # C2 is duplicate-load: each child reloads parquet. Sharing=False until C4.
+    n_workers = resolve_workers_from_cfg(
+        n_combos, requested, sharing=False,
+    )
+    if n_workers <= 1:
+        return 1
+    if replay_reload_spec(replay) is None:
+        _log.info("grid workers: replay has no reload paths; staying single-process")
+        return 1
+    if not strategy_is_spawnable(strategy_cls):
+        _log.info("grid workers: strategy class is not picklable; staying single-process")
+        return 1
+    return n_workers
+
+
+def _run_grid_shard(payload):
+    # type: (Dict[str, Any]) -> Tuple
+    """Spawn child: reload MarketReplay from paths, run one combo shard."""
+    from backtester.core.market_replay import MarketReplay
+
+    spec = payload["spec"]
+    replay = MarketReplay(
+        spec["snapshot_path"],
+        spec["spot_track_path"],
+        expiry_filter=spec.get("expiry_filter"),
+        start=spec.get("start"),
+        end=spec.get("end"),
+        step_minutes=spec.get("step_minutes", 5),
+    )
+    return _run_grid_full_combos(
+        payload["strategy_cls"],
+        payload["combos"],
+        replay,
+        extra_params=payload.get("extra_params"),
+        progress=bool(payload.get("progress")),
+        progress_cb=None,
+        progress_cb_interval=int(payload.get("progress_cb_interval") or 50),
+        status_cb=None,
+    )
+
+
+def _run_grid_full_spawn(
+    strategy_cls,
+    combos,
+    replay,
+    extra_params,
+    progress,
+    n_workers,
+    status_cb=None,
+):
+    # type: (Type, List[Dict[str, Any]], Any, Optional[Dict[str, Any]], bool, int, Optional[Any]) -> Tuple
+    from backtester.core.grid_workers import (
+        merge_grid_results,
+        partition_combos,
+        replay_reload_spec,
+        shard_offsets,
+    )
+
+    spec = replay_reload_spec(replay)
+    if spec is None:
+        return _run_grid_full_combos(
+            strategy_cls, combos, replay,
+            extra_params=extra_params, progress=progress, status_cb=status_cb,
+        )
+    parts = partition_combos(combos, n_workers)
+    offsets = shard_offsets(parts)
+    payloads = [
+        {
+            "strategy_cls": strategy_cls,
+            "combos": part,
+            "extra_params": extra_params,
+            "spec": spec,
+            "progress": bool(progress) and i == 0,
+            "progress_cb_interval": 50,
+        }
+        for i, part in enumerate(parts)
+    ]
+    if status_cb is not None:
+        status_cb("backtesting", f"Running backtest ({len(parts)} workers)…")
+    ctx = multiprocessing.get_context("spawn")
+    with ctx.Pool(len(parts)) as pool:
+        shards = pool.map(_run_grid_shard, payloads)
+    master_keys = []
+    for _df, keys, *_rest in shards:
+        master_keys.extend(keys)
+    return merge_grid_results(shards, offsets, master_keys)
+
+
 def run_grid_full(
     strategy_cls,       # type: Type
     param_grid,         # type: Dict[str, List]
@@ -429,11 +527,18 @@ def run_grid_full(
     progress_cb=None,   # type: Optional[Any]  # Callable[[int, int, str], None] | None
     progress_cb_interval=50,  # type: int  # call progress_cb every N states
     status_cb=None,     # type: Optional[Any]  # Callable[[str, str], None] | None
+    workers=None,       # type: Optional[int]
 ):
     """Run all parameter combos in a single pass over market data.
 
     Accumulates trades into flat lists, then builds a memory-efficient
     pandas DataFrame (~10× less RAM than keeping Trade objects alive).
+
+    ``workers is None`` auto-sizes from host + combo count. ``workers=1``
+    (or any resolved value of 1) is the legacy single-process path — no
+    Pool is created. ``workers>1`` shards *expanded combos* across spawn
+    children; each child reloads MarketReplay from parquet paths
+    (duplicate-load). Fake / in-memory replays stay on the workers=1 path.
 
     Args:
         strategy_cls: Strategy class (configure/on_market_state/on_end/reset).
@@ -441,6 +546,7 @@ def run_grid_full(
         replay:       MarketReplay instance (iterable of MarketState).
         extra_params: Optional fixed params merged into every combo.
         progress:     Print progress updates.
+        workers:      Requested inner processes. None = auto. 1 = no spawn.
 
     Returns:
         Tuple of (df, keys, nav_daily_df, final_nav_df, df_fills):
@@ -451,13 +557,51 @@ def run_grid_full(
         - final_nav_df: one row per combo with final_nav, realized_pnl, open_pnl.
         - df_fills: one row per leg per event (open/close) across all combos.
     """
-    import pandas as pd
-
     combos = _grid_combos(param_grid)
     n_combos = len(combos)
+    n_workers = _effective_inner_workers(n_combos, workers, replay, strategy_cls)
 
     if progress:
         print(f"Running {n_combos} parameter combos...")
+        if n_workers > 1:
+            print(f"  inner workers: {n_workers} (spawn, duplicate-load)")
+
+    if n_workers <= 1:
+        return _run_grid_full_combos(
+            strategy_cls,
+            combos,
+            replay,
+            extra_params=extra_params,
+            progress=progress,
+            progress_cb=progress_cb,
+            progress_cb_interval=progress_cb_interval,
+            status_cb=status_cb,
+        )
+    return _run_grid_full_spawn(
+        strategy_cls,
+        combos,
+        replay,
+        extra_params=extra_params,
+        progress=progress,
+        n_workers=n_workers,
+        status_cb=status_cb,
+    )
+
+
+def _run_grid_full_combos(
+    strategy_cls,       # type: Type
+    combos,             # type: List[Dict[str, Any]]
+    replay,             # type: Any
+    extra_params=None,  # type: Optional[Dict[str, Any]]
+    progress=True,      # type: bool
+    progress_cb=None,   # type: Optional[Any]
+    progress_cb_interval=50,  # type: int
+    status_cb=None,     # type: Optional[Any]
+):
+    """Single-process kernel: one replay pass over an expanded combo list."""
+    import pandas as pd
+
+    n_combos = len(combos)
 
     instances = []  # type: List[Any]
     keys = []       # type: List[Tuple]
