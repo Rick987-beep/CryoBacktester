@@ -112,5 +112,3 @@ def test_queue_client_snapshot_without_jobd(tmp_path):
     assert client.ping() is False
     snap = client.snapshot()
     assert len(snap.queued) + len(snap.running) + len(snap.recent) >= 1
-    with pytest.raises(NotImplementedError):
-        client.enqueue(_spec())

@@ -58,6 +58,11 @@ python -m backtester.run --strategy <name>
 python -m backtester.run --strategy <name> --workers 4
 # or: CRYOBT_GRID_WORKERS=4 python -m backtester.run --strategy <name>
 
+# Detached enqueue (jobd + stub/real runner). Foreground is still the default.
+python -m backtester.run --strategy <name> --detach
+python -m backtester.job snapshot
+python -m backtester.job ping
+
 # With robustness stats (Deflated Sharpe Ratio)
 python -m backtester.run --strategy short_str_turb_dyn --robustness
 
@@ -73,10 +78,6 @@ python -m backtester.ui.desktop
 
 # Research UI — browser / Terminal (dev)
 python -m backtester.ui.app --no-browser
-
-# Detached jobs — file snapshot (jobd enqueue comes next)
-python -m backtester.job snapshot
-python -m backtester.job ping
 
 # Look up a past run / combo (fast path — do not load full grids)
 python -m backtester.inspect show 748

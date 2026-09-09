@@ -177,6 +177,11 @@ def main():
              "1 = single-process (legacy). Env: CRYOBT_GRID_WORKERS. "
              "CRYOBT_GRID_SHARE=0 forces duplicate-load debug.",
     )
+    parser.add_argument(
+        "--detach", action="store_true",
+        help="Enqueue the run on jobd and return immediately. "
+             "Without this flag the CLI stays in-process and blocking.",
+    )
     args = parser.parse_args()
 
     # ── Resolve strategy, param_grid, and WFO window params ───────
@@ -191,12 +196,35 @@ def main():
         wfo_is_days   = exp.wfo_is_days
         wfo_oos_days  = exp.wfo_oos_days
         wfo_step_days = exp.wfo_step_days
+        strategy_key = exp.strategy
     else:
         strategy_cls = STRATEGIES[args.strategy]
         param_grid    = strategy_cls.PARAM_GRID
         wfo_is_days   = args.is_days
         wfo_oos_days  = args.oos_days
         wfo_step_days = args.step_days
+        strategy_key = args.strategy
+
+    if args.detach:
+        from backtester.job.api import JobSpec, QueueClient
+
+        date_from, date_to = getattr(strategy_cls, "DATE_RANGE", (None, None))
+        key = strategy_key
+        view = QueueClient().enqueue(
+            JobSpec(
+                strategy=key,
+                param_grid=param_grid,
+                date_from=date_from,
+                date_to=date_to,
+                account_size=float(_cfg.simulation.account_size_usd),
+                requested_inner_workers=args.workers,
+                options_path=args.options,
+                spot_path=args.spot,
+                source="cli",
+            )
+        )
+        print(view.job_id)
+        return
 
     print(f"\n{'='*60}")
     print(f"  Backtester V2 — {strategy_cls.name}")

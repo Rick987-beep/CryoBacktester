@@ -289,23 +289,61 @@ def _heartbeat_stale(heartbeat_ts: str | None, *, now: datetime | None = None) -
 
 
 class QueueClient:
-    """Socket client to jobd. I1: files-only snapshot; enqueue arrives in I3."""
+    """Socket client to jobd, with JobStore file fallback for snapshot."""
 
     def __init__(self, root: str | Path | None = None):
         self.store = JobStore(root)
 
     def ping(self) -> bool:
-        sock = self.store.root / "queue.sock"
-        return sock.exists()
+        from backtester.job.supervisor import rpc, sock_path
+
+        if not sock_path(self.store.root).exists():
+            return False
+        try:
+            return bool(rpc(self.store.root, {"op": "ping"}, timeout=0.4).get("ok"))
+        except OSError:
+            return False
 
     def snapshot(self) -> QueueSnapshot:
         return self.store.read_snapshot()
 
     def enqueue(self, spec: JobSpec) -> JobView:
-        raise NotImplementedError("QueueClient.enqueue needs jobd (I2/I3)")
+        from backtester.job.supervisor import rpc
+
+        self._ensure()
+        resp = rpc(self.store.root, {"op": "enqueue", "spec": spec.to_dict()})
+        if not resp.get("ok"):
+            raise RuntimeError(resp.get("error") or "enqueue failed")
+        view = self.store.get(resp["job_id"])
+        if view is None:
+            raise RuntimeError("enqueue wrote no job dir")
+        return view
 
     def cancel(self, job_id: str) -> JobView:
-        raise NotImplementedError("QueueClient.cancel needs jobd (I2/I3)")
+        from backtester.job.supervisor import rpc
+
+        self._ensure()
+        resp = rpc(self.store.root, {"op": "cancel", "job_id": job_id})
+        if not resp.get("ok"):
+            raise RuntimeError(resp.get("error") or "cancel failed")
+        view = self.store.get(job_id)
+        if view is None:
+            raise RuntimeError("cancel: job missing")
+        return view
 
     def set_concurrency(self, n: int) -> int:
-        raise NotImplementedError("QueueClient.set_concurrency needs jobd (I2/I3)")
+        from backtester.job.supervisor import rpc
+
+        self._ensure()
+        resp = rpc(self.store.root, {"op": "set_concurrency", "n": int(n)})
+        if not resp.get("ok"):
+            raise RuntimeError(resp.get("error") or "set_concurrency failed")
+        return int(resp["concurrency"])
+
+    def _ensure(self) -> None:
+        if self.ping():
+            return
+        from backtester.job.supervisor import ensure_jobd
+
+        ensure_jobd(self.store.root)
+
