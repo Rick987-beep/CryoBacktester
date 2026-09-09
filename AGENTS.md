@@ -341,6 +341,17 @@ width = pct × short strike; `min_width_usd` floors listed width (0 = off).
 No `max_width_usd`. Design-A stop grid kept as `V18_STOP_DISCOVERY_GRID`.
 Wings = investor principle (never naked), not a PnL/greek silver bullet.
 
+**`theta_engine_v19` Lenbach rebuild (paused after Step 2):** fork of
+`base` after Lenbach (run 759 / `fc678e1a6b1e`) Aug-2026 blow-up.
+DATE_RANGE → 2026-08-31; fixed exits SL 2× / TP 0.60 through Step 2.
+Step 1 run **775**: occupancy dominates; peak-DD pause inert; soft mc
+8–10. Step 2 run **776** (`V19_STEP2_DISCOVERY_GRID`, 3000 cells):
+`side_imbalance_limit` dominates — skew-only best full-sample / worst
+Aug; limit 1 dangerous; soft force 2–4 helps Aug; prefer
+`force_after_days=3`, gap 0–1; launch gate ≈ noise. Live picks (not
+locks): `c823cd1f9665`, `bc7b45e82c5c`. **Next = Step 3 exits.** See
+`.cursor/rules/theta-engine-baselines.mdc` and `v19.py` docstring.
+
 ---
 
 ## Key documents
