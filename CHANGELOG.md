@@ -17,9 +17,12 @@ Acceptance on this branch: tudysho run-777 config (648 combos, 2026-05-01 →
 ```bash
 python -m backtester.run --strategy tudysho --workers 4
 python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+python -m pytest tests/job -v
 ```
 
-Jobd / `--detach` is still a stub queue (not a real `run_backtest` runner).
+Jobd / `--detach` runs a real `run_backtest` in an isolated process (file
+snapshot + Unix-socket supervisor). Unit tests keep a 0.4s stub; E2E uses
+in-repo `job_smoke` + tiny parquet.
 
 ---
 

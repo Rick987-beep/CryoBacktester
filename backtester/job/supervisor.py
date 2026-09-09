@@ -53,6 +53,10 @@ class Supervisor:
         env = os.environ.copy()
         env["CRYOBT_JOBS"] = str(self.root)
         env["CRYOBT_JOB_PEERS"] = str(max(1, self.concurrency))
+        env["PYTHONUNBUFFERED"] = "1"
+        from backtester.core.paths import repo_root
+
+        env["PYTHONPATH"] = str(repo_root()) + os.pathsep + env.get("PYTHONPATH", "")
         if self.stub:
             env["CRYOBT_JOB_STUB"] = "1"
             env.setdefault("CRYOBT_JOB_STUB_SECS", "0.5")
@@ -304,6 +308,10 @@ def ensure_jobd(root: Path, timeout: float = 5.0) -> None:
     env = os.environ.copy()
     env["CRYOBT_JOBS"] = str(root)
     env.setdefault("CRYOBT_JOBD_IDLE_SEC", "8")
+    env["PYTHONUNBUFFERED"] = "1"
+    from backtester.core.paths import repo_root
+
+    env["PYTHONPATH"] = str(repo_root()) + os.pathsep + env.get("PYTHONPATH", "")
     cmd = [sys.executable, "-m", "backtester.job.supervisor", "--root", str(root)]
     if env.get("CRYOBT_JOB_STUB") == "1":
         cmd.append("--stub")

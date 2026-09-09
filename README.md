@@ -47,6 +47,8 @@ pip install -r requirements.txt
 python -m backtester.run --strategy blueprint_howto
 # Optional: inner combo-shard workers (auto from P-cores + RAM; 1 = single-process)
 python -m backtester.run --strategy blueprint_howto --workers 4
+# Optional: enqueue on jobd and return immediately
+python -m backtester.run --strategy blueprint_howto --detach
 
 # 4. Launch the interactive Research UI (native window — preferred)
 python -m backtester.ui.desktop

@@ -58,10 +58,13 @@ python -m backtester.run --strategy <name>
 python -m backtester.run --strategy <name> --workers 4
 # or: CRYOBT_GRID_WORKERS=4 python -m backtester.run --strategy <name>
 
-# Detached enqueue (jobd + stub/real runner). Foreground is still the default.
+# Detached enqueue (jobd). Foreground is still the default.
+# Jobs isolate UI state (CRYOBT_UI_STATE) and write bundles under data/jobs/<id>/out/.
 python -m backtester.run --strategy <name> --detach
 python -m backtester.job snapshot
 python -m backtester.job ping
+python -m backtester.job status JOB_ID
+python -m backtester.job cancel JOB_ID
 
 # With robustness stats (Deflated Sharpe Ratio)
 python -m backtester.run --strategy short_str_turb_dyn --robustness
@@ -155,6 +158,9 @@ python -m pytest tests/ -v
 
 # Inner combo-shard workers
 python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+
+# Detached jobs (stub unit tests + job_smoke E2E)
+python -m pytest tests/job -v
 
 # Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v

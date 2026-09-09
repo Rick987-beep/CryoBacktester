@@ -1,8 +1,7 @@
 """Detached-job file protocol and GUI-facing types.
 
 Observation is files-only (``JobStore``). Commands go through ``QueueClient``
-(Unix socket to jobd) in a later step — this module already defines the
-types that freeze.
+(Unix socket to jobd).
 """
 from __future__ import annotations
 
