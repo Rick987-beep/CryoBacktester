@@ -36,7 +36,7 @@ def run(
         end=date_to,
     )
     df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
-        strategy_cls, param_grid, replay,
+        strategy_cls, param_grid, replay, workers=1,
     )
     runtime = time.time() - t0
 

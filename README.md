@@ -45,6 +45,10 @@ pip install -r requirements.txt
 
 # 3. Run the public blueprint strategy (requires data in data/market/)
 python -m backtester.run --strategy blueprint_howto
+# Optional: inner combo-shard workers (auto from P-cores + RAM; 1 = single-process)
+python -m backtester.run --strategy blueprint_howto --workers 4
+# Optional: enqueue on jobd and return immediately
+python -m backtester.run --strategy blueprint_howto --detach
 
 # 4. Launch the interactive Research UI (native window — preferred)
 python -m backtester.ui.desktop
@@ -75,6 +79,7 @@ CryoBacktester/
 │   ├── run.py                     # CLI entry point
 │   ├── core/                      # Engine, market replay, pricing, results
 │   │   ├── engine.py              # Single-pass grid runner — run_grid_full()
+│   │   ├── grid_workers.py        # Combo-shard policy, partition, shared replay
 │   │   ├── market_replay.py       # Parquet loader → MarketState iterator
 │   │   ├── strategy_base.py       # Strategy protocol, Trade/OpenPosition
 │   │   ├── results.py             # GridResult: vectorised scoring, equity metrics
@@ -89,6 +94,7 @@ CryoBacktester/
 │   │   ├── robustness.py          # Deflated Sharpe Ratio
 │   │   └── run_audit/             # Grid quality autopsy (η², danger, curve-fit, live picks)
 │   ├── inspect/                   # Fast run/combo lookup CLI (python -m backtester.inspect)
+│   ├── job/                       # Detached queue: jobd, JobStore, QueueClient
 │   ├── reporting/                 # Self-contained HTML reports
 │   │   ├── html_report.py
 │   │   └── charts.py              # SVG chart primitives
@@ -330,6 +336,24 @@ run_grid_full(strategy_cls, param_grid, replay)
 
 This means market data is loaded exactly once regardless of grid size.
 
+**Inner workers:** `run_grid_full(..., workers=N)` (CLI `--workers`, env
+`CRYOBT_GRID_WORKERS`) shards the **already-expanded combo list** across spawn
+children. Never slice `PARAM_GRID` axes (`Cartesian(subset) ≠ subset(Cartesian)`).
+`workers=1` (or any resolved value of 1) is the legacy path — no child processes.
+Default is auto from P-cores + RAM + combo count (`[simulation]`
+`grid_workers_hard_cap`, `grid_min_combos_parallel`, `grid_min_combos_per_worker`
+in `config.toml`). Children attach to a shared read-only `MarketReplay`;
+`CRYOBT_GRID_SHARE=0` forces each child to reload parquet. Walk-forward and
+livecompare stay `workers=1`.
+
+**Detached jobs:** `python -m backtester.run --strategy … --detach` (and Research
+UI **New Run**) enqueue on **jobd**. Observation is files under `data/jobs/`
+(`python -m backtester.job snapshot`). Commands go through one Unix socket.
+Default concurrency is 1 (FIFO). Closing the UI does not stop a job. CLI without
+`--detach` stays in-process foreground. Inner `--workers` still apply inside the
+job. Bundles land in `data/jobs/<id>/out/`; the UI registers them into
+`ui_state.db` when they finish.
+
 ---
 
 ## The Research Pipeline
@@ -339,6 +363,7 @@ Running a parameter grid and picking the best result is statistically dangerous 
 ### Step 1 — Discovery
 ```bash
 python -m backtester.run --strategy short_str_turb_dyn
+python -m backtester.run --strategy short_str_turb_dyn --workers 4
 ```
 Wide `PARAM_GRID` (hundreds of combos), full date range.
 **Goal:** find which region of parameter space is profitable at all.
@@ -380,8 +405,10 @@ Agent skills: `.cursor/skills/run-lookup/`, `.cursor/skills/run-audit/` (see `AG
 
 ## Research UI
 
-An interactive Panel-based app for exploring backtest results without re-running the engine.
-The preferred launch is a **native desktop window** (pywebview / WKWebView on macOS) — one Dock icon, one window, no browser tabs.
+An interactive Panel-based app for exploring backtest results and starting
+discovery runs. **New Run** enqueues on jobd (same as `--detach`). The preferred
+launch is a **native desktop window** (pywebview / WKWebView on macOS) — one Dock
+icon, one window, no browser tabs.
 
 ```bash
 # Native desktop (preferred)
@@ -401,7 +428,46 @@ python -m backtester.ui.app --no-browser
 python -m backtester.ui.app --dev        # autoreload on file changes
 ```
 
-**Quit behaviour (desktop):** if a backtest worker is still running, a confirmation dialog appears. Cancel keeps the window open; confirm stops all workers (SIGTERM, then SIGKILL) and exits. Closing the window also releases the single-instance lock.
+**New Run** enqueues on **jobd** (same as `python -m backtester.run --detach`).
+Progress is polled from `data/jobs/<id>/status.json`. Closing the UI does **not**
+stop the backtest.
+
+**Quit behaviour (desktop):** if jobs are still queued or running, a confirmation
+dialog appears. Cancel keeps the window open; confirm **closes the window only** —
+jobs keep running. Reopen the UI to watch progress, or use **Cancel** in New Run
+to stop them. Closing the window also releases the single-instance lock.
+
+### GUI job acceptance (human)
+
+Use a **short** grid. `blueprint_howto` is two combos over four days — enough to
+see progress without waiting on a discovery grid.
+
+From this checkout, point at market data if this tree has no `data/market/`:
+
+```bash
+export CRYOBT_MARKET_DATA=/path/to/CryoBacktester/data/market
+export CRYOBT_KLINE_DIR=/path/to/CryoBacktester/data/klines
+python -m backtester.ui.desktop
+```
+
+1. **New Run** → strategy `blueprint_howto` (leave its date range). Click **Run**.
+   Status should go Queued → Running with a progress bar.
+2. In a Terminal: `python -m backtester.job snapshot` — same `job_id`, state
+   `running`. Heartbeat file: `data/jobs/<id>/status.json`.
+3. **Quit the desktop window while it is still running.** Confirm the dialog
+   (jobs keep running). The Dock icon is gone.
+4. Still in Terminal: snapshot still shows `running`; `ps` still has the job
+   runner PID. `status.json` `heartbeat_ts` is moving.
+5. Relaunch `python -m backtester.ui.desktop`. New Run should say **Reconnected**
+   and keep showing progress. When it finishes, the bundle loads and the UI
+   switches to Results Grid.
+6. **Cancel:** start another `blueprint_howto` run, click **Cancel** — snapshot
+   goes `cancelled`, no new bundle, runner PID gone.
+7. **Queue (optional):** while a run is in flight, from Terminal
+   `python -m backtester.run --strategy blueprint_howto --detach`. Snapshot
+   shows the second job `queued` until the first finishes (concurrency=1).
+
+Automated coverage: `python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v`
 
 **Troubleshooting**
 
@@ -417,12 +483,16 @@ python -m backtester.ui.app --dev        # autoreload on file changes
 
 The UI scans `data/runs/` for run bundles — directories created by `run.py`
 (format: `<strategy>_<timestamp>.bundle/`) containing `meta.json`, `trade_log.parquet`,
-`nav_daily.parquet`, and `final_nav.parquet`. It does **not** re-run the backtest engine.
+`nav_daily.parquet`, and `final_nav.parquet`. New Run jobs write bundles under
+`data/jobs/<id>/out/` and the UI **registers** them into `ui_state.db` when they
+finish (or on the next launch via `import_finished_jobs`).
 
 ### Tabs
 
 | Tab | Description |
 |---|---|
+| **New Run** | Enqueue a discovery grid on jobd; progress from `data/jobs/<id>/status.json` |
+| **Runs** | Indexed bundles (including jobs registered when they finish) |
 | **Results Grid** | All combos for the selected run — sortable, filterable, star/unstar |
 | **Combo Detail** | Stats card + equity/drawdown chart + trade log for one focused combo |
 | **Equity Overlay** | Multi-combo equity curves on one chart (select up to 50 combos) |
@@ -565,7 +635,7 @@ Key sections:
 | Section | Key settings |
 |---|---|
 | `[data]` | Paths to parquet files and directories |
-| `[simulation]` | `account_size_usd`, `top_n_report` (top N combos in HTML) |
+| `[simulation]` | `account_size_usd`, `top_n_report` (top N combos in HTML), `grid_workers_hard_cap`, `grid_min_combos_parallel`, `grid_min_combos_per_worker` |
 | `[pricing]` | `risk_free_rate`, `expiry_hour_utc`, `strike_step_usd`, vol clamps |
 | `[repricing]` | Fallback pricing when bid/ask is 0 (mark × slip factor) |
 | `[fees]` | Deribit fee model parameters |
@@ -676,25 +746,32 @@ python -m backtester.run --strategy my_strategy
 ## Testing
 
 ```bash
-# Full test suite: UI tests + strategy tests
-python -m pytest tests/ workspace/tests/ -v
+# Product tests (engine, jobs, UI unit tests)
+python -m pytest tests/ -v
 
-# Strategy tests only (42 tests)
+# Inner combo-shard workers
+python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+
+# Detached jobs (fast stub queue tests + job_smoke E2E)
+python -m pytest tests/job -v
+
+# GUI job client (enqueue / quit-does-not-kill / reconnect)
+python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
+
+# Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v
-
-# UI tests only
-python -m pytest tests/ui/ -v
 
 # Live/network tests (deselected by default, require network)
 python -m pytest workspace/tests/ -m live -v
 ```
 
-Tests live in two directories:
-- `tests/ui/` — Panel UI unit tests (state, views, services, filter parser, etc.)
+Tests live in:
+- `tests/` — engine, jobs, CLI, Research UI
 - `workspace/tests/` — per-strategy backtesting unit tests
 
 `@pytest.mark.live` tests are excluded by default via `pyproject.toml` (`addopts = "-m 'not live'"`).
-`@pytest.mark.slow_ui` marks tests that require a real Panel server and are also excluded by default.
+`@pytest.mark.slow_ui` marks tests that boot a real Panel server (also excluded by default).
+The 777-grid worker check is `CRYOBT_RUN_777=1`; the inner-worker perf gate is `CRYOBT_RUN_PERF=1`.
 
 ---
 
@@ -709,6 +786,7 @@ On an M1 Mac with the full dataset (~109k intervals, ~87M option rows):
 
 Key optimisations in the engine and market replay:
 - **Single data pass** — all combos evaluated simultaneously; market data loaded once.
+- **Combo-shard workers** — large grids spawn processes over expanded combos sharing one read-only chain (`--workers`; auto-sized). Tiny grids stay single-process.
 - **NumPy columnar storage** — option data in contiguous typed arrays (`float32`, `uint8`, `bool`). ~5× less RAM than Python dicts.
 - **Timestamp index** — `np.unique` with `return_index/return_counts` for O(1) per-tick slicing.
 - **Lazy `OptionQuote` construction** — built only when a strategy calls `get_option()`, with a per-tick dict cache.

@@ -21,6 +21,11 @@ Two public entry points:
                        • nav_daily_df  — daily NAV low/high/close per combo
                        • final_nav_df  — final NAV + realized/open PnL per combo
 
+  Inner workers: run_grid_full(..., workers=N) shards already-expanded combos
+  across spawn children when N>1 and MarketReplay can reload from parquet.
+  workers=1 (the default once combo-count/host caps resolve) is bit-identical
+  to the pre-parallel kernel — no Pool is created.
+
 NAV tracking detail:
   Every tick, _open_unrealized_pnl() marks all open positions to market.
   It reads pos._last_reprice_usd (cached by _reprice_legs in strategy_base)
@@ -36,6 +41,10 @@ Usage:
 """
 import itertools
 import logging
+import multiprocessing
+import os
+import queue as _queue
+import threading
 import time as _time
 from typing import Any, Dict, List, Optional, Tuple, Type
 
@@ -84,22 +93,17 @@ def _dep_cache_key(dep):
     )
 
 
-def _inject_indicators(strategy_cls, instances, replay, progress, status_cb=None):
-    # type: (Type, List[Any], Any, bool, Any) -> None
-    """Pre-compute indicators and inject into each instance.
-
-    Unique ``(name, symbol, interval, warmup, params)`` tuples are built once
-    so PARAM_GRID can vary indicator knobs without recomputing identical
-    series. Each instance still receives a dict keyed by indicator name.
-    """
+def _compute_indicator_cache(strategy_cls, instances, replay, progress, status_cb=None):
+    # type: (Type, List[Any], Any, bool, Any) -> Dict[Tuple, Any]
+    """Build unique indicator series for ``instances``. Empty dict if none."""
     per_instance = [_indicator_deps_for_instance(strategy_cls, inst) for inst in instances]
+    cache = {}  # type: Dict[Tuple, Any]
     if not any(per_instance):
-        return
+        return cache
 
     from backtester.indicators import build_indicators
 
     start_dt, end_dt = replay.date_range()
-    cache = {}  # type: Dict[Tuple, Any]
     build_order = []  # type: List[Any]
     for deps in per_instance:
         for dep in deps:
@@ -120,14 +124,61 @@ def _inject_indicators(strategy_cls, instances, replay, progress, status_cb=None
         built = build_indicators([dep], start_dt, end_dt, status_cb=status_cb)
         cache[key] = built[dep.name]
 
-    for strategy, deps in zip(instances, per_instance):
-        if not deps or not hasattr(strategy, "set_indicators"):
-            continue
-        ind = {dep.name: cache[_dep_cache_key(dep)] for dep in deps}
-        strategy.set_indicators(ind)
-
     if progress:
         print(f"  Indicators ready: {len(cache)} unique series")
+    return cache
+
+
+def _apply_indicator_cache(strategy_cls, instances, cache):
+    # type: (Type, List[Any], Optional[Dict[Tuple, Any]]) -> None
+    if not cache:
+        return
+    for strategy in instances:
+        deps = _indicator_deps_for_instance(strategy_cls, strategy)
+        if not deps or not hasattr(strategy, "set_indicators"):
+            continue
+        strategy.set_indicators({dep.name: cache[_dep_cache_key(dep)] for dep in deps})
+
+
+def _indicator_cache_for_combos(strategy_cls, combos, extra_params, replay, progress, status_cb=None):
+    # type: (Type, List[Dict[str, Any]], Optional[Dict[str, Any]], Any, bool, Any) -> Optional[Dict[Tuple, Any]]
+    """Parent-side unique series so spawn children skip a 4× kline rebuild."""
+    probes = []
+    seen = set()
+    for params in combos:
+        full_params = dict(params)
+        if extra_params:
+            full_params.update(extra_params)
+        inst = strategy_cls()
+        inst.configure(full_params)
+        deps = _indicator_deps_for_instance(strategy_cls, inst)
+        key = tuple(_dep_cache_key(d) for d in deps)
+        if key in seen:
+            continue
+        seen.add(key)
+        probes.append(inst)
+    if not probes:
+        return None
+    cache = _compute_indicator_cache(
+        strategy_cls, probes, replay, progress, status_cb,
+    )
+    return cache or None
+
+
+def _inject_indicators(strategy_cls, instances, replay, progress, status_cb=None, indicator_cache=None):
+    # type: (Type, List[Any], Any, bool, Any, Optional[Dict[Tuple, Any]]) -> None
+    """Pre-compute indicators and inject into each instance.
+
+    Unique ``(name, symbol, interval, warmup, params)`` tuples are built once
+    so PARAM_GRID can vary indicator knobs without recomputing identical
+    series. Each instance still receives a dict keyed by indicator name.
+    Pass ``indicator_cache`` from the parent spawn path to skip rebuilds.
+    """
+    if indicator_cache is None:
+        indicator_cache = _compute_indicator_cache(
+            strategy_cls, instances, replay, progress, status_cb,
+        )
+    _apply_indicator_cache(strategy_cls, instances, indicator_cache)
 
 _progress_interval = _cfg.simulation.progress_interval
 
@@ -420,6 +471,432 @@ def run_grid(
     return results
 
 
+def _effective_inner_workers(n_combos, requested, replay, strategy_cls):
+    # type: (int, Optional[int], Any, Type) -> int
+    """Resolve inner workers; 1 means the legacy single-process kernel."""
+    from backtester.core.grid_workers import (
+        replay_reload_spec,
+        resolve_workers_from_cfg,
+        strategy_is_spawnable,
+    )
+
+    sharing = os.environ.get("CRYOBT_GRID_SHARE", "1") != "0"
+    n_workers = resolve_workers_from_cfg(
+        n_combos, requested, sharing=sharing,
+    )
+    if n_workers <= 1:
+        return 1
+    if replay_reload_spec(replay) is None:
+        _log.info("grid workers: replay has no reload paths; staying single-process")
+        return 1
+    if not strategy_is_spawnable(strategy_cls):
+        _log.info("grid workers: strategy class is not picklable; staying single-process")
+        return 1
+    return n_workers
+
+
+def _ensure_child_logging():
+    # type: () -> None
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+        )
+
+
+_SHARD_PROGRESS_QUEUE = None  # set in spawn children via Pool initializer
+
+
+def _init_shard_worker(q):
+    # type: (Any) -> None
+    global _SHARD_PROGRESS_QUEUE
+    _ensure_child_logging()
+    _SHARD_PROGRESS_QUEUE = q
+
+
+def _assert_spawnable_parent():
+    # type: () -> None
+    """Pool/Process spawn re-imports __main__. stdin/`python -c` cannot be re-run."""
+    import sys
+
+    main = sys.modules.get("__main__")
+    path = getattr(main, "__file__", None)
+    if not path or os.path.basename(str(path)) in ("<stdin>", "<string>"):
+        raise RuntimeError(
+            "inner grid workers cannot spawn from python -c or stdin "
+            "(children re-import __main__ and then respawn forever). "
+            "Run via python -m backtester.run, python -m backtester.job, or pytest."
+        )
+
+
+def _shard_proc(payload, progress_queue, result_queue):
+    # type: (Dict[str, Any], Any, Any) -> None
+    """Process target: one shard, result on ``result_queue``. No Pool respawn."""
+    _init_shard_worker(progress_queue)
+    shard_i = int(payload.get("shard_i") or 0)
+    try:
+        result_queue.put((shard_i, True, _run_grid_shard(payload)))
+    except Exception as exc:
+        try:
+            result_queue.put((shard_i, False, exc))
+        except Exception:
+            pass
+        raise
+
+
+def _terminate_procs(procs):
+    # type: (List[Any]) -> None
+    for p in procs:
+        if p.is_alive():
+            try:
+                p.terminate()
+            except Exception:
+                pass
+    deadline = _time.time() + 3.0
+    for p in procs:
+        remaining = deadline - _time.time()
+        try:
+            p.join(timeout=max(0.05, remaining))
+        except Exception:
+            pass
+    for p in procs:
+        if p.is_alive():
+            try:
+                p.kill()
+            except Exception:
+                pass
+            try:
+                p.join(timeout=1.0)
+            except Exception:
+                pass
+
+
+def _run_grid_shard(payload):
+    # type: (Dict[str, Any]) -> Tuple
+    """Spawn child: attach shared replay or reload from paths, run one shard."""
+    from backtester.core.market_replay import MarketReplay
+
+    _ensure_child_logging()
+    shard_i = int(payload.get("shard_i") or 0)
+    n_shards = int(payload.get("n_shards") or 1)
+    combos = payload["combos"]
+    offset = int(payload.get("combo_offset") or 0)
+    q = payload.get("progress_queue") or _SHARD_PROGRESS_QUEUE
+    share_meta = payload.get("share_meta")
+    spec = payload.get("spec")
+    pid = os.getpid()
+    _log.info(
+        "grid-w%s/%s start pid=%s n_combos=%s combo_off=%s share=%s",
+        shard_i + 1, n_shards, pid, len(combos), offset, share_meta is not None,
+    )
+    print(
+        f"[grid-w{shard_i + 1}/{n_shards}] start pid={pid} n_combos={len(combos)} "
+        f"combo_off={offset} share={share_meta is not None}",
+        flush=True,
+    )
+    t0 = _time.time()
+    replay = None
+    try:
+        if share_meta is not None:
+            replay = MarketReplay.from_shared_meta(share_meta)
+        else:
+            replay = MarketReplay(
+                spec["snapshot_path"],
+                spec["spot_track_path"],
+                expiry_filter=spec.get("expiry_filter"),
+                start=spec.get("start"),
+                end=spec.get("end"),
+                step_minutes=spec.get("step_minutes", 5),
+            )
+
+        def _cb(current, total, day_iso):
+            if q is None or shard_i != 0:
+                return
+            try:
+                q.put(("progress", current, total, day_iso))
+            except Exception:
+                pass
+
+        result = _run_grid_full_combos(
+            payload["strategy_cls"],
+            combos,
+            replay,
+            extra_params=payload.get("extra_params"),
+            progress=bool(payload.get("progress")),
+            progress_cb=_cb if q is not None else None,
+            progress_cb_interval=int(payload.get("progress_cb_interval") or 50),
+            status_cb=None,
+            indicator_cache=payload.get("indicator_cache"),
+        )
+        elapsed = _time.time() - t0
+        _log.info(
+            "grid-w%s/%s done pid=%s elapsed=%.1fs trades=%s",
+            shard_i + 1, n_shards, pid, elapsed, len(result[0]),
+        )
+        print(
+            f"[grid-w{shard_i + 1}/{n_shards}] done pid={pid} "
+            f"elapsed={elapsed:.1f}s trades={len(result[0])}",
+            flush=True,
+        )
+        if q is not None:
+            try:
+                q.put(("shard_done", shard_i, pid, _time.time() - t0, len(result[0])))
+            except Exception:
+                pass
+        return result
+    except Exception:
+        _log.exception("grid-w%s/%s failed pid=%s", shard_i + 1, n_shards, pid)
+        raise
+    finally:
+        for shm in getattr(replay, "_shm_holders", None) or []:
+            try:
+                shm.close()
+            except Exception:
+                pass
+
+
+def _run_grid_full_spawn(
+    strategy_cls,
+    combos,
+    replay,
+    extra_params,
+    progress,
+    n_workers,
+    status_cb=None,
+    progress_cb=None,
+    progress_cb_interval=50,
+):
+    # type: (Type, List[Dict[str, Any]], Any, Optional[Dict[str, Any]], bool, int, Optional[Any], Optional[Any], int) -> Tuple
+    from backtester.core.grid_workers import (
+        merge_grid_results,
+        pack_replay_shared,
+        partition_combos,
+        replay_reload_spec,
+        shard_offsets,
+        unlink_replay_shared,
+    )
+
+    _assert_spawnable_parent()
+    spec = replay_reload_spec(replay)
+    share = os.environ.get("CRYOBT_GRID_SHARE", "1") != "0"
+    share_meta = None
+    holders = []
+    indicator_cache = None
+    try:
+        indicator_cache = _indicator_cache_for_combos(
+            strategy_cls, combos, extra_params, replay, progress, status_cb,
+        )
+    except Exception:
+        _log.exception("parent indicator cache failed; children will rebuild")
+        indicator_cache = None
+    if share:
+        try:
+            share_meta, holders = pack_replay_shared(replay)
+            _log.info("grid spawn: packed %s shared arrays", len(share_meta.get("arrays") or {}))
+        except Exception:
+            _log.exception("shared replay pack failed; falling back to duplicate-load")
+            share_meta = None
+            holders = []
+    if share_meta is None and spec is None:
+        _log.info("grid spawn: no share and no reload paths; single-process")
+        return _run_grid_full_combos(
+            strategy_cls, combos, replay,
+            extra_params=extra_params, progress=progress,
+            progress_cb=progress_cb, progress_cb_interval=progress_cb_interval,
+            status_cb=status_cb,
+        )
+    parts = partition_combos(combos, n_workers)
+    offsets = shard_offsets(parts)
+    ctx = multiprocessing.get_context("spawn")
+    progress_queue = ctx.Queue()
+    result_queue = ctx.Queue()
+    payloads = [
+        {
+            "strategy_cls": strategy_cls,
+            "combos": part,
+            "extra_params": extra_params,
+            "spec": spec,
+            "share_meta": share_meta,
+            "progress": bool(progress) and i == 0,
+            "progress_cb_interval": progress_cb_interval,
+            "shard_i": i,
+            "n_shards": len(parts),
+            "combo_offset": offsets[i],
+            "indicator_cache": indicator_cache,
+        }
+        for i, part in enumerate(parts)
+    ]
+    _log.info(
+        "grid spawn: %s combos → %s shards sizes=%s share=%s",
+        len(combos), len(parts), [len(p) for p in parts], share_meta is not None,
+    )
+    if progress:
+        print(
+            f"  spawn {len(parts)} shards sizes={[len(p) for p in parts]} "
+            f"share={share_meta is not None} indicator_cache={indicator_cache is not None}",
+            flush=True,
+        )
+    if status_cb is not None:
+        status_cb("backtesting", f"Running backtest ({len(parts)} workers)…")
+
+    stop_listen = threading.Event()
+
+    def _listen():
+        while True:
+            try:
+                msg = progress_queue.get(timeout=0.2)
+            except _queue.Empty:
+                if stop_listen.is_set():
+                    break
+                continue
+            if msg is None:
+                break
+            kind = msg[0]
+            if kind == "progress":
+                _cur, _tot, _day = msg[1], msg[2], msg[3]
+                if progress_cb is not None:
+                    try:
+                        progress_cb(_cur, _tot, _day)
+                    except Exception:
+                        _log.warning("progress_cb raised; ignoring", exc_info=True)
+            elif kind == "shard_done":
+                _log.info(
+                    "grid shard %s done pid=%s elapsed=%.1fs trades=%s",
+                    msg[1] + 1, msg[2], msg[3], msg[4],
+                )
+
+    listener = threading.Thread(target=_listen, name="grid-progress", daemon=True)
+    listener.start()
+
+    shard_timeout = os.environ.get("CRYOBT_GRID_SHARD_TIMEOUT")
+    shard_timeout_s = float(shard_timeout) if shard_timeout else None
+    procs = []  # type: List[Any]
+    shards = [None] * len(payloads)  # type: List[Optional[Tuple]]
+    try:
+        for payload in payloads:
+            p = ctx.Process(
+                target=_shard_proc,
+                args=(payload, progress_queue, result_queue),
+                name=f"grid-w{int(payload['shard_i']) + 1}",
+                daemon=False,
+            )
+            p.start()
+            procs.append(p)
+            _log.info("grid parent spawned %s pid=%s", p.name, p.pid)
+            if progress:
+                print(f"  spawned {p.name} pid={p.pid}", flush=True)
+
+        outstanding = set(range(len(procs)))
+        t_wait = _time.time()
+        last_beat = t_wait
+        first_result_s = 30.0
+        while outstanding:
+            try:
+                idx, ok, body = result_queue.get(timeout=0.2)
+            except _queue.Empty:
+                idx = None
+            else:
+                outstanding.discard(int(idx))
+                if ok:
+                    shards[int(idx)] = body
+                    _log.info(
+                        "grid parent collected shard %s/%s remaining=%s",
+                        int(idx) + 1, len(procs), len(outstanding),
+                    )
+                    if progress:
+                        print(
+                            f"  collected shard {int(idx) + 1}/{len(procs)} "
+                            f"remaining={len(outstanding)}",
+                            flush=True,
+                        )
+                else:
+                    raise RuntimeError(
+                        f"grid worker shard {int(idx) + 1} failed: {body!r}"
+                    ) from (body if isinstance(body, BaseException) else None)
+
+            now = _time.time()
+            if now - last_beat >= 10.0:
+                _log.info(
+                    "grid parent waiting shards=%s elapsed=%.0fs pids=%s",
+                    sorted(i + 1 for i in outstanding),
+                    now - t_wait,
+                    [procs[i].pid for i in sorted(outstanding)],
+                )
+                last_beat = now
+            if shard_timeout_s is not None and (now - t_wait) > shard_timeout_s:
+                raise TimeoutError(
+                    f"grid shards {sorted(i + 1 for i in outstanding)} still "
+                    f"running after {shard_timeout_s:.0f}s"
+                )
+            if (now - t_wait) > first_result_s and len(outstanding) == len(procs):
+                dead = [
+                    f"{procs[i].name} pid={procs[i].pid} exit={procs[i].exitcode}"
+                    for i in outstanding
+                    if procs[i].exitcode not in (None, 0)
+                ]
+                if dead:
+                    raise RuntimeError(
+                        "grid workers died before returning a shard: " + "; ".join(dead)
+                    )
+
+            for i in list(outstanding):
+                p = procs[i]
+                if p.exitcode is None:
+                    continue
+                if p.exitcode != 0:
+                    # Exception may already be on the queue; wait one more drain.
+                    try:
+                        idx2, ok2, body2 = result_queue.get(timeout=0.5)
+                    except _queue.Empty:
+                        raise RuntimeError(
+                            f"grid worker {p.name} pid={p.pid} exited {p.exitcode} "
+                            "without a result"
+                        )
+                    outstanding.discard(int(idx2))
+                    if not ok2:
+                        raise RuntimeError(
+                            f"grid worker shard {int(idx2) + 1} failed: {body2!r}"
+                        ) from (body2 if isinstance(body2, BaseException) else None)
+                    shards[int(idx2)] = body2
+
+        for p in procs:
+            p.join()
+        procs = []
+    except KeyboardInterrupt:
+        _log.warning("grid spawn interrupted; terminating workers")
+        _terminate_procs(procs)
+        raise
+    except BaseException:
+        _log.exception("grid spawn abort; terminating workers")
+        _terminate_procs(procs)
+        raise
+    finally:
+        try:
+            progress_queue.put(None)
+        except Exception:
+            pass
+        stop_listen.set()
+        listener.join(timeout=2.0)
+        for q in (progress_queue, result_queue):
+            try:
+                q.close()
+                q.join_thread()
+            except Exception:
+                pass
+        unlink_replay_shared(holders)
+
+    master_keys = []
+    for _df, keys, *_rest in shards:
+        master_keys.extend(keys)
+    merged = merge_grid_results(shards, offsets, master_keys)
+    _log.info(
+        "grid spawn merge: keys=%s trades=%s",
+        len(merged[1]), len(merged[0]),
+    )
+    return merged
+
+
 def run_grid_full(
     strategy_cls,       # type: Type
     param_grid,         # type: Dict[str, List]
@@ -429,11 +906,19 @@ def run_grid_full(
     progress_cb=None,   # type: Optional[Any]  # Callable[[int, int, str], None] | None
     progress_cb_interval=50,  # type: int  # call progress_cb every N states
     status_cb=None,     # type: Optional[Any]  # Callable[[str, str], None] | None
+    workers=None,       # type: Optional[int]
 ):
     """Run all parameter combos in a single pass over market data.
 
     Accumulates trades into flat lists, then builds a memory-efficient
     pandas DataFrame (~10× less RAM than keeping Trade objects alive).
+
+    ``workers is None`` auto-sizes from host + combo count. ``workers=1``
+    (or any resolved value of 1) is the legacy single-process path — no
+    child processes are created. ``workers>1`` shards *expanded combos*
+    across spawn children sharing a read-only MarketReplay (or duplicate-
+    load if ``CRYOBT_GRID_SHARE=0``). Fake / in-memory replays stay on
+    the workers=1 path.
 
     Args:
         strategy_cls: Strategy class (configure/on_market_state/on_end/reset).
@@ -441,6 +926,7 @@ def run_grid_full(
         replay:       MarketReplay instance (iterable of MarketState).
         extra_params: Optional fixed params merged into every combo.
         progress:     Print progress updates.
+        workers:      Requested inner processes. None = auto. 1 = no spawn.
 
     Returns:
         Tuple of (df, keys, nav_daily_df, final_nav_df, df_fills):
@@ -451,13 +937,65 @@ def run_grid_full(
         - final_nav_df: one row per combo with final_nav, realized_pnl, open_pnl.
         - df_fills: one row per leg per event (open/close) across all combos.
     """
-    import pandas as pd
-
     combos = _grid_combos(param_grid)
     n_combos = len(combos)
+    n_workers = _effective_inner_workers(n_combos, workers, replay, strategy_cls)
 
     if progress:
         print(f"Running {n_combos} parameter combos...")
+        if n_workers > 1:
+            share = os.environ.get("CRYOBT_GRID_SHARE", "1") != "0"
+            mode = "shared replay" if share else "duplicate-load"
+            print(f"  inner workers: {n_workers} (spawn, {mode})")
+
+    if n_workers <= 1:
+        out = _run_grid_full_combos(
+            strategy_cls,
+            combos,
+            replay,
+            extra_params=extra_params,
+            progress=progress,
+            progress_cb=progress_cb,
+            progress_cb_interval=progress_cb_interval,
+            status_cb=status_cb,
+        )
+    else:
+        out = _run_grid_full_spawn(
+            strategy_cls,
+            combos,
+            replay,
+            extra_params=extra_params,
+            progress=progress,
+            n_workers=n_workers,
+            status_cb=status_cb,
+            progress_cb=progress_cb,
+            progress_cb_interval=progress_cb_interval,
+        )
+    from backtester.core.grid_workers import worker_run_meta
+
+    df = out[0]
+    df.attrs["grid_workers"] = worker_run_meta(
+        workers, n_workers,
+        sharing=os.environ.get("CRYOBT_GRID_SHARE", "1") != "0",
+    )
+    return out
+
+
+def _run_grid_full_combos(
+    strategy_cls,       # type: Type
+    combos,             # type: List[Dict[str, Any]]
+    replay,             # type: Any
+    extra_params=None,  # type: Optional[Dict[str, Any]]
+    progress=True,      # type: bool
+    progress_cb=None,   # type: Optional[Any]
+    progress_cb_interval=50,  # type: int
+    status_cb=None,     # type: Optional[Any]
+    indicator_cache=None,  # type: Optional[Dict[Tuple, Any]]
+):
+    """Single-process kernel: one replay pass over an expanded combo list."""
+    import pandas as pd
+
+    n_combos = len(combos)
 
     instances = []  # type: List[Any]
     keys = []       # type: List[Tuple]
@@ -471,7 +1009,10 @@ def run_grid_full(
         keys.append(_params_to_key(_effective_params_for_key(params, strategy)))
 
     # Inject pre-computed indicators if strategy declares dependencies
-    _inject_indicators(strategy_cls, instances, replay, progress, status_cb=status_cb)
+    _inject_indicators(
+        strategy_cls, instances, replay, progress,
+        status_cb=status_cb, indicator_cache=indicator_cache,
+    )
 
     if status_cb is not None:
         status_cb("backtesting", "Running backtest…")
@@ -748,6 +1289,12 @@ def run_grid_full(
                 _logging.getLogger(__name__).warning(
                     "progress_cb raised; ignoring", exc_info=True
                 )
+
+    if progress_cb is not None and n_states:
+        try:
+            progress_cb(n_states, total_states, day_key)
+        except Exception:
+            _log.warning("progress_cb raised; ignoring", exc_info=True)
 
     if last_state is not None:
         for i, strategy in enumerate(instances):

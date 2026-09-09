@@ -216,7 +216,7 @@ def run_walk_forward(
         is_replay = MarketReplay(options_path, spot_path,
                                  start=is_start_s, end=is_end_s)
         df_is, keys_is, nav_daily_is, final_nav_is, _ = run_grid_full(
-            strategy_cls, grid, is_replay
+            strategy_cls, grid, is_replay, workers=1,
         )
         is_result = GridResult(
             df_is, keys_is, nav_daily_is, final_nav_is,
@@ -245,7 +245,7 @@ def run_walk_forward(
         oos_replay = MarketReplay(options_path, spot_path,
                                   start=oos_start_s, end=oos_end_s)
         df_oos, keys_oos, _, _, _ = run_grid_full(
-            strategy_cls, oos_param_grid, oos_replay
+            strategy_cls, oos_param_grid, oos_replay, workers=1,
         )
 
         oos_pnl = float(df_oos["pnl"].sum()) if not df_oos.empty else 0.0

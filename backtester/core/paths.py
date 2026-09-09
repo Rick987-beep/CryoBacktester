@@ -62,5 +62,10 @@ def runs_dir() -> Path:
     return _env_path("CRYOBT_RUNS") or (_REPO_ROOT / "data" / "runs")
 
 
+def jobs_dir() -> Path:
+    """Detached job dirs + queue.sock (override with CRYOBT_JOBS)."""
+    return _env_path("CRYOBT_JOBS") or (_REPO_ROOT / "data" / "jobs")
+
+
 def data_archive_dir() -> Path:
     return _env_path("CRYOBT_DATA_ARCHIVE") or (_REPO_ROOT / "data" / "archive")

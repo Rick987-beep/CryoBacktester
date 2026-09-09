@@ -1,8 +1,7 @@
-"""
-tests/ui/test_run_service_lifecycle.py — Default-CI lifecycle tests for RunService.
+"""Default-CI lifecycle tests for local submit_cmd children.
 
-Uses dummy subprocesses (no parquet, not slow_ui) to verify process-group
-spawn, shutdown_all TERM→KILL, and running_worker_count.
+shutdown_all TERM→KILL applies only to those test children, never to jobd
+jobs. Job isolation is tests/ui/test_run_service.py.
 """
 from __future__ import annotations
 

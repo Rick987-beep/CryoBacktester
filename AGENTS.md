@@ -46,13 +46,25 @@ CryoBacktester/
 │   └── tests/
 ```
 
-Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS` (see `backtester.core.paths`).
+Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS`, `CRYOBT_JOBS` (see `backtester.core.paths`).
 
 ## CLI
 
 ```bash
 # Discovery — wide parameter grid, full date range
 python -m backtester.run --strategy <name>
+
+# Inner combo-shard workers (auto from P-cores + RAM; 1 = single-process)
+python -m backtester.run --strategy <name> --workers 4
+# or: CRYOBT_GRID_WORKERS=4 python -m backtester.run --strategy <name>
+
+# Detached enqueue (jobd). Foreground is still the default.
+# Jobs isolate UI state (CRYOBT_UI_STATE) and write bundles under data/jobs/<id>/out/.
+python -m backtester.run --strategy <name> --detach
+python -m backtester.job snapshot
+python -m backtester.job ping
+python -m backtester.job status JOB_ID
+python -m backtester.job cancel JOB_ID
 
 # With robustness stats (Deflated Sharpe Ratio)
 python -m backtester.run --strategy short_str_turb_dyn --robustness
@@ -65,6 +77,7 @@ python -m backtester.run --experiment short_str_turb_dyn_v1 --mode wfo
 
 # Research UI — native window (preferred)
 python -m backtester.ui.desktop
+# New Run enqueues on jobd. Closing the window does not stop the backtest.
 # or: open scripts/macos/CryoBacktester.app
 
 # Research UI — browser / Terminal (dev)
@@ -103,10 +116,12 @@ Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `ana
 
 ## Runtime model
 
-1. Load snapshot parquets from `backtester/data/` via `MarketReplay`
-2. `engine.run_grid_full()` runs **all parameter combos in one pass** over the data
+1. Load snapshot parquets from `data/market/` via `MarketReplay`
+2. `engine.run_grid_full()` runs **all parameter combos in one pass** (optional inner combo-shard `--workers`)
 3. `GridResult` computes vectorised metrics per combo: Sharpe, PnL, Omega, Ulcer Index, drawdown, DSR, composite score
 4. `backtester.reporting.generate_html()` renders a self-contained HTML file (no recomputation)
+
+Detached runs (`--detach` / UI New Run) wrap that kernel in jobd. Observe `data/jobs/`; do not killpg jobs when the UI quits.
 
 ---
 
@@ -115,6 +130,8 @@ Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `ana
 ```
 Step 1 — Discovery
   Wide PARAM_GRID (hundreds of combos), full date range.
+  Inner workers: python -m backtester.run --strategy <name> --workers 4
+  (auto from P-cores + RAM if omitted; 1 = single-process).
   Goal: find which region of parameter space is profitable at all.
   Then: python -m backtester.research.run_audit <run> --html
         (influence / danger / curve-fit / diverse live picks)
@@ -139,14 +156,26 @@ Past-run lookup: `.cursor/skills/run-lookup/` · grid autopsy: `.cursor/skills/r
 ## Testing
 
 ```bash
-# Run strategy tests (always do this)
+# Product / engine tests (always do this)
+python -m pytest tests/ -v
+
+# Inner combo-shard workers
+python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+
+# Detached jobs (fast stub queue tests + real job_smoke E2E)
+python -m pytest tests/job -v
+
+# GUI job client (enqueue / quit-does-not-kill / reconnect)
+python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
+
+# Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v
 
 # Live/network tests only when explicitly asked
 python -m pytest workspace/tests/ -m live -v
 ```
 
-Tests live in `workspace/tests/`. `@pytest.mark.live` tests require network access and are deselected by default (`addopts = "-m 'not live'"`).
+Product tests live in `tests/`. Strategy tests live in `workspace/tests/`. `@pytest.mark.live` tests require network access and are deselected by default (`addopts = "-m 'not live'"`).
 
 ---
 

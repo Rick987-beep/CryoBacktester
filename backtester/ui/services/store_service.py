@@ -298,6 +298,15 @@ class StoreService:
                 log.warning("Could not snapshot strategy source for %s", strategy)
         if sidecars:
             meta["sidecars"] = sidecars
+        gw = getattr(grid_result, "grid_workers", None) or {}
+        for key in (
+            "grid_workers_requested",
+            "grid_workers_host_cap",
+            "grid_workers_effective",
+            "grid_machine",
+        ):
+            if key in gw:
+                meta[key] = gw[key]
         (bundle_dir / "meta.json").write_text(json.dumps(meta, indent=2))
 
         log.info("Bundle written: %s", bundle_dir)

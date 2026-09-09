@@ -4,6 +4,34 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-09-09: Inner combo-shard workers
+
+Discovery grids can shard **expanded combos** across spawn processes that share
+a read-only `MarketReplay` (`--workers N`, default auto from P-cores + RAM).
+`workers=1` is the legacy single-process kernel. WFO and livecompare stay
+single-process. Duplicate-load remains behind `CRYOBT_GRID_SHARE=0`.
+
+Acceptance on this branch: tudysho run-777 config (648 combos, 2026-05-01 →
+2026-07-31) — 4 workers matched workers=1 at 29,322 trades.
+
+```bash
+python -m backtester.run --strategy tudysho --workers 4
+python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+python -m pytest tests/job -v
+```
+
+Jobd / `--detach` and Research UI **New Run** run `run_backtest` in an isolated
+process (file snapshot + Unix-socket supervisor). Closing the desktop window does
+not kill jobs; reopen to reconnect. Queue unit tests use a sub-second stub; E2E
+uses in-repo `job_smoke` + tiny parquet. Human GUI acceptance given 2026-09-09.
+
+```bash
+python -m pytest tests/job -v
+python -m pytest tests/ui/test_run_service.py tests/ui/test_desktop_shell.py tests/ui/test_run_service_lifecycle.py -v
+```
+
+---
+
 ## Checkpoint — 2026-09-01: Private workspace submodule split
 
 Research plane moved out of the public repo into **CryoBacktester-workspace**

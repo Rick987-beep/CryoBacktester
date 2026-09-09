@@ -2,6 +2,7 @@
 markers = [
     "live: tests that require live network access (deselected by default)",
     "slow_ui: tests that start a real Panel server (skipped by default)",
+    "perf: inner-worker speedup gate (skip unless CRYOBT_RUN_PERF=1)",
 ]
 addopts = "-m 'not live and not slow_ui'"
 testpaths = ["workspace/tests", "backtester/calm_nights/tests", "tests"]

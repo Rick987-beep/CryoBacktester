@@ -42,6 +42,9 @@ class SimulationConfig:
     progress_interval: int
     top_n_console: int
     top_n_report: int
+    grid_workers_hard_cap: int = 16
+    grid_min_combos_parallel: int = 8
+    grid_min_combos_per_worker: int = 8
 
 
 @dataclass
@@ -153,6 +156,9 @@ def load_config(path=_CONFIG_PATH):
             progress_interval=int(s["progress_interval"]),
             top_n_console=int(s["top_n_console"]),
             top_n_report=int(s["top_n_report"]),
+            grid_workers_hard_cap=int(s.get("grid_workers_hard_cap", 16)),
+            grid_min_combos_parallel=int(s.get("grid_min_combos_parallel", 8)),
+            grid_min_combos_per_worker=int(s.get("grid_min_combos_per_worker", 8)),
         ),
         pricing=PricingConfig(
             hours_per_year=float(p["hours_per_year"]),

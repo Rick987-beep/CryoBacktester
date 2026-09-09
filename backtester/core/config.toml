@@ -37,6 +37,9 @@ account_size_usd        = 100_000  # virtual account size (used in equity curve)
 progress_interval       = 500     # print engine progress every N market states
 top_n_console           = 5       # top combos printed to terminal after run
 top_n_report            = 20      # top combos for detailed equity metrics in HTML report
+grid_workers_hard_cap          = 16  # max inner combo-shard processes
+grid_min_combos_parallel       = 8   # below this, never multi-process
+grid_min_combos_per_worker     = 8   # don't pay spawn/merge for tiny shards
 
 # ── Pricing ───────────────────────────────────────────────────────────────────
 [pricing]

@@ -40,7 +40,7 @@ DEFAULT_OPTIONS = _cfg.data.options_parquet
 DEFAULT_SPOT = _cfg.data.spot_parquet
 
 
-# ── run_backtest() — callable by worker + tests ───────────────────
+# ── run_backtest() — CLI, job runner, and tests ───────────────────
 
 def run_backtest(
     strategy_key,
@@ -53,6 +53,7 @@ def run_backtest(
     progress_cb=None,
     status_cb=None,
     source="cli",
+    workers=None,
 ):
     """Run a discovery backtest and write both an HTML report and a run bundle.
 
@@ -68,6 +69,7 @@ def run_backtest(
         status_cb:     Optional callable(phase, msg) — called at phase transitions:
                        "loading_data", "building_indicators", "backtesting".
         source:        "cli" | "ui" recorded in bundle meta.
+        workers:       Inner combo-shard processes. None = auto. 1 = single-process.
 
     Returns:
         pathlib.Path pointing to the .bundle/ directory.
@@ -93,6 +95,7 @@ def run_backtest(
         strategy_cls, param_grid, replay,
         progress_cb=progress_cb,
         status_cb=status_cb,
+        workers=workers,
     )
     grid_time = time.time() - t1
 
@@ -122,7 +125,7 @@ def run_backtest(
     html_path.write_text(html)
 
     # Write bundle
-    _ui_state_dir = os.path.join(
+    _ui_state_dir = os.environ.get("CRYOBT_UI_STATE") or os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "ui", "state"
     )
     from backtester.ui.services.store_service import StoreService
@@ -167,6 +170,18 @@ def main():
                              "(experiment grid around best params), wfo (walk-forward).")
     parser.add_argument("--no-bundle", action="store_true",
                         help="Skip writing a run bundle (no .bundle/ dir next to the HTML).")
+    parser.add_argument(
+        "--workers", type=int, default=None, metavar="N",
+        help="Inner combo-shard processes (shared read-only MarketReplay). "
+             "Default: auto from P-cores + RAM + combo count. "
+             "1 = single-process (legacy). Env: CRYOBT_GRID_WORKERS. "
+             "CRYOBT_GRID_SHARE=0 forces duplicate-load debug.",
+    )
+    parser.add_argument(
+        "--detach", action="store_true",
+        help="Enqueue the run on jobd and return immediately. "
+             "Without this flag the CLI stays in-process and blocking.",
+    )
     args = parser.parse_args()
 
     # ── Resolve strategy, param_grid, and WFO window params ───────
@@ -181,12 +196,35 @@ def main():
         wfo_is_days   = exp.wfo_is_days
         wfo_oos_days  = exp.wfo_oos_days
         wfo_step_days = exp.wfo_step_days
+        strategy_key = exp.strategy
     else:
         strategy_cls = STRATEGIES[args.strategy]
         param_grid    = strategy_cls.PARAM_GRID
         wfo_is_days   = args.is_days
         wfo_oos_days  = args.oos_days
         wfo_step_days = args.step_days
+        strategy_key = args.strategy
+
+    if args.detach:
+        from backtester.job.api import JobSpec, QueueClient
+
+        date_from, date_to = getattr(strategy_cls, "DATE_RANGE", (None, None))
+        key = strategy_key
+        view = QueueClient().enqueue(
+            JobSpec(
+                strategy=key,
+                param_grid=param_grid,
+                date_from=date_from,
+                date_to=date_to,
+                account_size=float(_cfg.simulation.account_size_usd),
+                requested_inner_workers=args.workers,
+                options_path=args.options,
+                spot_path=args.spot,
+                source="cli",
+            )
+        )
+        print(view.job_id)
+        return
 
     print(f"\n{'='*60}")
     print(f"  Backtester V2 — {strategy_cls.name}")
@@ -202,7 +240,7 @@ def main():
     # Run grid
     t1 = time.time()
     df, keys, nav_daily_df, final_nav_df, df_fills = run_grid_full(
-        strategy_cls, param_grid, replay
+        strategy_cls, param_grid, replay, workers=args.workers,
     )
     grid_time = time.time() - t1
 
@@ -267,7 +305,7 @@ def main():
     if not getattr(args, "no_bundle", False):
         try:
             from backtester.ui.services.store_service import StoreService
-            _ui_state_dir = os.path.join(
+            _ui_state_dir = os.environ.get("CRYOBT_UI_STATE") or os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), "ui", "state"
             )
             _store = StoreService(_ui_state_dir, reports_dir)

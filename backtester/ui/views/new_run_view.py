@@ -288,6 +288,81 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
         cancel_btn.disabled = True
         run_btn.disabled = False
 
+    def _begin_watch(handle, *, reconnect: bool = False):
+        """Poll JobStore progress until the job finishes or is cancelled."""
+        _stop_cb()
+        state.active_run_handle = handle
+        run_btn.disabled = True
+        cancel_btn.disabled = False
+        progress_bar.value = 0
+        progress_bar.visible = True
+        progress_label.object = ""
+        if reconnect:
+            status_label.object = (
+                "<span style='color:#2563eb'>Reconnected — job still running…</span>"
+            )
+        elif getattr(handle, "is_queued", lambda: False)():
+            status_label.object = "<span style='color:#2563eb'>Queued…</span>"
+        else:
+            status_label.object = "<span style='color:#2563eb'>Running…</span>"
+        _cb_handle["handle"] = handle
+
+        def _poll():
+            h = _cb_handle.get("handle")
+            if h is None:
+                return
+            for line in run_service.tail_progress(h):
+                if "phase" in line:
+                    phase = line["phase"]
+                    msg = line.get("msg", "")
+                    progress_label.object = msg
+                    if phase == "queued":
+                        progress_bar.value = 1
+                        status_label.object = (
+                            "<span style='color:#2563eb'>Queued…</span>"
+                        )
+                    elif phase == "loading_data":
+                        progress_bar.value = 3
+                        status_label.object = (
+                            "<span style='color:#2563eb'>Running…</span>"
+                        )
+                    elif phase == "building_indicators":
+                        progress_bar.value = 8
+                    elif phase == "backtesting" or phase == "starting":
+                        progress_bar.value = max(progress_bar.value, 12)
+                        status_label.object = (
+                            "<span style='color:#2563eb'>Running…</span>"
+                        )
+                elif "current" in line and "total" in line:
+                    total = line["total"]
+                    current = line["current"]
+                    if total > 0:
+                        progress_bar.value = 12 + int(88 * current / total)
+                    if line.get("date"):
+                        progress_label.object = f"Processing {line['date']}"
+                elif line.get("status") == "done":
+                    _on_run_done(line)
+                    return
+                elif line.get("status") in ("error", "cancelled"):
+                    _on_run_ended(line)
+                    return
+            if not h.is_alive():
+                remaining = list(run_service.tail_progress(h))
+                final = next((l for l in reversed(remaining) if "status" in l), None)
+                if final:
+                    if final.get("status") == "done":
+                        _on_run_done(final)
+                    else:
+                        _on_run_ended(final)
+                else:
+                    _on_run_ended({
+                        "status": "error",
+                        "message": "job exited unexpectedly",
+                    })
+
+        cb = pn.state.add_periodic_callback(_poll, period=500)
+        _cb_handle["cb"] = cb
+
     def _on_run(event):
         if not _validate_all():
             return
@@ -321,66 +396,17 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
             log.error("new_run_view: submit failed: %s", exc)
             return
 
-        state.active_run_handle = handle
-        run_btn.disabled = True
-        cancel_btn.disabled = False
-        progress_bar.value = 0
-        progress_bar.visible = True
-        progress_label.object = ""
-        status_label.object = "<span style='color:#2563eb'>Running…</span>"
-        _cb_handle["handle"] = handle
-
-        def _poll():
-            h = _cb_handle.get("handle")
-            if h is None:
-                return
-            for line in run_service.tail_progress(h):
-                if "phase" in line:
-                    phase = line["phase"]
-                    msg = line.get("msg", "")
-                    progress_label.object = msg
-                    if phase == "loading_data":
-                        progress_bar.value = 3
-                    elif phase == "building_indicators":
-                        progress_bar.value = 8
-                    elif phase == "backtesting":
-                        progress_bar.value = 12
-                elif "current" in line and "total" in line:
-                    total = line["total"]
-                    current = line["current"]
-                    if total > 0:
-                        progress_bar.value = 12 + int(88 * current / total)
-                    if line.get("date"):
-                        progress_label.object = f"Processing {line['date']}"
-                elif line.get("status") == "done":
-                    _on_run_done(line)
-                    return
-                elif line.get("status") in ("error", "cancelled"):
-                    _on_run_ended(line)
-                    return
-            if not h.is_alive():
-                remaining = list(run_service.tail_progress(h))
-                final = next((l for l in reversed(remaining) if "status" in l), None)
-                if final:
-                    if final.get("status") == "done":
-                        _on_run_done(final)
-                    else:
-                        _on_run_ended(final)
-                else:
-                    _on_run_ended({
-                        "status": "error",
-                        "message": "worker exited unexpectedly",
-                    })
-
-        cb = pn.state.add_periodic_callback(_poll, period=500)
-        _cb_handle["cb"] = cb
+        _begin_watch(handle)
 
     run_btn.on_click(_on_run)
 
     def _on_cancel(event):
         h = _cb_handle.get("handle") or state.active_run_handle
         if h:
-            run_service.cancel(h)
+            try:
+                run_service.cancel(h)
+            except Exception as exc:
+                log.error("new_run_view: cancel failed: %s", exc)
         cancel_btn.disabled = True
 
     cancel_btn.on_click(_on_cancel)
@@ -415,8 +441,27 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
 
     state.param.watch(_on_rerun_request, ["rerun_request"])
 
+    def _adopt_later():
+        try:
+            adopted = run_service.adopt_in_flight()
+        except Exception as exc:
+            log.debug("new_run_view: adopt_in_flight failed: %s", exc)
+            return
+        if adopted is not None:
+            _begin_watch(adopted, reconnect=True)
+
+    try:
+        pn.state.onload(_adopt_later)
+    except Exception as exc:
+        log.debug("new_run_view: onload adopt not available: %s", exc)
+
     return pn.Column(
         pn.pane.Markdown("## New Run", margin=(8, 4, 4, 4)),
+        pn.pane.Markdown(
+            "Runs enqueue on **jobd** (same as `python -m backtester.run --detach`). "
+            "Closing the window does not stop them — reopen to watch progress.",
+            margin=(0, 4, 8, 4),
+        ),
         pn.Row(family_select, strategy_select, reload_btn, sizing_mode="stretch_width"),
         pn.pane.Markdown("### Parameters", margin=(12, 4, 4, 4)),
         param_editor_col,
