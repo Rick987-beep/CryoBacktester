@@ -124,6 +124,8 @@ Outputs: run-audit → `analysis/run_audit/<bundle_stem>/`; livecompare → `ana
 ```
 Step 1 — Discovery
   Wide PARAM_GRID (hundreds of combos), full date range.
+  Inner workers: python -m backtester.run --strategy <name> --workers 4
+  (auto from P-cores + RAM if omitted; 1 = single-process).
   Goal: find which region of parameter space is profitable at all.
   Then: python -m backtester.research.run_audit <run> --html
         (influence / danger / curve-fit / diverse live picks)
@@ -148,14 +150,20 @@ Past-run lookup: `.cursor/skills/run-lookup/` · grid autopsy: `.cursor/skills/r
 ## Testing
 
 ```bash
-# Run strategy tests (always do this)
+# Product / engine tests (always do this)
+python -m pytest tests/ -v
+
+# Inner combo-shard workers
+python -m pytest tests/test_engine_workers_*.py tests/test_grid_workers_resolve.py -v
+
+# Strategy tests (private workspace submodule)
 python -m pytest workspace/tests/ -v
 
 # Live/network tests only when explicitly asked
 python -m pytest workspace/tests/ -m live -v
 ```
 
-Tests live in `workspace/tests/`. `@pytest.mark.live` tests require network access and are deselected by default (`addopts = "-m 'not live'"`).
+Product tests live in `tests/`. Strategy tests live in `workspace/tests/`. `@pytest.mark.live` tests require network access and are deselected by default (`addopts = "-m 'not live'"`).
 
 ---
 

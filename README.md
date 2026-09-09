@@ -45,6 +45,8 @@ pip install -r requirements.txt
 
 # 3. Run the public blueprint strategy (requires data in data/market/)
 python -m backtester.run --strategy blueprint_howto
+# Optional: inner combo-shard workers (auto from P-cores + RAM; 1 = single-process)
+python -m backtester.run --strategy blueprint_howto --workers 4
 
 # 4. Launch the interactive Research UI (native window — preferred)
 python -m backtester.ui.desktop
@@ -75,6 +77,7 @@ CryoBacktester/
 │   ├── run.py                     # CLI entry point
 │   ├── core/                      # Engine, market replay, pricing, results
 │   │   ├── engine.py              # Single-pass grid runner — run_grid_full()
+│   │   ├── grid_workers.py        # Combo-shard policy, partition, shared replay
 │   │   ├── market_replay.py       # Parquet loader → MarketState iterator
 │   │   ├── strategy_base.py       # Strategy protocol, Trade/OpenPosition
 │   │   ├── results.py             # GridResult: vectorised scoring, equity metrics
@@ -330,6 +333,16 @@ run_grid_full(strategy_cls, param_grid, replay)
 
 This means market data is loaded exactly once regardless of grid size.
 
+**Inner workers:** `run_grid_full(..., workers=N)` (CLI `--workers`, env
+`CRYOBT_GRID_WORKERS`) shards the **already-expanded combo list** across spawn
+children. Never slice `PARAM_GRID` axes (`Cartesian(subset) ≠ subset(Cartesian)`).
+`workers=1` (or any resolved value of 1) is the legacy path — no child processes.
+Default is auto from P-cores + RAM + combo count (`[simulation]`
+`grid_workers_hard_cap`, `grid_min_combos_parallel`, `grid_min_combos_per_worker`
+in `config.toml`). Children attach to a shared read-only `MarketReplay`;
+`CRYOBT_GRID_SHARE=0` forces each child to reload parquet. Walk-forward and
+livecompare stay `workers=1`.
+
 ---
 
 ## The Research Pipeline
@@ -339,6 +352,7 @@ Running a parameter grid and picking the best result is statistically dangerous 
 ### Step 1 — Discovery
 ```bash
 python -m backtester.run --strategy short_str_turb_dyn
+python -m backtester.run --strategy short_str_turb_dyn --workers 4
 ```
 Wide `PARAM_GRID` (hundreds of combos), full date range.
 **Goal:** find which region of parameter space is profitable at all.
@@ -565,7 +579,7 @@ Key sections:
 | Section | Key settings |
 |---|---|
 | `[data]` | Paths to parquet files and directories |
-| `[simulation]` | `account_size_usd`, `top_n_report` (top N combos in HTML) |
+| `[simulation]` | `account_size_usd`, `top_n_report` (top N combos in HTML), `grid_workers_hard_cap`, `grid_min_combos_parallel`, `grid_min_combos_per_worker` |
 | `[pricing]` | `risk_free_rate`, `expiry_hour_utc`, `strike_step_usd`, vol clamps |
 | `[repricing]` | Fallback pricing when bid/ask is 0 (mark × slip factor) |
 | `[fees]` | Deribit fee model parameters |
@@ -709,6 +723,7 @@ On an M1 Mac with the full dataset (~109k intervals, ~87M option rows):
 
 Key optimisations in the engine and market replay:
 - **Single data pass** — all combos evaluated simultaneously; market data loaded once.
+- **Combo-shard workers** — large grids spawn processes over expanded combos sharing one read-only chain (`--workers`; auto-sized). Tiny grids stay single-process.
 - **NumPy columnar storage** — option data in contiguous typed arrays (`float32`, `uint8`, `bool`). ~5× less RAM than Python dicts.
 - **Timestamp index** — `np.unique` with `return_index/return_counts` for O(1) per-tick slicing.
 - **Lazy `OptionQuote` construction** — built only when a strategy calls `get_option()`, with a per-tick dict cache.
