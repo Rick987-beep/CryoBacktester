@@ -125,7 +125,7 @@ def run_backtest(
     html_path.write_text(html)
 
     # Write bundle
-    _ui_state_dir = os.path.join(
+    _ui_state_dir = os.environ.get("CRYOBT_UI_STATE") or os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "ui", "state"
     )
     from backtester.ui.services.store_service import StoreService
@@ -305,7 +305,7 @@ def main():
     if not getattr(args, "no_bundle", False):
         try:
             from backtester.ui.services.store_service import StoreService
-            _ui_state_dir = os.path.join(
+            _ui_state_dir = os.environ.get("CRYOBT_UI_STATE") or os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), "ui", "state"
             )
             _store = StoreService(_ui_state_dir, reports_dir)

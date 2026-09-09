@@ -1,7 +1,8 @@
 """Job process: heartbeat files, then stub sleep or run_backtest, then exit.
 
 Tests set ``CRYOBT_JOB_STUB=1`` and ``CRYOBT_JOB_STUB_SECS`` to a fraction of
-a second. Never use a full-grid strategy in unit tests.
+a second. Never use a full-grid strategy in unit tests. E2E uses ``job_smoke``
+plus a tiny parquet fixture.
 """
 from __future__ import annotations
 
@@ -10,11 +11,14 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from backtester.core.paths import jobs_dir
-from backtester.job.api import JobStore, atomic_write_json
+from backtester.job.api import JobSpec, JobStore, atomic_write_json, read_json
 
 _CANCELLED = False
+_LAST_HB = 0.0
+_HB_MIN_INTERVAL = 0.25
 
 
 def _now() -> str:
@@ -52,7 +56,12 @@ def _install_cancel(store: JobStore, job_id: str) -> None:
     signal.signal(signal.SIGINT, _handler)
 
 
-def _heartbeat(store: JobStore, job_id: str, extra: dict | None = None) -> None:
+def _heartbeat(store: JobStore, job_id: str, extra: dict | None = None, *, force: bool = False) -> None:
+    global _LAST_HB
+    now = time.time()
+    if not force and (now - _LAST_HB) < _HB_MIN_INTERVAL:
+        return
+    _LAST_HB = now
     payload = {
         "state": "running",
         "pid": os.getpid(),
@@ -75,8 +84,66 @@ def _run_stub(store: JobStore, job_id: str) -> None:
         _heartbeat(
             store, job_id,
             {"phase": "backtesting", "current": n, "total": 10, "date": "stub"},
+            force=True,
         )
         time.sleep(min(0.05, secs / 5))
+
+
+def _load_spec(store: JobStore, job_id: str) -> JobSpec:
+    blob = read_json(store.job_dir(job_id) / "spec.json")
+    return JobSpec.from_dict(blob)
+
+
+def _run_real(store: JobStore, job_id: str):
+    # type: (JobStore, str) -> tuple[Path, dict]
+    from backtester.job.smoke import register_smoke
+    from backtester.run import run_backtest
+
+    register_smoke()
+    spec = _load_spec(store, job_id)
+    out_root = store.job_dir(job_id) / "out"
+    out_root.mkdir(parents=True, exist_ok=True)
+    os.environ["CRYOBT_UI_STATE"] = str(store.job_dir(job_id) / "ui_state")
+    os.environ.setdefault("CRYOBT_RUNS", str(out_root))
+
+    def progress_cb(current, total, day_iso):
+        if _CANCELLED:
+            raise KeyboardInterrupt("job cancelled")
+        _heartbeat(
+            store, job_id,
+            {
+                "phase": "backtesting",
+                "current": int(current),
+                "total": int(total),
+                "date": str(day_iso),
+            },
+        )
+
+    def status_cb(phase, msg):
+        if _CANCELLED:
+            raise KeyboardInterrupt("job cancelled")
+        _heartbeat(store, job_id, {"phase": str(phase), "message": str(msg)}, force=True)
+
+    bundle = run_backtest(
+        spec.strategy,
+        spec.param_grid,
+        (spec.date_from, spec.date_to),
+        spec.account_size,
+        str(out_root),
+        options_path=spec.options_path,
+        spot_path=spec.spot_path,
+        progress_cb=progress_cb,
+        status_cb=status_cb,
+        source=spec.source or "job",
+        workers=spec.requested_inner_workers,
+    )
+    extra = {}
+    meta_path = Path(bundle) / "meta.json"
+    if meta_path.is_file():
+        meta = read_json(meta_path)
+        if meta.get("grid_workers_effective") is not None:
+            extra["inner_workers_effective"] = meta["grid_workers_effective"]
+    return Path(bundle), extra
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,20 +158,41 @@ def main(argv: list[str] | None = None) -> int:
     _install_cancel(store, job_id)
     _caffeinate(pid)
     atomic_write_json(store.job_dir(job_id) / "runtime.json", {"pid": pid, "started_at": _now()})
-    _heartbeat(store, job_id, {"phase": "starting"})
+    _heartbeat(store, job_id, {"phase": "starting"}, force=True)
     try:
-        if os.environ.get("CRYOBT_JOB_STUB") != "1":
-            raise RuntimeError(
-                "job runner refusing a real backtest in this build step; "
-                "set CRYOBT_JOB_STUB=1 or call run_backtest from E2E later"
-            )
-        _run_stub(store, job_id)
+        if os.environ.get("CRYOBT_JOB_STUB") == "1":
+            _run_stub(store, job_id)
+            bundle = None
+            extra = {"stub": True}
+        else:
+            bundle, extra = _run_real(store, job_id)
         if not _CANCELLED:
-            store.write_status(
+            payload = {
+                "state": "done",
+                "pid": pid,
+                "heartbeat_ts": _now(),
+                "phase": "done",
+                "bundle_path": str(bundle) if bundle else None,
+            }
+            payload.update({k: v for k, v in extra.items() if k != "stub"})
+            if extra.get("stub"):
+                payload["stub"] = True
+            store.write_status(job_id, payload)
+            store.write_result(
                 job_id,
-                {"state": "done", "pid": pid, "heartbeat_ts": _now(), "phase": "done"},
+                {
+                    "state": "done",
+                    "bundle_path": str(bundle) if bundle else None,
+                    **({"stub": True} if extra.get("stub") else {}),
+                },
             )
-            store.write_result(job_id, {"state": "done", "bundle_path": None, "stub": True})
+    except KeyboardInterrupt:
+        store.write_status(
+            job_id,
+            {"state": "cancelled", "pid": pid, "heartbeat_ts": _now()},
+        )
+        store.write_result(job_id, {"state": "cancelled", "bundle_path": None})
+        return 0
     except SystemExit:
         raise
     except Exception as exc:
