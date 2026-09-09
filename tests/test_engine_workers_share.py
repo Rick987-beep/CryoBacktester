@@ -33,6 +33,11 @@ def test_pack_attach_writeable_and_same_values(tmp_path):
         assert float(child._opt_bid[0]) == float(parent._opt_bid[0])
     finally:
         unlink_replay_shared(holders)
+    # Parent must still own its arrays after shm is unlinked (CLI reads time_range).
+    assert float(parent._opt_bid[0]) == pytest.approx(0.01)
+    start, end = parent.time_range
+    assert start is not None and end is not None
+    assert len(parent._timestamps) == 8
 
 
 def test_spawn_uses_shared_not_parquet_reload(tmp_path, monkeypatch):
@@ -71,7 +76,11 @@ def test_shared_spawn_matches_workers_1(tmp_path, monkeypatch):
         _ParamPnlStrategy, grid, MarketReplay(opt, spot), progress=False, workers=1,
     )
     monkeypatch.setattr(eng, "_effective_inner_workers", lambda *a, **k: 2)
+    replay = MarketReplay(opt, spot)
+    orig_ts0 = int(replay._timestamps[0])
     got = run_grid_full(
-        _ParamPnlStrategy, grid, MarketReplay(opt, spot), progress=False, workers=2,
+        _ParamPnlStrategy, grid, replay, progress=False, workers=2,
     )
     _assert_same_grid(ref, got)
+    assert int(replay._timestamps[0]) == orig_ts0
+    assert len(replay.time_range) == 2

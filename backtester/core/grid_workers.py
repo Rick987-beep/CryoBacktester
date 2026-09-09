@@ -375,8 +375,9 @@ def freeze_arrays(obj: Any, names: Sequence[str] = _ARRAY_ATTRS) -> None:
 def pack_replay_shared(replay: Any) -> tuple[dict[str, Any], list]:
     """Copy replay ndarrays into SharedMemory. Parent keeps holders until unlink.
 
-    Replaces replay's array attributes with read-only views onto the same blocks
-    so parent and children share backing store.
+    Parent arrays stay as the original buffers so ``time_range`` / HTML
+    still work after children exit and shm is unlinked. Children attach
+    read-only views via ``MarketReplay.from_shared_meta``.
     """
     from multiprocessing import shared_memory
 
@@ -395,7 +396,6 @@ def pack_replay_shared(replay: Any) -> tuple[dict[str, Any], list]:
         if arr.size:
             view[:] = arr
         view.flags.writeable = False
-        setattr(replay, name, view)
         arrays[name] = {
             "name": shm.name,
             "shape": tuple(int(x) for x in arr.shape),
