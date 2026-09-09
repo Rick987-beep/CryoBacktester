@@ -2,6 +2,7 @@
 data/market/
 data/klines/
 data/runs/
+data/jobs/
 data/tardis_raw/
 data/archive/
 data/macro/

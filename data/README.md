@@ -9,6 +9,7 @@ in the shippable `backtester/` product package.
 | `macro/` | Synced macro series (e.g. `deribit/BTC_DVOL/` hive partitions) |
 | `klines/` | Binance kline cache used by indicators |
 | `runs/` | HTML reports + `*.bundle` UI run artifacts |
+| `jobs/` | Detached job queue (`queue.json`, per-job `spec.json` / `status.json`) |
 | `tardis_raw/` | Optional Tardis ingest output |
 | `archive/` | Cold/legacy data blobs |
 
@@ -17,6 +18,7 @@ Override roots with env vars (see `backtester.core.paths`):
 - `CRYOBT_MARKET_DATA`
 - `CRYOBT_KLINE_DIR` (alias: `CRYOTRADER_KLINE_DIR`)
 - `CRYOBT_RUNS`
+- `CRYOBT_JOBS`
 - `CRYOBT_MACRO` / `CRYOBT_DVOL`
 - `CRYOBT_MACRO_CALENDAR`
 - `CRYOBT_TARDIS_RAW`

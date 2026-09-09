@@ -46,7 +46,7 @@ CryoBacktester/
 │   └── tests/
 ```
 
-Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS` (see `backtester.core.paths`).
+Path overrides: `CRYOBT_MARKET_DATA`, `CRYOBT_KLINE_DIR` / `CRYOTRADER_KLINE_DIR`, `CRYOBT_RUNS`, `CRYOBT_JOBS` (see `backtester.core.paths`).
 
 ## CLI
 
@@ -73,6 +73,10 @@ python -m backtester.ui.desktop
 
 # Research UI — browser / Terminal (dev)
 python -m backtester.ui.app --no-browser
+
+# Detached jobs — file snapshot (jobd enqueue comes next)
+python -m backtester.job snapshot
+python -m backtester.job ping
 
 # Look up a past run / combo (fast path — do not load full grids)
 python -m backtester.inspect show 748
