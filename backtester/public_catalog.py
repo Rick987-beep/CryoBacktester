@@ -67,10 +67,14 @@ def family_label(family_id: str) -> str:
 
 
 def strategy_options(family_id: str | None = None) -> Dict[str, str]:
-    """Map display label → stable strategy id for Panel Select widgets."""
+    """Map display label → stable strategy id for Panel Select widgets.
+
+    Omits ``archived`` specs (kept in SPECS for lookup / CLI).
+    """
     specs = list(SPECS.values())
     if family_id and family_id != "all":
         specs = [s for s in specs if s.family == family_id]
+    specs = [s for s in specs if s.status != "archived"]
     out: Dict[str, str] = {}
     for s in sorted(specs, key=lambda x: x.id):
         out[s.label()] = s.id

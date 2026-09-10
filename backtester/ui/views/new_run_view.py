@@ -294,9 +294,18 @@ def build_new_run_view(state, store, cache, run_service) -> pn.Column:
         strat = req.get("strategy")
         pg = req.get("param_grid", {})
         if strat:
+            from backtester.catalog import SPECS
+
             fam = family_for(strat)
             family_select.value = fam if fam in family_select.options.values() else _FAMILY_ALL
-            strategy_select.options = _strategy_select_options(family_select.value)
+            opts = _strategy_select_options(family_select.value)
+            # Archived IDs are hidden from the normal picker but must still
+            # resolve for Completed Runs → Rerun / historical favourites.
+            if strat not in opts.values() and strat in STRATEGIES:
+                spec = SPECS.get(strat)
+                label = spec.label() if spec is not None else strat
+                opts = {**opts, label: strat}
+            strategy_select.options = opts
             if strat in strategy_select.options.values():
                 strategy_select.value = strat
             for pname, ti in _param_inputs.items():

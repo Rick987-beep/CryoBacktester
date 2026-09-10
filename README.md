@@ -670,7 +670,7 @@ compatibility shims only.
 
 | Family | Examples |
 |---|---|
-| `tudysho` | tudysho, eisbach, monopteros, starnberg, stradysho, v1–v4 |
+| `tudysho` | Active: tudysho, monopteros, starnberg, stradysho. Frozen: v4. Archived: v1–v3, eisbach (still loadable) |
 | `theta_engine` | base, v1–v14, v16–v19 (v15 unused) |
 | `other` | blueprint_howto, short_str_turb_dyn, cadysho, … |
 

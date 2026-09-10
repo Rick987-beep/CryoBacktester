@@ -32,6 +32,8 @@ def test_private_workspace_has_full_registry():
         "tudysho_v1",
         "tudysho_v2",
         "tudysho_v3",
+        "tudysho_v4",
+        "tudysho_monopteros",
         "cadysho",
         "blueprint_howto",
         "long_gamma_move",
@@ -48,3 +50,29 @@ def test_private_workspace_has_full_registry():
     assert _STABLE_IDS <= set(STRATEGIES.keys())
     assert family_for("theta_engine_v6") == "theta_engine"
     assert family_for("tudysho_monopteros") == "tudysho"
+
+
+@pytest.mark.skipif(not using_private_workspace(), reason="private workspace submodule")
+def test_tudysho_archive_statuses_and_picker_hide():
+    """Archived IDs stay registered but omit from New Run strategy_options."""
+    from backtester.catalog import strategy_options
+
+    assert SPECS["tudysho_v1"].status == "archived"
+    assert SPECS["tudysho_v2"].status == "archived"
+    assert SPECS["tudysho_v3"].status == "archived"
+    assert SPECS["tudysho_eisbach"].status == "archived"
+    assert SPECS["tudysho_v4"].status == "frozen"
+    assert SPECS["tudysho"].status == "active"
+    assert SPECS["stradysho"].status == "active"
+    assert SPECS["tudysho_monopteros"].status == "active"
+
+    for sid in ("tudysho_v1", "tudysho_v2", "tudysho_v3", "tudysho_eisbach"):
+        assert sid in STRATEGIES
+
+    opts = strategy_options("tudysho")
+    assert "tudysho_eisbach" not in opts.values()
+    assert "tudysho_v1" not in opts.values()
+    assert "tudysho" in opts.values()
+    assert "stradysho" in opts.values()
+    assert "tudysho_v4" in opts.values()
+    assert "tudysho_monopteros" in opts.values()
