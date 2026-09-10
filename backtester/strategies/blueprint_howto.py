@@ -642,6 +642,8 @@ class BlueprintHowto:
             "stop_loss_pct":   self._sl_pct,
             "take_profit_pct": self._tp_pct,
             "qty":             qty,
+            # Open fills already emitted by the side="open" Trade.
+            "skip_open_fill":  True,
         })
 
         self._log_close(state, pos, trade, call_q, put_q,
