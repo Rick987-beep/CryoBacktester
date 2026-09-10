@@ -130,6 +130,40 @@ def test_cancel_queued_never_starts(job_run_service):
         svc.cancel(a)
 
 
+def test_cancel_running_starts_queued_successor(job_run_service):
+    """Cancel job A while B is queued — B must leave the queue and run."""
+    svc, opt, spot, jobs_root = job_run_service
+    a = svc.submit(
+        "job_smoke",
+        {"x": list(range(8))},
+        (None, None),
+        options_path=opt,
+        spot_path=spot,
+        workers=1,
+    )
+    b = svc.submit(
+        "job_smoke",
+        {"x": list(range(8))},
+        (None, None),
+        options_path=opt,
+        spot_path=spot,
+        workers=1,
+    )
+    _wait(lambda: a.is_alive() and b.is_queued(), timeout=8, msg="A running, B queued")
+    svc.cancel(a)
+    _wait(lambda: not a.is_alive(), timeout=8, msg="A cancelled")
+    store = JobStore(jobs_root)
+    assert store.get(a.job_id).state == "cancelled"
+    _wait(
+        lambda: store.get(b.job_id).state in ("running", "done"),
+        timeout=10,
+        msg="B promoted after A cancel",
+    )
+    assert store.get(b.job_id).state in ("running", "done")
+    if b.is_alive():
+        svc.cancel(b)
+
+
 def test_adopt_in_flight_reattaches(job_run_service):
     svc, opt, spot, jobs_root = job_run_service
     handle = svc.submit(

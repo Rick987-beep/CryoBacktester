@@ -524,6 +524,31 @@ def build_backtester_run_view(state, store, cache, run_service) -> pn.Column:
         _stop_cb()
         status_code = line.get("status", "error")
         msg = line.get("message", "")
+        ended_handle = _watch.get("handle")
+
+        # Cancel / error of the watched job must not strand the queue: adopt
+        # the next running/queued job if jobd still has work.
+        next_handle = None
+        try:
+            next_handle = run_service.adopt_in_flight()
+        except Exception as exc:
+            log.debug("backtester_run: adopt after end failed: %s", exc)
+        if (
+            next_handle is not None
+            and next_handle is not ended_handle
+            and getattr(next_handle, "is_alive", lambda: False)()
+        ):
+            log.info(
+                "backtester_run: adopting next job_id=%s after %s",
+                getattr(next_handle, "job_id", None),
+                status_code,
+            )
+            _watch["ended"] = None
+            _watch["pct"] = 0
+            _watch["msg"] = ""
+            _begin_watch(next_handle)
+            return
+
         if status_code == "cancelled":
             _watch["ended"] = {
                 "kind": "cancelled",

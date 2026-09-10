@@ -132,11 +132,15 @@ class Supervisor:
             self.store.write_result(job_id, {"state": "cancelled", "bundle_path": None})
             self.persist_queue()
             return {"ok": True, "state": "cancelled"}
-        proc = self.running.get(job_id)
-        if proc is not None and proc.poll() is None:
-            _kill_proc(proc, sig=signal.SIGTERM)
+        proc = self.running.pop(job_id, None)
+        if proc is not None:
+            if proc.poll() is None:
+                _kill_proc(proc, sig=signal.SIGTERM)
             self.store.write_status(job_id, {"state": "cancelled", "pid": proc.pid})
             self.store.write_result(job_id, {"state": "cancelled", "bundle_path": None})
+            # Free the slot immediately so the next queued job can start
+            # without waiting for the next serve-loop reap tick.
+            self.fill_slots()
             return {"ok": True, "state": "cancel_requested"}
         view = self.store.get(job_id)
         if view is None:
@@ -256,8 +260,15 @@ def _kill_proc(proc: subprocess.Popen, sig: int = signal.SIGKILL) -> None:
         proc.wait(timeout=1)
     except subprocess.TimeoutExpired:
         try:
-            proc.kill()
+            os.killpg(proc.pid, signal.SIGKILL)
         except OSError:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
             pass
 
 

@@ -69,6 +69,22 @@ def test_j4_cancel_queued_never_starts(sup):
     assert b not in sup.running
 
 
+def test_cancel_running_promotes_queued(sup, monkeypatch):
+    """Cancel the active job must free the slot and start the next queued one."""
+    monkeypatch.setenv("CRYOBT_JOB_STUB_SECS", "5")
+    a = sup.enqueue(_spec())["job_id"]
+    _wait(lambda: a in sup.running, msg="A running")
+    b = sup.enqueue(_spec())["job_id"]
+    assert b in sup.queued
+    resp = sup.cancel(a)
+    assert resp["state"] == "cancel_requested"
+    assert a not in sup.running
+    assert b in sup.running
+    assert b not in sup.queued
+    assert (sup.store.get(b) or type("V", (), {"state": ""})).state == "running"
+    assert (sup.store.get(a) or type("V", (), {"state": ""})).state == "cancelled"
+
+
 def test_j3_spec_immutable(sup):
     spec = JobSpec(strategy="stub", param_grid={"k": [1, 2, 3]}, source="test")
     job_id = sup.enqueue(spec)["job_id"]

@@ -195,6 +195,95 @@ def test_backtester_run_idle_and_active_render(tmp_path, monkeypatch):
     assert active.count("2026-04-11") == 1 or "date 2026-04-11" not in active
 
 
+def test_cancel_adopts_next_queued_job(tmp_path, monkeypatch):
+    """When the watched job cancels, Backtester Run must adopt the next job."""
+    from backtester.ui.state import AppState
+    from backtester.ui.services.cache_service import ResultCache
+    from backtester.ui.services.run_service import RunService
+    from backtester.ui.services.store_service import StoreService
+    from backtester.ui.views.backtester_run_view import build_backtester_run_view
+
+    store = StoreService(tmp_path / "state", tmp_path / "bundles")
+    cache = ResultCache(store, max_unpinned=2)
+    run_service = RunService(store, cache)
+    state = AppState()
+
+    class _DummyCB:
+        def stop(self):
+            pass
+
+    next_job = SimpleNamespace(
+        job_id="job_b",
+        state="queued",
+        spec=SimpleNamespace(strategy="blueprint_howto"),
+        is_alive=lambda: True,
+        is_queued=lambda: True,
+        _job_view=lambda: SimpleNamespace(
+            job_id="job_b",
+            state="queued",
+            phase=None,
+            message=None,
+            current=None,
+            total=None,
+            date=None,
+            inner_workers_effective=None,
+            n_shards=None,
+            submitted_at="2026-09-10T08:00:00Z",
+            spec=SimpleNamespace(
+                strategy="blueprint_howto",
+                date_from=None,
+                date_to=None,
+                requested_inner_workers=None,
+            ),
+            error=None,
+            queue_position=1,
+        ),
+    )
+    adopt = {"enabled": False}
+    run_service.adopt_in_flight = (  # type: ignore[method-assign]
+        lambda: next_job if adopt["enabled"] else None
+    )
+    run_service.queue_snapshot = lambda: SimpleNamespace(  # type: ignore
+        running=[], queued=[], recent=[]
+    )
+    run_service.job_log_tail = lambda job_id, max_bytes=24000: ""  # type: ignore
+
+    def _tail(h):
+        if getattr(h, "job_id", None) == "job_a":
+            yield {"status": "cancelled", "message": "cancelled"}
+
+    run_service.tail_progress = _tail  # type: ignore[method-assign]
+
+    poll_fns = []
+
+    def _capture_cb(fn, period=500):
+        poll_fns.append(fn)
+        return _DummyCB()
+
+    monkeypatch.setattr(pn.state, "add_periodic_callback", _capture_cb)
+    monkeypatch.setattr(pn.state, "onload", lambda fn: None)
+    build_backtester_run_view(state, store, cache, run_service)
+
+    class _HandleA:
+        job_id = "job_a"
+
+        def is_alive(self):
+            return False
+
+        def is_queued(self):
+            return False
+
+        def _job_view(self):
+            return None
+
+    adopt["enabled"] = True
+    state.active_run_handle = _HandleA()
+    assert poll_fns, "watch poll was not registered"
+    poll_fns[-1]()
+    assert state.active_run_handle is next_job
+    assert state.active_run_handle.job_id == "job_b"
+
+
 def test_build_app_includes_backtester_run_page(tmp_path):
     from backtester.ui.app import build_app
 
