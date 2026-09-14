@@ -4,6 +4,15 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-09-14: sync_vps post-sync QA
+
+`python -m backtester.ingest.sync_vps --confirm` now QA-checks every date in
+scope after transfer (and when nothing new to download): options snaps/gaps/
+thin instruments/size, spot bars/head truncation/gaps/size. Warnings only;
+`--no-qa` skips. See `tests/test_sync_vps_qa.py`.
+
+---
+
 ## Checkpoint — 2026-09-14: Research UI chrome polish + Configuration
 
 Header/selection-bar spacing aligned to the light brand specimen; new

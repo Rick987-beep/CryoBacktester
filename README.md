@@ -175,9 +175,13 @@ python -m backtester.ingest.tardis.bulk_fetch
 See `backtester/ingest/tardis/TARDIS_DATA_NOTES.md` for format details.  
 For raw archive before subscription expiry, see `backtester/ingest/tardis/TARDIS_ARCHIVE_PLAN.md`.
 
-**Sync from VPS live recorder** (done from the CryoTrader repo):
-The live tick recorder runs as `ct-recorder` on the VPS and writes daily parquets.
-Sync them using `backtester/ingest/tickrecorder/sync.py` in CryoTrader.
+**Sync from VPS live recorder** (`ct-recorder` on the production box):
+```bash
+python -m backtester.ingest.sync_vps --days 14          # dry run
+python -m backtester.ingest.sync_vps --all --confirm    # transfer + local QA
+```
+After a real sync, dates in scope get a local completeness / size QA pass
+(warnings only; `--no-qa` to skip). SSH config: `.env.example`.
 
 Both sources produce the same parquet schema — the engine sees no difference.
 

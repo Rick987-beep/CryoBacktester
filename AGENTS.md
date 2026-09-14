@@ -196,9 +196,16 @@ Parquet snapshots live in `data/market/` (~924 MB, gitignored). Two ingestion so
 python -m backtester.ingest.tardis.bulk_fetch
 ```
 
-**Sync live recorder data from VPS** (done from the CryoTrader repo):
-The live tick recorder runs as `ct-recorder` on the VPS and writes daily parquets.
-Sync them down using `backtester/ingest/tickrecorder/sync.py` in CryoTrader.
+**Sync live recorder data from VPS** (`ct-recorder` on the production box):
+```bash
+python -m backtester.ingest.sync_vps --days 14          # dry run
+python -m backtester.ingest.sync_vps --all --confirm    # transfer + local QA
+python -m backtester.ingest.sync_vps --all --confirm --no-qa
+```
+Pulls `options_*.parquet` / `spot_track_*.parquet` into `backtester/data`
+(→ `data/market/`). After `--confirm`, logs per-day completeness / size warnings
+(options snaps vs 288, gaps, thin instruments; spot bars, head truncation, gaps).
+Config: `RECORDER_VPS_*` / `RECORDER_SSH_KEY` in `.env` (see `.env.example`).
 
 ### ⚠️ Cloud Agent data availability (TODO — unresolved)
 
