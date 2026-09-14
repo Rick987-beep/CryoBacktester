@@ -2,8 +2,8 @@
 views/chrome.py — Top navigation + context detail bar for the Research UI.
 
 Nav order: New Run → Backtester Run → Completed Runs → Results Grid →
-Combo Detail → Favourites. Legacy ?tab=Runs / Equity Overlay / Compare map
-via ``normalize_tab_name``.
+Combo Detail → Favourites → Configuration. Legacy ?tab=Runs / Equity Overlay /
+Compare map via ``normalize_tab_name``.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ NAV_PAGES = [
     "Results Grid",
     "Combo Detail",
     "Favourites",
+    "Configuration",
 ]
 
 # Legacy URL ?tab= values → current page names
@@ -80,9 +81,10 @@ def build_nav(state) -> pn.widgets.RadioButtonGroup:
         value=normalize_tab_name(state.active_tab),
         button_type="default",
         sizing_mode="fixed",
-        width=780,
-        height=36,
-        margin=(6, 8),
+        width=920,
+        height=32,
+        # Specimen header already pads 8px; no extra vertical margin
+        margin=(0, 0),
         stylesheets=[_NAV_CSS],
     )
 
@@ -166,18 +168,21 @@ def _esc(text: str) -> str:
 
 def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
     """Single-line selection bar: Selected Run | Selected Combo [| Cancel]."""
+    from backtester.ui.brand import NAVY_700, load_research_css
+
     bar_html = pn.pane.HTML(
         "",
         sizing_mode="stretch_width",
         margin=(0, 0),
-        height=36,
+        height=40,
+        stylesheets=[load_research_css()],
     )
     cancel_btn = pn.widgets.Button(
         name="■ Cancel",
         button_type="danger",
         width=100,
         visible=False,
-        margin=(2, 8, 2, 4),
+        margin=(6, 24, 6, 8),
         height=28,
     )
 
@@ -269,7 +274,13 @@ def build_detail_bar(state, store, run_service=None, cache=None) -> pn.Row:
         bar_html,
         cancel_btn,
         sizing_mode="stretch_width",
-        height=36,
-        margin=(0, 0, 4, 0),
-        styles={"overflow": "hidden"},
+        height=40,
+        margin=(0, 0),
+        css_classes=["ca-selection-row"],
+        styles={
+            "overflow": "hidden",
+            "background": NAVY_700,
+            "border-bottom": "1px solid #263347",
+        },
+        stylesheets=[load_research_css()],
     )

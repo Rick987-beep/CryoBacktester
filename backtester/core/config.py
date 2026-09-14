@@ -2,7 +2,8 @@
 config.py — Backtester2 application configuration loader.
 
 Reads backtester/core/config.toml and exposes typed dataclasses for each section.
-Import the module-level ``cfg`` singleton — it is loaded once at import time.
+Import the module-level ``cfg`` singleton — loaded at import time, and refreshed
+in place by ``reload_config`` / ``apply_config_text`` (Configuration UI).
 
 Usage::
 
@@ -204,3 +205,94 @@ def load_config(path=_CONFIG_PATH):
 # ── Module-level singleton ────────────────────────────────────────
 
 cfg = load_config()
+
+
+def config_path() -> str:
+    """Absolute path to the application config.toml."""
+    return _CONFIG_PATH
+
+
+def config_display_path() -> str:
+    """Repo-relative path shown in the UI."""
+    return "backtester/core/config.toml"
+
+
+def read_config_text(path: str | None = None) -> str:
+    """Return raw TOML text from disk (UTF-8)."""
+    with open(path or _CONFIG_PATH, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def validate_config_text(text: str) -> BacktesterConfig:
+    """Parse TOML text and build a BacktesterConfig (does not write disk).
+
+    Raises ``tomllib.TOMLDecodeError`` / ``KeyError`` / ``TypeError`` /
+    ``ValueError`` on invalid content.
+    """
+    import tempfile
+
+    tomllib.loads(text)  # fail fast on syntax before temp write
+    fd, tmp = tempfile.mkstemp(suffix=".toml")
+    try:
+        os.close(fd)
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        return load_config(tmp)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def write_config_text(text: str, path: str | None = None) -> None:
+    """Validate TOML then atomically replace config.toml on disk."""
+    import tempfile
+
+    target = path or _CONFIG_PATH
+    # Validate structure via full loader (temp file) before touching the real file
+    validate_config_text(text)
+
+    directory = os.path.dirname(os.path.abspath(target)) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".config_", suffix=".toml.tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def reload_config(path: str | None = None) -> BacktesterConfig:
+    """Reload config.toml into the process-wide ``cfg`` singleton (in place).
+
+    Preserves object identity so ``from backtester.core.config import cfg``
+    holders see updated section objects. Also refreshes import-time constants
+    in ``backtester.core.pricing``.
+    """
+    new = load_config(path or _CONFIG_PATH)
+    cfg.data = new.data
+    cfg.simulation = new.simulation
+    cfg.pricing = new.pricing
+    cfg.repricing = new.repricing
+    cfg.fees = new.fees
+    cfg.scoring = new.scoring
+    try:
+        from backtester.core import pricing as _pricing
+
+        _pricing.refresh_config_constants()
+    except Exception:
+        pass
+    return cfg
+
+
+def apply_config_text(text: str, path: str | None = None) -> BacktesterConfig:
+    """Validate, write to disk, and hot-reload ``cfg``. Returns the live config."""
+    write_config_text(text, path=path)
+    return reload_config(path)

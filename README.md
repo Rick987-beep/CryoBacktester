@@ -109,7 +109,7 @@ CryoBacktester/
 │   ├── ui/                        # Interactive Research UI (Panel + Bokeh + Plotly)
 │   │   ├── desktop.py             # Native window: python -m backtester.ui.desktop
 │   │   ├── brand/                 # Light cryo_aureas shell (CSS + icon)
-│   │   ├── views/                 # Pages: New Run, Backtester Run, Completed Runs, …
+│   │   ├── views/                 # Pages: New Run … Favourites, Configuration
 │   │   ├── app.py                 # Browser CLI: python -m backtester.ui.app
 │   │   ├── server_utils.py        # wait_for_healthz + URL/WS origin helpers
 │   │   ├── state.py               # AppState param object (shared reactive state)
@@ -507,6 +507,7 @@ finish (or on the next launch via `import_finished_jobs`).
 | **Results Grid** | All combos for the selected run — sortable, filterable, star/unstar, column chooser |
 | **Combo Detail** | Stats card + equity/drawdown chart + trade log for one focused combo |
 | **Favourites** | Starred combos across all runs; TOML export, re-run prefill, notes |
+| **Configuration** | Editable `backtester/core/config.toml`; **OK** writes + hot-reloads live `cfg` |
 
 Legacy URL `?tab=` values: `Runs` → Completed Runs; `Equity Overlay` → Combo Detail;
 `Compare` → Favourites. Unused modules `compare_view.py` / `overlay_view.py` remain
@@ -516,7 +517,10 @@ in-tree but are not nav-wired.
 
 The Research UI uses a **light** cryo_aureas shell (`backtester/ui/brand/` —
 `research_light.css` + backtester icon). Hex comes from pack tokens only.
-Local specimen / mockups live under repo-root `brand/` (not required at runtime).
+Local specimen / mockups live under repo-root `brand/` (not required at runtime):
+`specimen.html`, `mockups/backtester_run.html`, `mockups/configuration.html`.
+Signed-off mockups are the layout contract for Panel pages (see
+`.cursor/rules/ui-mockup-fidelity.mdc`).
 
 ### Results Grid filter syntax
 
@@ -648,6 +652,11 @@ Deviation types: `"pct"` (±N% of best), `"abs"` (±N in natural units), `"fixed
 ## Configuration
 
 `backtester/core/config.toml` — application-level settings. Strategy-specific logic stays in strategy files.
+
+Edit from the Research UI **Configuration** tab (or on disk). **OK** validates,
+atomically writes the file, and hot-reloads the process-wide `cfg` singleton
+(`backtester.core.config.apply_config_text`) so new runs pick up changes without
+restarting the app. Invalid TOML is rejected and the file is left unchanged.
 
 Key sections:
 

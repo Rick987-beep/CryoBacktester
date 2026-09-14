@@ -4,6 +4,25 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-09-14: Research UI chrome polish + Configuration
+
+Header/selection-bar spacing aligned to the light brand specimen; new
+**Configuration** nav page for live `config.toml` editing.
+
+- Chrome: `#header` `8px 24px`, nav right-aligned away from the title, selection
+  bar flush under the gold rule, page content gutter `16×24px`.
+- **Configuration**: editable `backtester/core/config.toml`; **OK** validates,
+  atomic write, hot-reloads `cfg` (+ pricing constants). Cancel / Revert discard.
+- Mockup fidelity rule + `brand/mockups/configuration.html` as the signed-off
+  layout contract.
+
+```bash
+python -m pytest tests/ui/test_configuration_view.py tests/ui/test_brand_shell.py \
+  tests/ui/test_shell_redesign.py tests/ui/test_desktop_shell.py -v
+```
+
+---
+
 ## Checkpoint — 2026-09-09: Research UI brand + Backtester Run
 
 Light **cryo_aureas** shell for the Research UI (`backtester/ui/brand/`), nav

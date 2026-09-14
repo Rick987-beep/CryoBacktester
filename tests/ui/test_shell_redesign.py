@@ -25,11 +25,12 @@ def test_normalize_tab_name_legacy():
         "Results Grid",
         "Combo Detail",
         "Favourites",
+        "Configuration",
     }
     assert normalize_tab_name("Runs") == "Completed Runs"
 
 
-def test_shell_no_sidebar_and_six_pages(tmp_path):
+def test_shell_no_sidebar_and_seven_pages(tmp_path):
     from backtester.ui.app import build_app
     from backtester.ui.brand import NAVY_900
 
@@ -46,6 +47,7 @@ def test_shell_no_sidebar_and_six_pages(tmp_path):
         "Results Grid",
         "Combo Detail",
         "Favourites",
+        "Configuration",
     ]
     assert app.header_background == NAVY_900
     # Dark mode UI must not be present

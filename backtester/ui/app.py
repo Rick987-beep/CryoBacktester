@@ -91,6 +91,7 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     from backtester.ui.views.grid_view import build_grid_view
     from backtester.ui.views.detail_view import build_detail_view
     from backtester.ui.views.favourites_view import build_favourites_view
+    from backtester.ui.views.configuration_view import build_configuration_view
 
     pn.extension("tabulator", "plotly", sizing_mode="stretch_width")
 
@@ -132,6 +133,7 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
     grid_view = build_grid_view(state, cache, store=store)
     detail_view = build_detail_view(state, cache, store=store)
     favourites_view = build_favourites_view(state, store, cache)
+    configuration_view = build_configuration_view()
 
     pages = {
         "New Run": new_run_view,
@@ -140,10 +142,18 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
         "Results Grid": grid_view,
         "Combo Detail": detail_view,
         "Favourites": favourites_view,
+        "Configuration": configuration_view,
     }
 
-    # Single visible page; swap contents when active_tab changes
-    page_holder = pn.Column(pages[state.active_tab], sizing_mode="stretch_width")
+    # Single visible page; swap contents when active_tab changes.
+    # #main has padding:0 so the selection bar is flush under gold;
+    # page content gets specimen-aligned gutter (24px = --ca-space-xl).
+    page_holder = pn.Column(
+        pages[state.active_tab],
+        sizing_mode="stretch_width",
+        margin=(0, 0),
+        styles={"padding": "16px 24px"},
+    )
 
     def _show_page(event=None):
         name = normalize_tab_name(state.active_tab)
@@ -158,6 +168,8 @@ def build_app(state_dir: str | None = None, bundles_root: str | None = None):
         detail_bar,
         page_holder,
         sizing_mode="stretch_width",
+        margin=(0, 0),
+        styles={"gap": "0"},
     )
     template.main.append(main)
 

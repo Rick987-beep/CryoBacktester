@@ -26,6 +26,8 @@ ac-brand emit -o ./brand --surface all --with-icons
 - `icons/` — product family icons
 - `specimen.html` — static chrome / control specimen (`python -m http.server` from here)
 - `mockups/backtester_run.html` — layout mock for the Backtester Run page
+- `mockups/configuration.html` — signed-off Configuration page (editable TOML + OK)
 
 Visual law: `~/agent-commons/docs/cryo-aureas/DESIGN_DECISION.md`  
-Skill: `brand` (agent-commons)
+Skill: `brand` (agent-commons)  
+Panel pages must match signed-off mockups: `.cursor/rules/ui-mockup-fidelity.mdc`

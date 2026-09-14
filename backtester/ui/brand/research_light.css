@@ -499,10 +499,15 @@ body,
   background-color: var(--ca-page);
 }
 
+/* Match .ca-shell-header: 8px 24px, min-height 56, gold rule */
 #header {
+  display: flex !important;
+  align-items: center !important;
   border-bottom: 2px solid var(--ca-gold);
   min-height: 56px;
-  padding: 6px 16px !important;
+  height: auto !important;
+  padding: var(--ca-space-sm) var(--ca-space-xl) !important; /* 8px 24px */
+  box-sizing: border-box;
 }
 
 #header .app-logo,
@@ -510,7 +515,15 @@ img.app-logo {
   height: 28px !important;
   width: 28px !important;
   padding: 0 8px 0 0 !important;
+  margin: 0 !important;
   object-fit: contain;
+}
+
+#app-title {
+  display: flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 #app-title a.title,
@@ -521,16 +534,28 @@ a.title {
   letter-spacing: -0.01em;
   line-height: 1.2 !important;
   color: #ffffff !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 #header-items {
-  align-items: center;
+  display: flex !important;
+  align-items: center !important;
+  /* Specimen .ca-nav { margin-left: auto } — push nav away from title */
+  margin: 0 0 0 auto !important;
+  padding: 0 0 0 var(--ca-space-lg) !important; /* ≥16px gap from title */
+  gap: var(--ca-space-xs);
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 #content,
 #main {
   background-color: var(--ca-page);
   color: var(--ca-text);
+  /* Flush selection bar under gold — no VanillaTemplate gutter */
+  padding: 0 !important;
 }
 
 /* Labels on widgets */
@@ -578,6 +603,34 @@ textarea.bk-input:focus,
 .bk-root textarea:disabled {
   background: var(--ca-page) !important;
   color: var(--ca-muted) !important;
+}
+
+/* Configuration TOML editor — mockup .config-editor (fill viewport) */
+.ca-config-editor textarea.bk-input,
+textarea.bk-input.ca-config-editor,
+:host(.ca-config-editor) textarea.bk-input,
+:host(.ca-config-editor) textarea {
+  font-family: var(--ca-font-data) !important;
+  font-size: var(--ca-fs-data) !important;
+  line-height: 1.5 !important;
+  white-space: pre !important;
+  tab-size: 2;
+  height: 100% !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
+  resize: none !important;
+  padding: 14px 16px !important;
+  border: none !important;
+}
+
+:host(.ca-config-editor) {
+  height: calc(100vh - 260px) !important;
+  min-height: 320px !important;
+  max-height: none !important;
+  border: 1px solid rgba(38, 51, 71, 0.18) !important;
+  border-radius: var(--ca-radius) !important;
+  background: var(--ca-panel) !important;
+  overflow: hidden !important;
 }
 
 /* Buttons — map Bokeh types onto brand kit */
@@ -643,14 +696,18 @@ input[type="checkbox"] {
   accent-color: var(--ca-navy-900);
 }
 
-/* Selection / context bar markup */
+/* Selection bar — match .ca-context-bar (8px 24px, full-bleed navy-700) */
 .ca-selection-bar {
   display: flex;
   align-items: center;
-  height: 36px;
+  gap: var(--ca-space-md);
+  box-sizing: border-box;
+  min-height: 40px;
+  height: 100%;
+  padding: var(--ca-space-sm) var(--ca-space-xl); /* 8px 24px */
   font-size: var(--ca-fs-data);
   font-family: var(--ca-font-ui);
-  line-height: 36px;
+  line-height: 1.45;
   background: var(--ca-navy-700);
   color: #f5f7fa;
   border-bottom: 1px solid var(--ca-border);
@@ -669,18 +726,20 @@ input[type="checkbox"] {
 .ca-selection-bar .ca-sel-combo {
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 10px;
+  padding: 0;
 }
 
 .ca-selection-bar .ca-sel-run {
   flex: 0 1 auto;
   max-width: 40%;
   min-width: 160px;
+  padding-right: var(--ca-space-md);
 }
 
 .ca-selection-bar .ca-sel-combo {
   flex: 1 1 0;
   min-width: 0;
+  padding-left: var(--ca-space-md);
   border-left: 1px solid rgba(255, 255, 255, 0.18);
 }
 
@@ -692,8 +751,14 @@ input[type="checkbox"] {
 
 .ca-selection-bar .ca-sel-flight {
   flex: 0 0 auto;
-  padding: 0 8px;
+  padding: 0 0 0 var(--ca-space-sm);
   color: var(--ca-gold);
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Row wrapper for selection HTML + cancel — continuous navy under gold */
+.ca-selection-row {
+  background: var(--ca-navy-700) !important;
+  border-bottom: 1px solid var(--ca-border);
 }

@@ -28,6 +28,18 @@ DEFAULT_VOL       = _cfg.pricing.default_vol
 EXPIRY_HOUR_UTC   = _cfg.pricing.expiry_hour_utc
 
 
+def refresh_config_constants() -> None:
+    """Re-copy pricing constants from the live ``cfg`` singleton (after reload)."""
+    global HOURS_PER_YEAR, STRIKE_STEP, VOL_LOOKBACK
+    global MIN_VOL_CANDLES, DEFAULT_VOL, EXPIRY_HOUR_UTC
+    HOURS_PER_YEAR = _cfg.pricing.hours_per_year
+    STRIKE_STEP = _cfg.pricing.strike_step_usd
+    VOL_LOOKBACK = _cfg.pricing.vol_lookback_candles
+    MIN_VOL_CANDLES = _cfg.pricing.min_vol_candles
+    DEFAULT_VOL = _cfg.pricing.default_vol
+    EXPIRY_HOUR_UTC = _cfg.pricing.expiry_hour_utc
+
+
 # ── Strike Grid ───────────────────────────────────────────────────
 
 def snap_strike(price, step=STRIKE_STEP):

@@ -277,6 +277,7 @@ def test_panel_session_hydrates_nav_with_localhost_url():
             "Results Grid",
             "Combo Detail",
             "Favourites",
+            "Configuration",
         ], f"nav not hydrated: {found!r}"
     finally:
         session.close()

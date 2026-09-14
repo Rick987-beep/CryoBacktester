@@ -64,3 +64,49 @@ def test_detail_bar_uses_brand_selection_markup(tmp_path):
     assert "Selected Run:" in html
     assert "#f8fafc" not in html
     assert "#6b7280" not in html
+    assert bar.height == 40
+    assert bar.margin == (0, 0) or bar.margin == 0
+    assert "ca-selection-row" in (bar.css_classes or [])
+
+
+def test_header_chrome_padding_matches_specimen():
+    """Panel #header padding must match .ca-shell-header (8px 24px)."""
+    from backtester.ui.brand import load_research_css
+
+    css = load_research_css()
+    assert "padding: var(--ca-space-sm) var(--ca-space-xl)" in css
+    assert "#main" in css
+    assert "padding: 0 !important" in css
+    assert "min-height: 40px" in css  # selection bar
+    # Nav cluster pushed right of title (specimen .ca-nav)
+    assert "margin: 0 0 0 auto" in css
+    # Old looser header pad must be gone
+    assert "padding: 6px 16px" not in css
+
+
+def test_nav_has_no_extra_vertical_margin():
+    from backtester.ui.state import AppState
+    from backtester.ui.views.chrome import build_nav
+
+    nav = build_nav(AppState())
+    assert nav.margin == (0, 0) or nav.margin == 0
+    assert nav.height == 32
+
+
+def test_page_holder_has_content_gutter(tmp_path):
+    """Main content keeps specimen left/right pad; selection bar stays flush."""
+    from backtester.ui.app import build_app
+
+    app = build_app(
+        state_dir=str(tmp_path / "state"),
+        bundles_root=str(tmp_path / "bundles"),
+    )
+    main = app.main[0]
+    assert len(main) >= 2
+    page_holder = main[1]
+    pad = (page_holder.styles or {}).get("padding", "")
+    assert "24px" in pad
+    # Selection bar (first child) must not inherit that gutter
+    detail = main[0]
+    assert getattr(detail, "height", None) == 40
+    assert detail.margin == (0, 0) or detail.margin == 0

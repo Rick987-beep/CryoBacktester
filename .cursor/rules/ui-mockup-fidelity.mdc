@@ -1,0 +1,15 @@
+---
+description: Signed-off UI mockups are the pixel contract for Panel realization
+globs: backtester/ui/**/*.{py,css},brand/mockups/**/*
+alwaysApply: false
+---
+
+# Mockup fidelity (Research UI)
+
+When a screen is signed off via a static mock under `brand/mockups/`:
+
+1. **Realize it exactly** — same structure, labels, type roles (`ca-label` / `ca-data` / `ca-badge` / title), spacing, and control set.
+2. **Do not invent** extra copy, toolbars, hints, badges, or panels that are not in the mockup.
+3. **Do not drop** mockup elements unless the user explicitly removes them from the mock first; then update the mockup file in the same change.
+4. Prefer brand pack classes / `research_light.css` tokens — no invented hex or one-off fonts.
+5. If Panel/Bokeh forces a deviation, say so before shipping; do not silently “simplify.”
