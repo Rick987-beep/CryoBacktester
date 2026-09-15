@@ -207,6 +207,8 @@ Pulls `options_*.parquet` / `spot_track_*.parquet` into `backtester/data`
 (options snaps vs 288, gaps, thin instruments; spot bars, head truncation, gaps).
 Config: `RECORDER_VPS_*` / `RECORDER_SSH_KEY` in `.env` (see `.env.example`).
 
+Hetzner Cloud lookup/inspect/create/delete is the global Cursor skill `hetzner` (`ac-hetzner`, `api.hetzner.cloud`). Read-only SSH inspect is allowed; recorder ingest stays `sync_vps`. Never delete TradeUbuHetz (`46.225.137.92`). Apps `91.107.208.208`, Storage Box `u626177`.
+
 ### ⚠️ Cloud Agent data availability (TODO — unresolved)
 
 The full historic dataset currently lives **only on the maintainer's local

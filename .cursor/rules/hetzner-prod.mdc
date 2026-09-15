@@ -1,0 +1,12 @@
+---
+description: Never delete TradeUbuHetz (CryoTrader production VPS)
+alwaysApply: true
+---
+
+# Never delete TradeUbuHetz (production)
+
+CryoTrader production is Hetzner **TradeUbuHetz** (`46.225.137.92`, Cloud id `123669146`). Also called **prod**.
+
+**Never delete this server.** Not via `ac-hetzner`, Console, or `hcloud`. If asked, refuse. Leave Hetzner delete protection on.
+
+This repo may SSH to that host for recorder sync. That is not permission to destroy the VPS.
