@@ -3,6 +3,10 @@
 Cadysho / calm_nights use parquet ``tier`` values from CryoQuant.
 TuDySho Starnberg remaps by ``event_type`` via ``STARNBERG_EVENT_TIERS``
 (local table — ignores parquet ``tier``).
+
+Do not use ``event_type=fomc`` from this parquet as a funds-rate decision
+gate: minutes rows are titled “FOMC rate decision”. Policy-statement
+meetings live in ``backtester.indicators.fomc_decision``.
 """
 
 from __future__ import annotations

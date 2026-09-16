@@ -74,12 +74,15 @@ class IndicatorDep:
         warmup_days: Extra history before the backtest start date needed for
                   the indicator's rolling windows to warm up fully.
                   Default 30 days covers Turbulence (14-day lookback).
+        needs_klines: When False (calendar / event tables), skip the kline
+                  fetch and pass no OHLCV into the builder.
     """
     name: str
     symbol: str
     interval: str
     params: Dict[str, Any] = field(default_factory=dict)
     warmup_days: int = 30
+    needs_klines: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +482,19 @@ def _build_front_25d_iv_rank(df_raw: pd.DataFrame, **params) -> pd.DataFrame:
     return build_front_25d_iv_rank(df_raw, **params)
 
 
+def _build_fomc_decision(
+    df_raw: pd.DataFrame | None = None,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    **params: Any,
+) -> pd.DataFrame:
+    """Locked FOMC policy-statement table. Ignores klines."""
+    from backtester.indicators.fomc_decision import build_fomc_decision
+
+    return build_fomc_decision(start=start, end=end, **params)
+
+
 # Registry: indicator name → builder function
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
@@ -492,6 +508,7 @@ _BUILDERS: Dict[str, Callable[..., Any]] = {
     "calm_nights": _build_calm_nights,
     "vol_context": _build_vol_context,
     "front_25d_iv_rank": _build_front_25d_iv_rank,
+    "fomc_decision": _build_fomc_decision,
 }
 
 
@@ -534,25 +551,32 @@ def build_indicators(
                 f"Registered indicators: {sorted(_BUILDERS)}"
             )
 
-        logger.info(
-            "build_indicators: loading %s klines for %s (%s → %s, +%dd warmup)",
-            dep.interval, dep.symbol, start.date(), end.date(), dep.warmup_days,
-        )
-        df_raw = load_klines(
-            symbol=dep.symbol,
-            interval=dep.interval,
-            start=start,
-            end=end,
-            warmup_days=dep.warmup_days,
-        )
-        logger.info(
-            "build_indicators: computing '%s' from %d raw bars",
-            dep.name, len(df_raw),
-        )
-        if dep.name == "calm_nights":
-            result[dep.name] = builder(df_raw, start=start, end=end, **dep.params)
+        if not getattr(dep, "needs_klines", True):
+            logger.info(
+                "build_indicators: computing '%s' (no klines)",
+                dep.name,
+            )
+            result[dep.name] = builder(start=start, end=end, **dep.params)
         else:
-            result[dep.name] = builder(df_raw, **dep.params)
+            logger.info(
+                "build_indicators: loading %s klines for %s (%s → %s, +%dd warmup)",
+                dep.interval, dep.symbol, start.date(), end.date(), dep.warmup_days,
+            )
+            df_raw = load_klines(
+                symbol=dep.symbol,
+                interval=dep.interval,
+                start=start,
+                end=end,
+                warmup_days=dep.warmup_days,
+            )
+            logger.info(
+                "build_indicators: computing '%s' from %d raw bars",
+                dep.name, len(df_raw),
+            )
+            if dep.name == "calm_nights":
+                result[dep.name] = builder(df_raw, start=start, end=end, **dep.params)
+            else:
+                result[dep.name] = builder(df_raw, **dep.params)
         logger.info(
             "build_indicators: '%s' ready — %d output bars",
             dep.name, len(result[dep.name]),

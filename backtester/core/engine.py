@@ -89,6 +89,7 @@ def _dep_cache_key(dep):
         dep.symbol,
         dep.interval,
         int(getattr(dep, "warmup_days", 30)),
+        bool(getattr(dep, "needs_klines", True)),
         _freeze_indicator_params(getattr(dep, "params", None)),
     )
 
