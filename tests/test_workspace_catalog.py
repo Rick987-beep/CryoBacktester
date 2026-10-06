@@ -34,6 +34,7 @@ def test_private_workspace_has_full_registry():
         "tudysho_v3",
         "tudysho_v4",
         "tudysho_v5_FOMC",
+        "tudysho_v6_rollturb",
         "tudysho_monopteros",
         "cadysho",
         "blueprint_howto",
@@ -64,6 +65,7 @@ def test_tudysho_archive_statuses_and_picker_hide():
     assert SPECS["tudysho_eisbach"].status == "archived"
     assert SPECS["tudysho_v4"].status == "frozen"
     assert SPECS["tudysho_v5_FOMC"].status == "active"
+    assert SPECS["tudysho_v6_rollturb"].status == "active"
     assert SPECS["tudysho"].status == "active"
     assert SPECS["stradysho"].status == "active"
     assert SPECS["tudysho_monopteros"].status == "active"
@@ -78,4 +80,5 @@ def test_tudysho_archive_statuses_and_picker_hide():
     assert "stradysho" in opts.values()
     assert "tudysho_v4" in opts.values()
     assert "tudysho_v5_FOMC" in opts.values()
+    assert "tudysho_v6_rollturb" in opts.values()
     assert "tudysho_monopteros" in opts.values()
