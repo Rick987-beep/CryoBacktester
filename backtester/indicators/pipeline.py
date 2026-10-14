@@ -495,6 +495,13 @@ def _build_fomc_decision(
     return build_fomc_decision(start=start, end=end, **params)
 
 
+def _build_ohlc_atr(df_raw: pd.DataFrame, **params: Any) -> pd.DataFrame:
+    """OHLC + Wilder ATR on the dep interval (1h / 1d)."""
+    from backtester.indicators.ohlc_atr import build_ohlc_atr
+
+    return build_ohlc_atr(df_raw, **params)
+
+
 # Registry: indicator name → builder function
 _BUILDERS: Dict[str, Callable[..., Any]] = {
     "turbulence": _build_turbulence,
@@ -509,6 +516,9 @@ _BUILDERS: Dict[str, Callable[..., Any]] = {
     "vol_context": _build_vol_context,
     "front_25d_iv_rank": _build_front_25d_iv_rank,
     "fomc_decision": _build_fomc_decision,
+    # Same builder; dep.name / interval distinguish 1h vs 1d series.
+    "ohlc_atr_1h": _build_ohlc_atr,
+    "ohlc_atr_1d": _build_ohlc_atr,
 }
 
 
