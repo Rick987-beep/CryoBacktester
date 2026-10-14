@@ -4,6 +4,32 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-10-14: ccrelaunch v1 backspread + ohlc_atr
+
+Coincall FoF relaunch family (`ccrelaunch`) and first long-convexity discovery
+strategy. Step-1 grid closed as not viable as shipped — see workspace plan §12.
+
+- **Product:** `backtester/indicators/ohlc_atr.py` + pipeline names
+  `ohlc_atr_1h` / `ohlc_atr_1d` (Wilder ATR on cached klines).
+- **Workspace:** family `ccrelaunch`; catalog ID `ccrelaunch_v1_backspread`
+  (`workspace/strategies/ccrelaunch/`). Same-expiry call/put backspread with
+  all-in bid/ask+fees, competing `entry_mode`s, packed discovery grid,
+  strategy-local `COINCALL_INVESTOR_LIMITS` / `AUM_USD=500_000` (does not
+  mutate `DEFAULT_INVESTOR_LIMITS`).
+- **Step-1:** run **804** / job `9f61453ed910` / bundle
+  `ccrelaunch_v1_backspread_20261014_155329` — 2880 cells; ~51% zero trades
+  (`coil_break` never fired); ~74% exits `stop_loss`; 3.5% profitable; 0 live
+  picks. Learnings + next levers in
+  `workspace/strategies/ccrelaunch/BACKSPREAD_PLAN.md` §12.
+
+```bash
+python -m pytest workspace/tests/test_ccrelaunch_v1_backspread.py tests/ -q
+python -m backtester.inspect show 804
+python -m backtester.research.run_audit 804 --html
+```
+
+---
+
 ## Checkpoint — 2026-09-14: sync_vps post-sync QA
 
 `python -m backtester.ingest.sync_vps --confirm` now QA-checks every date in
