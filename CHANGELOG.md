@@ -4,6 +4,14 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-10-15: park ccrelaunch v1 backspread
+
+Idea 3 backspread lane **paused / closed** (trying other work first). Catalog
+status → `frozen`. Step-1 artefacts + resume checklist remain in
+`workspace/strategies/ccrelaunch/BACKSPREAD_PLAN.md` §12.
+
+---
+
 ## Checkpoint — 2026-10-14: ccrelaunch v1 backspread + ohlc_atr
 
 Coincall FoF relaunch family (`ccrelaunch`) and first long-convexity discovery

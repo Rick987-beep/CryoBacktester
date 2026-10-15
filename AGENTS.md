@@ -415,13 +415,14 @@ Aug; limit 1 dangerous; soft force 2–4 helps Aug; prefer
 locks): `c823cd1f9665`, `bc7b45e82c5c`. **Next = Step 3 exits.** See
 `.cursor/rules/theta-engine-baselines.mdc` and `v19.py` docstring.
 
-**`ccrelaunch_v1_backspread` Step-1 (run 804, 2026-10-14):** Coincall
-long-convexity backspread; packed grid 2880 cells. **Closed as shipped** —
-not a live book. ~51% zero trades (`coil_break` never fired under joint
-coil+ignite+break@15:00); ~74% exits `stop_loss`; clock-side call/put/
-wing_cheap death-valley; 3.5% profitable; 0 live picks. Best island only:
-`ignite` + SL off (thin, not a lock). Next: loosen coil_break, demote
-clock sides, redesign exits, AUM $500k in job. Plan §12:
+**`ccrelaunch_v1_backspread` Step-1 (run 804, 2026-10-14; paused 2026-10-15):**
+Coincall long-convexity backspread; packed grid 2880 cells. **Paused /
+closed** — not a live book; catalog `frozen`. ~51% zero trades
+(`coil_break` never fired under joint coil+ignite+break@15:00); ~74% exits
+`stop_loss`; clock-side call/put/wing_cheap death-valley; 3.5% profitable;
+0 live picks. Best island only: `ignite` + SL off (thin, not a lock).
+Resume checklist (parked): loosen coil_break, demote clock sides, redesign
+exits, AUM $500k in job. Plan §12:
 `workspace/strategies/ccrelaunch/BACKSPREAD_PLAN.md`.
 
 ---
