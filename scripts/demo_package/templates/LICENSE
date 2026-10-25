@@ -1,0 +1,20 @@
+CryoBacktester Demo — Evaluation License
+========================================
+
+Copyright (c) 2026 Aureas / Cryo. All rights reserved.
+
+This software and the bundled sample market data are provided for evaluation
+and educational use only.
+
+You may:
+  - run the included blueprint strategy on the bundled sample data
+  - study the engine and blueprint source to learn how the backtester works
+  - share the download link to the official demo package
+
+You may not:
+  - use this software or data for live trading or production systems
+  - redistribute modified copies as your own product
+  - claim affiliation with Aureas / Cryo without written permission
+  - reverse-engineer or re-host the sample market data as a data product
+
+THE SOFTWARE AND DATA ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
