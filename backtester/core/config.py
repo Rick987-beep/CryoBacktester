@@ -66,6 +66,9 @@ class PricingConfig:
 class RepricingConfig:
     min_mark_usd: float
     slip_pct_zero_price: float
+    # Bid (or ask) below mark × this frac is treated as missing → mark±slip.
+    # 0.0 disables the absurd-book check (legacy: only exact 0 triggers fallback).
+    book_vs_mark_min_frac: float
 
 
 @dataclass
@@ -176,6 +179,7 @@ def load_config(path=_CONFIG_PATH):
         repricing=RepricingConfig(
             min_mark_usd=float(r["min_mark_usd"]),
             slip_pct_zero_price=float(r["slip_pct_zero_price"]),
+            book_vs_mark_min_frac=float(r.get("book_vs_mark_min_frac", 0.25)),
         ),
         fees=FeesConfig(
             model=str(f["model"]),

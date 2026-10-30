@@ -62,14 +62,23 @@ max_vol                 = 3.00    # ceiling: 300% annualised
 # ── Repricing ─────────────────────────────────────────────────────────────────
 [repricing]
 
-# Fallback pricing for held positions when bid or ask is 0 (no market quote).
-# Applied only during mark-to-market repricing of open positions — entry logic
-# is unaffected (no quote = no entry, unchanged).
+# Fallback pricing for held positions when the book quote is missing OR absurd
+# vs mark. Applied in price_legs / _reprice_legs for open-position MTM (NAV)
+# and for executable/bid/ask exit checks — entry logic is unaffected
+# (no quote row = no entry, unchanged). Pure mode="mark" is unchanged.
 #
-# Three-tier logic in _reprice_legs:
-#   1. bid/ask > 0   → use as-is (normal path)
-#   2. bid/ask == 0 AND mark_usd > min_mark_usd  → mark × (1 ± slip_pct_zero_price)
-#   3. bid/ask == 0 AND mark_usd ≤ min_mark_usd  → treat as 0 (skip tick, as before)
+# Tier logic (executable / bid / ask modes):
+#   1. Book quote usable (see book_vs_mark_min_frac) → use bid/ask
+#   2. Book missing/absurd AND mark_usd > min_mark_usd
+#        → mark × (1 ± slip_pct_zero_price)
+#   3. Book missing/absurd AND mark_usd ≤ min_mark_usd → treat mark side as 0
+#   4. Entire quote *row* absent from snapshot → return None (carry-forward NAV)
+#
+# BEFORE (bug): only bid/ask == 0 triggered mark fallback. A stale micro-bid
+# (e.g. wing bid=0.01 BTC vs mark=0.125) was trusted → long wing marked ~$1k
+# while short used mark×1.25 → fake ~−$26k NAV on a $6.4k-wide vertical.
+# AFTER: bid < mark × book_vs_mark_min_frac is treated like bid==0.
+# See docs/repricing_illiquid_book.md for the full before/after case study.
 
 # Minimum mark in USD for the fallback to activate.
 # Below this the option is too deep OTM / illiquid for any estimate to be meaningful.
@@ -80,6 +89,12 @@ min_mark_usd            = 15.0
 # bid_fallback = mark × (1 - slip_pct_zero_price)   (proceeds from selling long)
 # 0.25 = 25% — conservative central estimate for thin crypto option markets.
 slip_pct_zero_price     = 0.25
+
+# Minimum book/mark ratio for trusting a non-zero bid (sell-to-close long) or,
+# symmetrically, requiring ask ≥ mark × frac before using ask without the
+# existing mark floor. Default 0.25 = book must be at least 25% of mark.
+# Set to 0.0 to restore legacy behaviour (only exact zero triggers fallback).
+book_vs_mark_min_frac   = 0.25
 
 # ── Fee Model ─────────────────────────────────────────────────────────────────
 # Two tiers are defined below. Only [fees] is active — the other is commented out.

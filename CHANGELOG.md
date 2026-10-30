@@ -4,6 +4,30 @@ All notable changes to CryoBacktester are documented here.
 
 ---
 
+## Checkpoint — 2026-10-30: absurd book-bid fallback in price_legs
+
+Executable / bid repricing no longer trusts a **non-zero micro-bid** far below
+mark when marking open positions (NAV) or checking executable exits. Such bids
+are treated like `bid == 0` → existing `mark × (1 − slip)` path.
+
+**Before:** only `bid == 0` triggered fallback. Example (run 810 winged call
+vertical, 2026-08-25 09:15): short ask=0 → mark×1.25 (~$28k); wing bid=0.01 vs
+mark=0.125 → trusted (~$1.3k) → fake ~−$26k / **−26%** DD on a **$6.4k**-wide
+book. Realized flatten was ~−$6.1k.
+
+**After:** `book_vs_mark_min_frac` (default `0.25`) in `[repricing]`; wing uses
+mark×0.75. Mark-mode SL unchanged. Full case study:
+`docs/repricing_illiquid_book.md`. Tests: `tests/test_price_legs_book_sanity.py`.
+
+Also: multi-worker merge no longer crashes when `investor_greeks` sidecars sit
+in `DataFrame.attrs` (`merge_grid_results`).
+
+```bash
+python -m pytest tests/test_price_legs_book_sanity.py tests/test_grid_workers_resolve.py -q
+```
+
+---
+
 ## Checkpoint — 2026-10-15: park ccrelaunch v1 backspread
 
 Idea 3 backspread lane **paused / closed** (trying other work first). Catalog

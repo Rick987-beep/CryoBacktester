@@ -541,26 +541,66 @@ def profit_target_pct(pct, price_mode="executable"):
 # Helpers
 # ------------------------------------------------------------------
 
+def _book_bid_unusable(quote, book_min_frac):
+    # type: (Any, float) -> bool
+    """True when bid must not be trusted for sell-to-close of a long.
+
+    Exact 0 is the classic illiquid case. A *stale micro-bid* (bid > 0 but
+    far below mark) is treated the same — otherwise multi-leg NAV can mark the
+    short at full ask/mark while the wing is priced near zero and print a
+    drawdown far beyond structural max loss. See docs/repricing_illiquid_book.md.
+    """
+    if float(quote.bid) <= 0.0:
+        return True
+    mark = float(quote.mark)
+    if mark > 0.0 and float(book_min_frac) > 0.0:
+        if float(quote.bid) < mark * float(book_min_frac):
+            return True
+    return False
+
+
+def _bid_fallback_btc(quote, min_mark_usd, slip):
+    # type: (Any, float, float) -> float
+    """BTC price used when the bid is missing/absurd but mark is real."""
+    if float(quote.mark_usd) > float(min_mark_usd):
+        return float(quote.mark) * (1.0 - float(slip))
+    return float(quote.mark)
+
+
+def _ask_fallback_btc(quote, min_mark_usd, slip):
+    # type: (Any, float, float) -> float
+    """BTC price used when the ask is missing but mark is real."""
+    if float(quote.mark_usd) > float(min_mark_usd):
+        return float(quote.mark) * (1.0 + float(slip))
+    return float(quote.mark)
+
+
 def price_legs(state, pos, mode="executable"):
     # type: (Any, OpenPosition, str) -> Optional[float]
     """Price all legs of pos at current market. Returns total USD value.
 
     mode — which price to use per leg:
-      "mark"        — quote.mark_usd (exchange model; stable)
-      "executable"  — ask for sell legs, bid for buy legs (what you'd pay/receive)
+      "mark"        — quote.mark_usd (exchange model; stable; typical SL path)
+      "executable"  — ask for sell legs, bid for buy legs (NAV + typical TP)
       "bid"         — always bid regardless of leg side
       "ask"         — always ask regardless of leg side
 
     Returns None only when a quote row is entirely missing from the snapshot
     (genuine data gap — row absent from parquet). Never returns None for
-    zero-mark or zero-bid/ask options: those are priced at $0 (worthless).
+    zero-mark or zero/absurd bid/ask: those use $0 or mark±slip fallbacks.
 
-    Zero-price handling:
-      "mark":       mark == 0.0  → $0 (exchange says worthless)
-      "executable"/"ask" (sell): mark == 0  → $0; ask == 0 but mark > 0 → use mark
-                                             (or mark × (1+slip) if large enough)
-      "executable"/"bid" (buy):  mark == 0  → $0; bid == 0 but mark > 0 → use mark
-                                             (or mark × (1-slip) if large enough)
+    Book vs mark (executable / bid / ask — not mark mode):
+      - mark == 0.0 → $0 (exchange says worthless)
+      - sell/ask: ask == 0 → mark×(1+slip) if mark_usd > min_mark_usd else mark;
+        else floor at mark (ask used only when ask > mark — never understate
+        short close cost)
+      - buy/bid: bid missing OR bid < mark × book_vs_mark_min_frac → same
+        mark×(1−slip) fallback as bid==0; else use bid
+
+    ``book_vs_mark_min_frac`` (config.toml [repricing], default 0.25) closes the
+    hole where a non-zero junk bid skipped the fallback and understated longs.
+    Set to 0.0 for legacy behaviour. Full before/after:
+    docs/repricing_illiquid_book.md.
 
     Writes total and per-leg values to pos._last_reprice_usd / pos._last_reprice_legs
     so the engine's NAV tracker can reuse them without a second call.
@@ -569,6 +609,7 @@ def price_legs(state, pos, mode="executable"):
     direction = pos.metadata.get("direction", "buy")
     _min_mark_usd = _cfg.repricing.min_mark_usd
     _slip = _cfg.repricing.slip_pct_zero_price
+    _book_frac = float(getattr(_cfg.repricing, "book_vs_mark_min_frac", 0.25))
     per_leg = []
 
     for leg in pos.legs:
@@ -592,9 +633,10 @@ def price_legs(state, pos, mode="executable"):
             # ── Bid mode: always use bid regardless of side ───────────────
             if quote.mark == 0.0:
                 leg_val = 0.0
-            elif quote.bid == 0.0:
-                leg_val = (quote.mark * (1.0 - _slip) if quote.mark_usd > _min_mark_usd
-                           else quote.mark) * quote.spot * _leg_qty
+            elif _book_bid_unusable(quote, _book_frac):
+                leg_val = (
+                    _bid_fallback_btc(quote, _min_mark_usd, _slip) * quote.spot * _leg_qty
+                )
             else:
                 leg_val = quote.bid * quote.spot * _leg_qty
 
@@ -603,8 +645,9 @@ def price_legs(state, pos, mode="executable"):
             if quote.mark == 0.0:
                 leg_val = 0.0
             elif quote.ask == 0.0:
-                leg_val = (quote.mark * (1.0 + _slip) if quote.mark_usd > _min_mark_usd
-                           else quote.mark) * quote.spot * _leg_qty
+                leg_val = (
+                    _ask_fallback_btc(quote, _min_mark_usd, _slip) * quote.spot * _leg_qty
+                )
             else:
                 leg_val = quote.ask * quote.spot * _leg_qty
 
@@ -616,8 +659,7 @@ def price_legs(state, pos, mode="executable"):
                     effective_price = 0.0
                 elif quote.ask == 0.0:
                     # Ask missing but mark is real: estimate close cost
-                    effective_price = (quote.mark * (1.0 + _slip) if quote.mark_usd > _min_mark_usd
-                                       else quote.mark)
+                    effective_price = _ask_fallback_btc(quote, _min_mark_usd, _slip)
                 else:
                     # Floor at mark: prevents wide-spread ask from understating cost
                     effective_price = quote.ask if quote.ask > quote.mark else quote.mark
@@ -626,10 +668,9 @@ def price_legs(state, pos, mode="executable"):
                 if quote.mark == 0.0:
                     # Exchange says worthless — $0 proceeds from selling a long leg
                     leg_val = 0.0
-                elif quote.bid == 0.0:
-                    # Bid missing but mark is real: estimate proceeds
-                    effective_price = (quote.mark * (1.0 - _slip) if quote.mark_usd > _min_mark_usd
-                                       else quote.mark)
+                elif _book_bid_unusable(quote, _book_frac):
+                    # Bid missing OR absurdly below mark — do not trust micro-bids
+                    effective_price = _bid_fallback_btc(quote, _min_mark_usd, _slip)
                     leg_val = effective_price * quote.spot * _leg_qty
                 else:
                     leg_val = quote.bid_usd * _leg_qty
