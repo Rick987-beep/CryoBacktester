@@ -173,6 +173,29 @@ def test_merge_empty_shard():
     assert keys == [("k", 0)]
 
 
+def test_merge_preserves_investor_greeks_sidecar():
+    """Nested DataFrame attrs must not break pd.concat across shards."""
+    df0 = pd.DataFrame({"combo_idx": [0], "pnl": [1.0], "entry_time": [1]})
+    df1 = pd.DataFrame({"combo_idx": [0], "pnl": [2.0], "entry_time": [2]})
+    g0 = pd.DataFrame({"combo_idx": [0], "live_bars": [10], "limits": ["coincall"]})
+    g1 = pd.DataFrame({"combo_idx": [0], "live_bars": [20], "limits": ["coincall"]})
+    df0.attrs["extra_parquets"] = {"investor_greeks.parquet": g0}
+    df1.attrs["extra_parquets"] = {"investor_greeks.parquet": g1}
+    empty = pd.DataFrame(columns=["combo_idx"])
+    shards = [
+        (df0, [("a", 1)], empty, empty, empty),
+        (df1, [("a", 2)], empty, empty, empty),
+    ]
+    df, keys, *_ = merge_grid_results(shards, [0, 1], [("a", 1), ("a", 2)])
+    assert list(df["combo_idx"]) == [0, 1]
+    assert keys == [("a", 1), ("a", 2)]
+    extra = df.attrs.get("extra_parquets") or {}
+    greeks = extra["investor_greeks.parquet"]
+    assert list(greeks["combo_idx"]) == [0, 1]
+    assert list(greeks["live_bars"]) == [10, 20]
+
+
+
 def test_freeze_arrays_write_raises():
     class Box:
         pass

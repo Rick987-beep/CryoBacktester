@@ -278,14 +278,20 @@ def merge_grid_results(
     extras: list[pd.DataFrame] = []
 
     for (df, _keys, nav, final, fill), off in zip(shard_results, offsets):
-        trades.append(remap_combo_idx(df, off))
-        navs.append(remap_combo_idx(nav, off))
-        finals.append(remap_combo_idx(final, off))
-        fills.append(remap_combo_idx(fill, off))
+        # Pull sidecars off trade attrs *before* concat — nested DataFrames in
+        # attrs make pandas ``__finalize__`` attrs-equality raise
+        # "truth value of a DataFrame is ambiguous".
         extra = getattr(df, "attrs", {}).get("extra_parquets") or {}
         greeks = extra.get("investor_greeks.parquet")
         if greeks is not None and not getattr(greeks, "empty", True):
             extras.append(remap_combo_idx(greeks, off))
+        trade = remap_combo_idx(df, off)
+        if getattr(trade, "attrs", None):
+            trade.attrs.pop("extra_parquets", None)
+        trades.append(trade)
+        navs.append(remap_combo_idx(nav, off))
+        finals.append(remap_combo_idx(final, off))
+        fills.append(remap_combo_idx(fill, off))
 
     def _cat(parts: list[pd.DataFrame]) -> pd.DataFrame:
         nonempty = [p for p in parts if p is not None and not p.empty]
