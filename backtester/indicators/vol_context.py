@@ -142,7 +142,9 @@ def build_vol_context(
     return out
 
 
-def lookup_vol_context(panel: pd.DataFrame, dt: datetime) -> dict[str, float]:
+def lookup_vol_context(
+    panel: pd.DataFrame | None, dt: datetime
+) -> dict[str, float]:
     """Causal asof row for decision timestamp ``dt`` (UTC)."""
     empty = {
         "dvol": float("nan"),
