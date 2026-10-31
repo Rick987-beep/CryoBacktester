@@ -418,8 +418,8 @@ locks): `c823cd1f9665`, `bc7b45e82c5c`. **Next = Step 3 exits.** See
 **`theta_engine_v20` Starnberg discovery (open):** fork of v18. Rich-qty
 sizing removed (v17 artefact only). Step-1 grid opens wing distance +
 min/max listed width, unpacked credit/prox/equity stops, and
-`force_after_days`. Artefact: `V20_STEP1_DISCOVERY_GRID` (8640 cells).
-Marketing Starnberg stays on v18.
+`force_after_days` (0 = no force). Artefact: `V20_STEP1_DISCOVERY_GRID`
+(10800 cells). Marketing Starnberg stays on v18.
 
 **`ccrelaunch_v1_backspread` Step-1 (run 804, 2026-10-14; paused 2026-10-15):**
 Coincall long-convexity backspread; packed grid 2880 cells. **Paused /
