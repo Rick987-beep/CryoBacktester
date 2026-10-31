@@ -59,3 +59,9 @@ Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c
 `theta_engine_v17` is a `v14` fork that meters investor D/G (`track_investor_greeks`, default on) into `investor_greeks.parquet`. Working grid is the run-727 **RichForce2 16 front** cell (`c8573c839903` / `rf2_1600` × `front`). Vega is a meter, not a gate. No overlay yet. Do not reuse `theta_engine_v15` — that ID was never a shipped book.
 
 **v17 rich qty closed (run 741):** `front_vrp` × `iv_rank_60` size-down (`rich_mode=on`) did not beat naked on PnL / Sharpe / Calmar. Default `rich_mode=none`. Discovery artefact: `V17_RICH_DISCOVERY_GRID` in `v17.py` — do not re-open as a performance search without a new hypothesis.
+
+# Theta Engine v20 — Starnberg discovery reopen
+
+`theta_engine_v20` forks **`v18` / Starnberg** (not v19 Lenbach). RichForce2 16 front, always-hedged. **`rich_mode` stays closed** (`none` only).
+
+Step-1 open axes (`V20_STEP1_DISCOVERY_GRID`, 8640 cells): `wing_pct` × `min_width_usd` × **`max_width_usd`** (new ceiling; 0=off) × unpacked `stop_loss_pct` × `prox_stop` × `open_pnl_equity_stop_pct` × **`force_after_days`** (overrides rf2 default of 2). No packed `stop_book`. Working DATE_RANGE starts at `2025-10-01`→`2026-10-30`. Marketing lock remains v18 run **794** / `a1d621a81904`.
