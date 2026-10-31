@@ -62,6 +62,6 @@ Fan-out (other occupancy / clock / skew, same shared lock): Daily16 (`0b4573c70c
 
 # Theta Engine v20 — Starnberg discovery reopen
 
-`theta_engine_v20` forks **`v18` / Starnberg** (not v19 Lenbach). RichForce2 16 front, always-hedged. **`rich_mode` stays closed** (`none` only).
+`theta_engine_v20` forks **`v18` / Starnberg** (not v19 Lenbach). RichForce2 16 front, always-hedged. **Rich-qty sizing removed** (no `rich_mode` / alpha / rank grid; no `front_25d_iv_rank` indicator). Artefact remains on v17 only.
 
 Step-1 open axes (`V20_STEP1_DISCOVERY_GRID`, 8640 cells): `wing_pct` × `min_width_usd` × **`max_width_usd`** (new ceiling; 0=off) × unpacked `stop_loss_pct` × `prox_stop` × `open_pnl_equity_stop_pct` × **`force_after_days`** (overrides rf2 default of 2). No packed `stop_book`. Working DATE_RANGE starts at `2025-10-01`→`2026-10-30`. Marketing lock remains v18 run **794** / `a1d621a81904`.
